@@ -1,0 +1,38 @@
+{
+  "name": "jotiva",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "packageManager": "pnpm@11.11.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "check": "tsc",
+    "build": "pnpm check && vite build",
+    "test:unit": "node --test qa/appearance.test.mjs",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "test:web": "pnpm build && pnpm test:web:editor && pnpm test:web:ui",
+    "test:web:editor": "python3 qa/document-windows.py",
+    "test:web:ui": "python3 qa/tooltips.py && python3 qa/source-tree.py",
+    "test:web:visual": "python3 qa/document-windows.py --caret && python3 qa/scrollbars.py",
+    "test:theme": "cargo test --locked --manifest-path src-tauri/Cargo.toml imported_stylesheet && python3 qa/themes.py",
+    "test:shortcuts": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::shortcuts::tests && python3 qa/shortcuts.py && python3 qa/tooltips.py --shortcut-settings && python3 qa/editor-shortcuts.py && python3 qa/tooltips.py --tree-focus",
+    "test:capacity": "cargo test --locked --manifest-path src-tauri/Cargo.toml lists_a_large_workspace_directory -- --ignored && python3 qa/source-tree.py --capacity && python3 qa/document-windows.py --capacity",
+    "test:filing": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::filing::tests && cargo test --locked --manifest-path src-tauri/Cargo.toml settings::filing::tests::loopback_choice_requires_confirmation_before_writing -- --ignored --exact && python3 qa/filing-http.py && python3 qa/document-windows.py --filing && python3 qa/tooltips.py --filing-settings",
+    "test:filing:live": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::filing::tests::live::classifies_synthetic_notes -- --ignored --exact",
+    "test:macos:smoke": "python3 qa/macos/run.py --smoke",
+    "test:macos:shortcuts": "python3 qa/macos/shortcut-menu.py",
+    "test:macos:storage": "python3 qa/macos/storage.py",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@jot-md/editor": "https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz",
+    "@tauri-apps/api": "^2",
+    "mermaid": "11.17.2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

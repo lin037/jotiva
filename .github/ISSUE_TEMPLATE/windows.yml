@@ -1,0 +1,21 @@
+name: Windows 使用反馈 / Windows feedback
+description: 分享使用需求，或反馈 Windows 预览版的问题
+body:
+  - type: input
+    id: system
+    attributes:
+      label: Windows 版本和架构 / Windows version and architecture
+      placeholder: Windows 11 24H2，x64
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: 预览版版本（如已安装）/ Preview build, if installed
+  - type: textarea
+    id: workflow
+    attributes:
+      label: 你想完成的操作或遇到的问题 / Workflow or problem
+      description: 如果你试用了预览版，请附安装来源、操作步骤和实际结果。
+    validations:
+      required: true

@@ -1,0 +1,114 @@
+@layer jot-ui {
+  .jot-control {
+    font: inherit;
+    color: inherit;
+    border: var(--jot-line-width) solid var(--jot-color-line);
+    border-radius: var(--jot-radius);
+    background: var(--jot-color-bg);
+  }
+
+  .jot-button { padding: var(--jot-space-2) var(--jot-space-3); cursor: default; }
+  .jot-button:where(:hover:enabled) { background: var(--jot-color-hover); }
+  .jot-button:where(:active:enabled) { background: var(--jot-color-active); }
+  .jot-button:disabled { opacity: .45; }
+  .jot-button.primary, .jot-button.primary:hover {
+    background: var(--jot-color-accent-fill);
+    color: var(--jot-color-on-accent);
+    border-color: color-mix(in srgb, var(--jot-color-accent-fill) 76%, var(--jot-color-muted));
+  }
+  .jot-button.primary:where(:hover:enabled, :active:enabled) {
+    border-color: var(--jot-color-accent);
+    box-shadow: inset 0 0 0 var(--jot-line-width) color-mix(in srgb, var(--jot-color-on-accent) 26%, transparent);
+  }
+  .jot-field { width: 100%; padding: var(--jot-space-2) var(--jot-space-3); }
+  .jot-field:where(:hover:enabled) { border-color: var(--jot-color-field-hover); }
+  .jot-field::placeholder { color: var(--jot-color-muted); opacity: 1; }
+  .jot-control:focus-visible {
+    outline: var(--jot-focus-width) solid var(--jot-color-focus);
+    outline-offset: var(--jot-line-width);
+  }
+  .jot-field:where(:not([type="checkbox"], [type="color"])):focus {
+    border-color: var(--jot-color-focus);
+    outline: none;
+    box-shadow: var(--jot-focus-ring);
+  }
+  .muted { color: var(--jot-color-muted); }
+
+  .jot-window-menu {
+    position: absolute;
+    inset: calc(var(--menu-titlebar-height, var(--jot-titlebar-height)) - var(--jot-space-1)) var(--jot-space-3) auto auto;
+    margin: 0;
+    padding: var(--jot-space-2);
+    min-width: var(--jot-window-menu-width);
+    max-width: min(90vw, var(--jot-sheet-width));
+    border: var(--jot-line-width) solid var(--jot-color-line);
+    border-radius: var(--jot-radius-large);
+    box-shadow: var(--jot-shadow-popup);
+    color: var(--jot-color-text);
+    background: var(--jot-color-bg);
+  }
+  .jot-window-menu:focus { outline: none; }
+  .jot-window-menu-item {
+    display: flex;
+    gap: var(--jot-space-3);
+    align-items: center;
+    min-height: var(--jot-note-row-height);
+    width: 100%;
+    border: 0;
+    text-align: start;
+    background: transparent;
+  }
+  .jot-window-menu-item .jot-icon, .jot-window-menu-item kbd { color: var(--jot-color-muted); }
+  .jot-window-menu-item:is(:hover, :focus-visible):enabled { background: var(--jot-color-hover); }
+  :is(.jot-window-menu-item, .library-node, .library-notes .note-row):focus-visible {
+    outline: none;
+  }
+  @media (forced-colors: active) {
+    :is(.jot-window-menu-item, .library-node, .library-notes .note-row):focus-visible { outline: var(--jot-line-width) solid Highlight; outline-offset: calc(-1 * var(--jot-line-width)); }
+  }
+
+  .icon-button {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: var(--jot-control-height);
+    height: var(--jot-control-height);
+    padding: 0;
+    border: 0;
+    border-radius: var(--jot-radius);
+    color: var(--jot-color-muted);
+    background: transparent;
+  }
+  .icon-button:hover:enabled { color: var(--jot-color-text); background: var(--jot-color-hover); }
+  .icon-button:is([aria-pressed="true"], [aria-expanded="true"]) { color: var(--jot-color-accent); }
+  .icon-button:is([aria-pressed="true"], [aria-expanded="true"]) .jot-icon { stroke-width: var(--jot-stroke-icon-selected); }
+  .icon-button:active:enabled { background: var(--jot-color-active); }
+  .jot-icon {
+    width: var(--jot-icon-size);
+    height: var(--jot-icon-size);
+    flex: none;
+    pointer-events: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: var(--jot-stroke-icon);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .jot-tooltip {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    row-gap: var(--jot-space-2);
+    width: max-content;
+    padding: var(--jot-space-1) var(--jot-space-3);
+    border: var(--jot-line-width) solid var(--jot-color-line-strong);
+    border-radius: var(--jot-radius-small);
+    font: var(--jot-type-small) / var(--jot-leading) var(--jot-font-ui);
+    color: var(--jot-color-bg);
+    background: var(--jot-color-text);
+    box-shadow: var(--jot-shadow-popup);
+    pointer-events: none;
+    user-select: none;
+  }
+}

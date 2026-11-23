@@ -1,0 +1,24 @@
+name: 报告问题 / Bug report
+description: 帮助复现 Jotiva 的错误
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Jotiva 版本和 macOS 版本 / Versions
+      placeholder: 0.1.0，macOS 15，Apple 芯片
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 可以附一份可公开分享的最小 Markdown 示例。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 预期和实际结果 / Expected and actual behavior
+      description: 涉及窗口关联时，补充宿主应用、有无外接显示器和全屏状态。
+    validations:
+      required: true

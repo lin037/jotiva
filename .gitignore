@@ -1,0 +1,58 @@
+# Dependencies and frontend build output
+node_modules/
+/dist/
+/dist-ssr/
+.pnpm-store/
+.vite/
+*.tsbuildinfo
+
+# QA outputs and local Python environments
+/qa/.cache/
+/.tmp/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+coverage/
+playwright-report/
+test-results/
+
+# Environment and signing credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+*.local
+*.p8
+*.p12
+*.pfx
+*.pem
+*.key
+*.keychain
+*.keychain-db
+*.provisionprofile
+*.mobileprovision
+/src-tauri/tauri.*.local.conf.json
+
+# Local archives and logs
+/docs/_local/
+/release/
+/*.dmg
+/*.pkg
+/*.app/
+logs/
+*.log
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~

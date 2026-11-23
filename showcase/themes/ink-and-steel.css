@@ -1,0 +1,86 @@
+:root {
+  --jot-color-bg: #f7f4ea;
+  --jot-color-chrome: #eae2cf;
+  --jot-color-sidebar: #e5ddca;
+  --jot-color-surface: #eee7d6;
+  --jot-color-text: #21252a;
+  --jot-color-muted: #4f4a40;
+  --jot-color-line: #807663;
+  --jot-color-backdrop: rgb(0 0 0 / 30%);
+  --jot-color-line-strong: #625744;
+  --jot-color-hover: #ded3bd;
+  --jot-color-active: #f1d184;
+  --jot-color-accent: #674100;
+  --jot-color-accent-fill: #f1bd50;
+  --jot-color-on-accent: #211b10;
+  --jot-color-focus: #805300;
+  --jot-color-selection: #f4db9f;
+  --jot-color-match: #f4db9f;
+  --jot-color-match-current: #edc062;
+  --jot-color-quote: #eee4cd;
+  --jot-color-rule-paper: #c5b898;
+  --jot-scrollbar-track: transparent;
+  --jot-scrollbar-thumb: #766a57;
+  --jot-scrollbar-thumb-hover: #4d4437;
+  --jot-radius-small: 0px;
+  --jot-radius: 2px;
+  --jot-radius-large: 2px;
+  --jot-shadow-popup: 4px 4px 0 #28231d44;
+  --jot-editor-font-family: Georgia, "Songti SC", serif;
+  --jot-editor-font-size: 16px;
+  --jot-quick-font-size: 15px;
+  --jot-editor-heading-ratio-1: 1.85;
+  --jot-sidebar-width: clamp(12rem, 24%, 17rem);
+  --jot-outline-width: clamp(11rem, 23%, 17rem);
+}
+
+:root[data-jot-scheme="dark"] {
+  --jot-color-bg: #23262b;
+  --jot-color-chrome: #15171a;
+  --jot-color-sidebar: #2e3238;
+  --jot-color-surface: #353a40;
+  --jot-color-text: #f6efdf;
+  --jot-color-muted: #c9bda7;
+  --jot-color-line: #79736a;
+  --jot-color-backdrop: rgb(0 0 0 / 45%);
+  --jot-color-line-strong: #a69a86;
+  --jot-color-hover: #41464d;
+  --jot-color-active: #584623;
+  --jot-color-accent: #ffcd70;
+  --jot-color-accent-fill: #ffcd70;
+  --jot-color-focus: #ffcd70;
+  --jot-color-selection: #5b4925;
+  --jot-color-match: #514222;
+  --jot-color-match-current: #68542d;
+  --jot-color-quote: #373530;
+  --jot-color-rule-paper: #514b42;
+  --jot-color-error: #ffb8ac;
+  --jot-scrollbar-thumb: #9d927f;
+  --jot-scrollbar-thumb-hover: #d6c8ae;
+  --jot-shadow-popup: 4px 4px 0 #10111488;
+}
+
+.jot-titlebar {
+  --jot-color-text: #fff1ce;
+  --jot-color-muted: #dbcba9;
+  --jot-color-hover: #41464d;
+  --jot-color-active: #584623;
+  --jot-color-accent: #ffcd70;
+  --jot-color-focus: #ffcd70;
+  background: #252a30;
+  border-block-end: 2px solid var(--jot-color-accent);
+}
+
+.jot-titlebar .jot-search {
+  --jot-color-text: #21252a;
+  --jot-color-muted: #4f4a40;
+}
+
+:root[data-jot-scheme="dark"] .jot-titlebar .jot-search {
+  --jot-color-text: #f6efdf;
+  --jot-color-muted: #c9bda7;
+}
+
+:root[data-jot-scheme="dark"] .jot-titlebar {
+  background: #15171a;
+}

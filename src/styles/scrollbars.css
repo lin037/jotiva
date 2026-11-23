@@ -1,0 +1,40 @@
+@layer jot-ui {
+  /* Cover scrollports created by the app, editor plugins and imported themes.
+     DirectScrollbar hides its native rail in the engine's own stylesheet. */
+  ::-webkit-scrollbar {
+    width: var(--jot-scrollbar-width);
+    height: var(--jot-scrollbar-width);
+  }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner {
+    background: var(--jot-scrollbar-track);
+  }
+  ::-webkit-scrollbar-thumb {
+    border: max(0px, calc((var(--jot-scrollbar-width) - var(--jot-scrollbar-thumb-size)) / 2)) solid transparent;
+    border-radius: var(--jot-radius);
+    background: var(--jot-scrollbar-thumb) padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active {
+    background-color: var(--jot-scrollbar-thumb-hover);
+  }
+}
+
+/* Preserve the component's track geometry and full draggable thumb box. */
+:is(body > .jot-direct-scrollbar, .jot-document-outline .jot-direct-scrollbar) {
+  border-color: transparent;
+  border-radius: var(--jot-radius);
+  background: var(--jot-scrollbar-track);
+}
+:is(body > .jot-direct-scrollbar, .jot-document-outline .jot-direct-scrollbar) .jot-direct-scrollbar__thumb {
+  border: var(--jot-line-width) solid transparent;
+  border-inline: 0;
+  padding-inline: max(0px, calc((100% - var(--jot-scrollbar-thumb-size)) / 2));
+  border-radius: var(--jot-radius);
+  background: var(--jot-scrollbar-thumb) content-box;
+}
+:is(body > .jot-direct-scrollbar, .jot-document-outline .jot-direct-scrollbar):is(:hover, :focus-visible) .jot-direct-scrollbar__thumb {
+  background-color: var(--jot-scrollbar-thumb-hover);
+}
+:is(body > .jot-direct-scrollbar, .jot-document-outline .jot-direct-scrollbar):focus-visible {
+  outline: var(--jot-line-width) solid var(--jot-color-focus);
+  outline-offset: calc(-1 * var(--jot-line-width));
+}

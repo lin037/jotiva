@@ -1,0 +1,24 @@
+@layer jot-ui {
+  :root {
+    color: var(--jot-color-text);
+    background: var(--jot-color-bg);
+    font: var(--jot-font-base)/var(--jot-leading) var(--jot-font-ui);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { overflow: hidden; }
+  body { margin: 0; }
+  [hidden] { display: none !important; }
+  #app { height: 100dvh; }
+
+  .error {
+    position: fixed;
+    bottom: var(--jot-space-2);
+    inset-inline: var(--jot-space-2);
+    padding: var(--jot-space-2) var(--jot-space-3);
+    background: var(--jot-color-bg);
+    color: var(--jot-color-error);
+    border: var(--jot-line-width) solid currentColor;
+    z-index: 5;
+  }
+}

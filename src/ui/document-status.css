@@ -1,0 +1,31 @@
+@layer jot-ui {
+  .workspace-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--jot-space-3);
+    flex: none;
+    color: var(--jot-color-muted);
+    border-top: var(--jot-line-width) solid var(--jot-color-line);
+    font-size: var(--jot-type-small);
+    padding: var(--jot-space-1) var(--jot-space-4);
+    min-height: var(--jot-control-height);
+  }
+  .workspace-path-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  /* Isolate the LTR path within the same line so WebKit paints its leading ellipsis. */
+  .workspace-path-label::before { content: "\2066"; }
+  .workspace-path-label::after { content: "\2069"; }
+  .workspace-stats { display: flex; flex: 0 0 auto; align-items: center; gap: var(--jot-space-4); max-inline-size: 100%; white-space: nowrap; }
+  .workspace-stats [role="status"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .workspace-count { flex: none; font-variant-numeric: tabular-nums; }
+  .workspace-count + [role="status"]:not(:empty) { border-inline-start: var(--jot-line-width) solid var(--jot-color-line); padding-inline-start: var(--jot-space-4); }
+  /* Give the recovery action the full footer, including at large type in a quick note. */
+  .workspace-stats:has([role="status"] button) > :is(.workspace-count, .workspace-move) { display: none; }
+  body:has(.workspace-footer:not([hidden])) > .error {
+    bottom: calc(var(--jot-control-height) + var(--jot-space-4));
+  }
+  .workspace-metadata { display: flex; flex: 1 1 0; align-items: center; gap: var(--jot-space-1); min-width: 0; overflow: hidden; }
+  .workspace-metadata > .icon-button { flex: none; }
+  .workspace-move { display: inline-flex; align-items: center; gap: var(--jot-space-2); min-width: 0; border: 0; background: transparent; }
+  .workspace-move.workspace-location { display: block; }
+}

@@ -1,0 +1,25 @@
+fn main() {
+    println!("cargo:rerun-if-changed=src/host/macos.m");
+    println!("cargo:rerun-if-changed=src/host/identity.m");
+    println!("cargo:rerun-if-changed=src/host/identity.h");
+    println!("cargo:rerun-if-changed=src/settings/hotkeys.m");
+    println!("cargo:rerun-if-changed=src/settings/filing.m");
+    println!("cargo:rustc-link-lib=framework=Security");
+    println!("cargo:rustc-link-lib=framework=LocalAuthentication");
+    println!("cargo:rustc-link-lib=curl");
+    println!("cargo:rerun-if-changed=src/native_ui.m");
+    println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=UniformTypeIdentifiers");
+    println!("cargo:rustc-link-lib=framework=ApplicationServices");
+    println!("cargo:rustc-link-lib=framework=Carbon");
+    cc::Build::new()
+        .file("src/host/macos.m")
+        .file("src/host/identity.m")
+        .file("src/settings/hotkeys.m")
+        .file("src/settings/filing.m")
+        .file("src/native_ui.m")
+        .flag("-fobjc-arc")
+        .flag("-mmacosx-version-min=14.0")
+        .compile("jot_host");
+    tauri_build::build();
+}

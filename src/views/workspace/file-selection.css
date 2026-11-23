@@ -1,0 +1,5 @@
+@layer jot-ui {
+  .library-tree .has-file-selection button[data-file][aria-current="true"][aria-pressed="false"]:not(:hover, :focus) { background: transparent; }
+  .library-tree button[data-file][aria-pressed="true"] { background: var(--jot-color-selection); color: var(--jot-color-text); }
+  .tree-name-new { padding-inline-start: var(--jot-space-3); }
+}

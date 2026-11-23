@@ -1,0 +1,195 @@
+@layer jot-ui {
+  .jot-editor {
+    --jot-editor-size: var(--jot-editor-font-size);
+    --jot-editor-inset: var(--jot-editor-pad-inline);
+    --jot-editor-inset-top: var(--jot-editor-pad-top);
+    --jot-editor-inset-bottom: var(--jot-editor-pad-bottom);
+  }
+  .jot-editor[data-jot-context="quick"] {
+    --jot-editor-size: var(--jot-quick-font-size);
+    --jot-editor-inset: max(var(--jot-quick-editor-pad), calc(var(--jot-heading-fold-button-size) + var(--jot-space-2)));
+    --jot-editor-inset-top: var(--jot-space-3);
+    --jot-editor-inset-bottom: var(--jot-space-6);
+  }
+}
+
+/* Hosts set layout through the component API. These rules define frame and paint. */
+.jot-editor {
+  --jot-heading-fold-gutter-width: 0px;
+  --jot-heading-fold-button-size: max(20px, 1.5rem);
+  --jot-heading-fold-offset: calc(var(--jot-editor-inset) - var(--jot-heading-fold-button-size) - var(--jot-space-1));
+  --jot-heading-fold-color: var(--jot-color-muted);
+  --jot-heading-fold-hover-background: var(--jot-color-hover);
+  --jot-heading-fold-focus-color: var(--jot-color-accent);
+  --jot-toolbar-padding: var(--jot-space-1) var(--jot-space-4);
+  --jot-toolbar-gap: var(--jot-space-1);
+  --jot-toolbar-button-size: var(--jot-control-height);
+  --jot-toolbar-icon-size: var(--jot-icon-size);
+  --jot-toolbar-accent: var(--jot-color-accent);
+  --jot-toolbar-background: var(--jot-color-bg);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.jot-editor .jot-editor-toolbar {
+  position: static;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.jot-editor .jot-editor-toolbar__group { flex: none; flex-wrap: nowrap; }
+/* Anchor command feedback to the editor, outside the toolbar's scrollport. */
+.jot-editor .jot-editor-toolbar__status {
+  inset-block-start: calc(var(--jot-toolbar-button-size) + 3 * var(--jot-space-1));
+}
+@container (max-width: 40rem) {
+  .jot-editor-toolbar {
+    --jot-toolbar-padding: var(--jot-space-1) var(--jot-space-2);
+  }
+  .jot-editor .jot-editor-toolbar__button { padding-inline: var(--jot-space-1); }
+  .jot-editor .jot-editor-toolbar__group { gap: 0; }
+  .jot-editor .jot-editor-toolbar__group:not([hidden]) ~ .jot-editor-toolbar__group { padding-inline-start: var(--jot-space-1); }
+}
+
+.jot-editor-metrics {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  font-family: var(--jot-editor-font-family);
+  font-size: var(--jot-editor-size);
+  height: var(--jot-editor-table-tools-height);
+  width: max(var(--jot-list-marker-min), var(--jot-ordered-width, 0px), var(--jot-ordered-task-width, 0px));
+}
+.jot-editor-metrics > span { display: block; height: 1lh; line-height: var(--jot-editor-heading-leading); }
+
+.jot-editor.jot-markdown-editor[data-jot-editor-mode] .jot-markdown-editor__input .cm-content,
+.jot-editor.jot-markdown-editor .jot-markdown-editor__surface {
+  padding: var(--jot-editor-inset-top) var(--jot-editor-inset) var(--jot-editor-inset-bottom);
+}
+.jot-editor.jot-markdown-editor[data-jot-editor-mode] .jot-markdown-editor__input .jot-live-preview-content {
+  min-height: 0;
+  padding-block-start: 0;
+}
+/* CodeMirror anchors virtual rows in content coordinates. Keep the page's
+   top margin outside those rows when Markdown headings replace plain lines. */
+.jot-editor.jot-markdown-editor[data-jot-editor-mode="live-preview"] .jot-markdown-editor__input .cm-scroller {
+  padding-block-start: var(--jot-editor-inset-top);
+}
+.jot-editor :is(.cm-scroller, .jot-markdown-editor__surface) { overscroll-behavior-y: none; }
+.jot-editor.jot-markdown-editor .cm-content:not(.jot-live-preview-content) { width: 100%; min-width: 0; }
+.jot-editor .cm-content[data-before-heading="first"] > .cm-line:first-child:not([data-jot-heading-level]),
+.jot-editor .cm-content > [data-before-heading="next"] + .cm-line:not([data-jot-heading-level]) {
+  font-size: var(--jot-heading-1-font-size);
+  line-height: var(--jot-heading-1-line-height);
+  font-weight: 700;
+  padding-inline: 0;
+}
+/* Enter creates a plain CodeMirror row before the worker classifies it as a blank or paragraph. */
+.jot-editor .jot-live-preview-content > .cm-line:where(:not(.jot-live-preview-line)) {
+  padding-inline: var(--jot-paragraph-padding-x);
+}
+.jot-editor .jot-live-preview-content > .jot-live-preview-native-block--heading:not(.jot-live-preview-native-block--block-quote,.jot-live-preview-list-item) {
+  padding-inline: 0;
+}
+/* The checkbox replaces an unordered task's visual marker. Numbered items keep their ordinal. */
+.jot-editor .cm-content.jot-live-preview-content .cm-line.jot-live-preview-list-item {
+  --jot-live-list-marker-column: var(--jot-list-indent);
+}
+.jot-editor .cm-content.jot-live-preview-content .cm-line.jot-live-preview-list-item::before {
+  inline-size: calc(var(--jot-list-indent) - var(--jot-list-marker-gap));
+}
+.jot-editor .cm-content.jot-live-preview-content .cm-line[data-jot-live-list-marker="•"]:has(.jot-live-preview-task-checkbox)::before {
+  content: none;
+}
+.jot-editor .jot-editor-content .jot-list-item[data-marker-text]::before {
+  box-sizing: border-box;
+  flex: none;
+  width: calc(var(--jot-list-indent) - var(--jot-list-marker-gap));
+  min-width: 0;
+  margin-inline-end: var(--jot-list-marker-gap);
+}
+/* Place the checkbox in the marker column, keeping the actual Markdown separator
+   in the editable text. Continuations still use the same paragraph start. */
+.jot-editor :is(.jot-live-preview-list-item, .jot-list-item) .jot-task-checkbox {
+  font: inherit;
+  width: var(--jot-task-box-size);
+  height: var(--jot-task-box-size);
+  margin-inline-start: calc(-1 * (var(--jot-task-box-size) + var(--jot-list-marker-gap)));
+  margin-inline-end: calc(var(--jot-list-marker-gap) - var(--jot-editor-source-space));
+}
+.jot-editor .cm-content.jot-live-preview-content .cm-line[data-jot-live-list-marker]:not([data-jot-live-list-marker="•"]):has(.jot-live-preview-task-checkbox)::before,
+.jot-editor .jot-editor-content .jot-list-item[value]:has(.jot-task-checkbox)::before {
+  box-sizing: border-box;
+  padding-inline-end: calc(var(--jot-task-box-size) + var(--jot-list-marker-gap));
+}
+.jot-editor .jot-editor-content .jot-list-item[value]:has(.jot-task-checkbox)::before {
+  content: attr(data-marker-text);
+}
+.jot-editor.jot-markdown-editor :is(.jot-live-preview-content, .jot-editor-content) {
+  --jot-heading-1-font-size: calc(1em * var(--jot-editor-heading-ratio-1));
+  --jot-heading-2-font-size: calc(1em * var(--jot-editor-heading-ratio-2));
+  --jot-heading-3-font-size: calc(1em * var(--jot-editor-heading-ratio-3));
+  --jot-heading-4-font-size: calc(1em * var(--jot-editor-heading-ratio-4));
+  --jot-heading-5-font-size: calc(1em * var(--jot-editor-heading-ratio-5));
+  --jot-heading-6-font-size: calc(1em * var(--jot-editor-heading-ratio-6));
+}
+:root[data-jot-paper="ruled"] .jot-editor :is(
+  .jot-live-preview-content > .cm-line:not(.jot-live-preview-line):has(> br:only-child),
+  .jot-live-preview-content > .cm-line:is(.jot-live-preview-native-block--paragraph,.jot-live-preview-blank-line):not(.jot-live-preview-native-block--block-quote,.jot-live-preview-list-item,.jot-live-preview-source-fenced-code,.jot-live-preview-source-math-block),
+  .jot-editor-content > [data-jot-kind="paragraph"],
+  .jot-editor-content > [data-jot-kind="blank-line"]
+) {
+  background-image: linear-gradient(to top, var(--jot-color-rule-paper) var(--jot-line-width), transparent var(--jot-line-width));
+  background-size: 100% 1lh;
+  background-repeat: repeat-y;
+  background-origin: content-box;
+  background-clip: content-box;
+}
+.jot-editor .cm-cursor, .jot-editor .cm-dropCursor { border-left-color: var(--jot-color-text); }
+.jot-editor .cm-content { caret-color: var(--jot-color-text); }
+.jot-editor :is(.jot-command-dialog, .jot-editor-toolbar__picker) { font-size: var(--jot-type-body); }
+.jot-editor :is(.jot-command-dialog, .jot-editor-toolbar__dimensions) input {
+  border: var(--jot-line-width) solid var(--jot-search-border, var(--jot-color-line));
+  border-radius: var(--jot-radius);
+  padding: var(--jot-space-2) var(--jot-space-3);
+  background: var(--jot-color-bg);
+  color: var(--jot-color-text);
+}
+.jot-editor :is(.jot-command-dialog input, .jot-editor-toolbar__dimensions input, .jot-search-input):where(:hover:enabled) {
+  --jot-search-border: var(--jot-color-field-hover);
+}
+.jot-editor :is(.jot-command-dialog input, .jot-editor-toolbar__dimensions input, .jot-search-panel .jot-search-row input.jot-search-input):focus {
+  --jot-search-border: var(--jot-color-focus);
+  outline: none;
+  box-shadow: var(--jot-focus-ring);
+}
+.jot-editor .jot-command-list button[aria-selected="true"] {
+  background: var(--jot-color-accent-fill);
+  color: var(--jot-color-on-accent);
+}
+.jot-editor .jot-heading-fold-gutter .cm-gutterElement:has(> button[data-jot-fold-id]) {
+  display: flex;
+  align-items: center;
+}
+.jot-editor .jot-heading-fold-button { flex: none; border-radius: var(--jot-radius-small); }
+.jot-editor .jot-heading-fold-button:not([aria-busy="true"])::before {
+  content: "";
+  width: var(--jot-editor-fold-mark-size);
+  height: var(--jot-editor-fold-mark-size);
+  border-right: max(var(--jot-line-width), .1rem) solid currentColor;
+  border-bottom: max(var(--jot-line-width), .1rem) solid currentColor;
+  transform: translateY(-17%) rotate(45deg);
+}
+.jot-editor .jot-heading-fold-button[aria-expanded="false"]:not([aria-busy="true"])::before {
+  transform: translateX(-17%) rotate(-45deg);
+}
+.jot-editor :is([data-jot-kind="heading"], .jot-pretext-block--heading) > .jot-heading-fold-button {
+  inset-inline-start: calc(-1 * var(--jot-heading-fold-button-size, 20px) - var(--jot-space-1));
+  top: 50%;
+  transform: translateY(-50%);
+}
+.jot-editor .jot-mermaid { background: var(--jot-color-bg); border-radius: var(--jot-radius); }
+.jot-editor .jot-table-toolbar { border-block-end-color: var(--jot-color-line); }
+.jot-editor .jot-table-cell { border-block-end-color: var(--jot-color-line); }

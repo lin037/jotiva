@@ -1,0 +1,16 @@
+@layer jot-ui {
+  .window-picker[open] { display: flex; flex-direction: column; gap: var(--jot-space-3); }
+  .window-picker h2 { margin: 0; }
+  .window-picker-list { min-height: 0; max-height: calc(8 * var(--jot-note-row-height)); overflow-y: auto; }
+  .window-picker-list:empty, .window-picker .form-message:empty { display: none; }
+  .window-picker .form-message { margin: 0; }
+  .window-picker-option {
+    display: flex; align-items: center; gap: var(--jot-space-3); min-height: var(--jot-note-row-height);
+    padding-inline: var(--jot-space-2); border-radius: var(--jot-radius-small); cursor: pointer;
+  }
+  .window-picker-option:hover { background: var(--jot-color-hover); }
+  .window-picker-option[aria-selected="true"] { background: var(--jot-color-selection); }
+  .window-picker-title, .window-picker-app { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .window-picker-title { flex: 1; }
+  .window-picker-app { max-width: 40%; font-size: var(--jot-type-small); color: var(--jot-color-muted); }
+}

@@ -1,0 +1,27 @@
+@layer jot-ui {
+  .sheet {
+    width: min(var(--jot-sheet-width), calc(100% - var(--jot-space-7)));
+    max-height: calc(100% - var(--jot-space-7));
+    overflow: auto;
+    padding: var(--jot-space-6);
+    color: var(--jot-color-text);
+    background: var(--jot-color-bg);
+    border: var(--jot-line-width) solid var(--jot-color-line);
+    border-radius: var(--jot-radius-large);
+    box-shadow: var(--jot-shadow-popup);
+  }
+  .sheet::backdrop { background: var(--jot-color-backdrop, rgb(0 0 0 / 25%)); }
+  .sheet h2 { margin: 0 0 var(--jot-space-5); font-size: var(--jot-type-title); }
+  .sheet-field { display: grid; gap: var(--jot-space-2); margin-bottom: var(--jot-space-4); }
+  .sheet-check { display: flex; align-items: center; gap: var(--jot-space-2); }
+  .sheet-check input { width: auto; }
+  .sheet textarea { resize: vertical; }
+  .path-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--jot-space-2); }
+  .sheet-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--jot-space-2); }
+  .folder-location, .form-message { overflow-wrap: anywhere; white-space: pre-line; }
+  .form-message { color: var(--jot-color-muted); }
+  .form-message:empty { display: none; }
+  .access-help { margin-block: var(--jot-space-3); font-size: var(--jot-type-small); }
+  .access-help summary { cursor: pointer; }
+  .access-help p { overflow-wrap: anywhere; }
+}

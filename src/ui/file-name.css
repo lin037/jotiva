@@ -1,0 +1,6 @@
+@layer jot-ui {
+  .tree-name-field { min-width: 0; width: 100%; }
+  .tree-name-field input { width: 100%; height: var(--jot-note-row-height); min-width: 0; font: inherit; padding-inline: var(--jot-space-2); }
+  .tree-name-error { color: var(--jot-color-error); font-size: var(--jot-type-small); overflow-wrap: anywhere; }
+  .tree-name-error:empty { display: none; }
+}
