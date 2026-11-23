@@ -6,7 +6,9 @@ Jotiva 是用 Tauri 2 构建的 Markdown 桌面应用。TypeScript 负责窗口�
 
 ## 从源码启动
 
-在 macOS 上安装 Xcode Command Line Tools、Rustup、Node.js 24 和 pnpm。项目锁定 pnpm 11.11.0 和 Rust 1.100.0。 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)
+三端均使用 Rustup、Node.js 24 和 pnpm。项目锁定 pnpm 11.11.0 和 Rust 1.100.0。macOS 需要 Xcode Command Line Tools，Windows 需要 MSVC C++ 桌面开发工具与 WebView2 Runtime，Linux 需要 WebKitGTK 4.1、GTK、AppIndicator、OpenSSL 和 libxdo 的开发包。 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)
+
+在 Windows 和 WSL 同时开发时，两个系统各自安装前端依赖。WSL 可以把工作副本放在 Linux 用户目录，并设置 `CARGO_TARGET_DIR="$HOME/.cache/jotiva-target"`，这样 Vite 的原生模块与 Cargo 构建缓存都使用本端架构。X11 和 Wayland 的原生回放命令见[测试指南](verification.md#linux-桌面回放)。
 
 在包含本项目 `package.json` 的目录运行。
 
@@ -29,7 +31,7 @@ pnpm tauri dev
 | `src-tauri/src/main.rs`、`events.rs` | 注册 Tauri 命令与全局状态，定义前后台交换的事件和视图数据。 |
 | `src-tauri/src/desktop.rs`、`desktop/note_windows.rs`、`windows.rs` | 处理窗口状态、切换宿主、速记面板和独立文档窗口。 |
 | `src-tauri/src/library/`、`storage.rs` | 管理便签、工作区、归档、索引和文件操作。底层文件写入由 `storage.rs` 提供。 |
-| `src-tauri/src/host/`、`native_ui.m`、`menus.rs` | 处理外部窗口身份、系统事件、原生面板与菜单。 |
+| `src-tauri/src/host.rs`、`platform/{macos,windows,linux}/`、`menus.rs` | 宿主数据、各桌面适配器与应用菜单。AppKit 桥接源码位于 `platform/macos/objc/`。 |
 | `src-tauri/src/settings/` | 保存外观、快捷键和其他应用偏好。 |
 | `qa/`、`showcase/` | 测试夹具和供人试用的虚构文档。 |
 

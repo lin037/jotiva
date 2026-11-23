@@ -1,3 +1,6 @@
+import { desktopPlatform } from "../desktop/platform";
+import { Menu } from "@tauri-apps/api/menu";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { invoke } from "@tauri-apps/api/core";
 import { clearError, report } from "./dom";
 
@@ -10,6 +13,14 @@ export async function popupMenu(event: MouseEvent, items: (Item | null)[]) {
   try {
     const anchor = event.detail === 0 && event.clientX === 0 && event.clientY === 0 && event.currentTarget instanceof Element
       ? event.currentTarget.getBoundingClientRect() : undefined;
+    if (!desktopPlatform.nativePopup) {
+      const menu = await Menu.new({items: items.map(item => item ? {
+        text: item.label, action: () => { void Promise.resolve().then(item.run).catch(report); },
+      } : {item: "Separator"})});
+      try { await menu.popup(new LogicalPosition(anchor?.left ?? event.clientX, anchor?.bottom ?? event.clientY)); }
+      finally { await menu.close(); }
+      return;
+    }
     const selected = await invoke<number | null>("context_menu", {
       labels: items.map(item => item?.label ?? null),
       x: anchor?.left ?? event.clientX,
@@ -22,5 +33,5 @@ export async function popupMenu(event: MouseEvent, items: (Item | null)[]) {
 }
 
 export function copyText(text: string) {
-  return invoke<void>("copy_text", { text });
+  return desktopPlatform.nativePasteboard ? invoke<void>("copy_text", { text }) : navigator.clipboard.writeText(text);
 }

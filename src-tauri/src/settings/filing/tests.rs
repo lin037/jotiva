@@ -272,22 +272,7 @@ fn only_the_current_unfiled_note_creates_a_markdown_file() {
     fs::remove_dir_all(base).unwrap();
 }
 
-fn post_fixture(endpoint: &str, key: &str, payload: &Value) -> (i64, Vec<u8>) {
-    unsafe extern "C" {
-        fn jot_filing_http(
-            endpoint: *const c_char,
-            key: *const c_char,
-            payload: *const c_char,
-            timeout: std::ffi::c_long,
-            reply: *mut *mut c_char,
-        ) -> i64;
-    }
-    let url = CString::new(endpoint).unwrap();
-    let key = CString::new(key).unwrap();
-    native_response(payload, |json, reply| unsafe {
-        jot_filing_http(url.as_ptr(), key.as_ptr(), json.as_ptr(), 25, reply)
-    })
-}
+use crate::platform::filing::post_fixture;
 
 #[test]
 #[ignore = "requires a local HTTP listener"]

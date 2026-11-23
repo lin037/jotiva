@@ -26,10 +26,16 @@ pub struct FileEntry {
     directory: bool,
 }
 
-pub fn is_markdown(path: &Path) -> bool {
+pub const DOCUMENT_EXTENSIONS: &[&str] = &["md", "markdown", "txt"];
+
+pub fn is_document(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+        .is_some_and(|ext| {
+            DOCUMENT_EXTENSIONS
+                .iter()
+                .any(|suffix| ext.eq_ignore_ascii_case(suffix))
+        })
 }
 
 impl Workspace {
@@ -89,7 +95,7 @@ fn entries(directory: &Path) -> io::Result<Vec<FileEntry>> {
         let kind = child.file_type()?;
         let path = child.path();
         // Traversing links can leave a chosen root or introduce directory cycles.
-        if kind.is_dir() || (kind.is_file() && is_markdown(&path)) {
+        if kind.is_dir() || (kind.is_file() && is_document(&path)) {
             children.push(FileEntry {
                 name,
                 path,
@@ -111,8 +117,8 @@ pub fn workspace_roots(app: AppHandle) -> Vec<PathBuf> {
 }
 
 #[tauri::command]
-pub fn add_workspace_folder(app: AppHandle) -> Result<bool, String> {
-    let Some(path) = folders::choose()? else {
+pub async fn add_workspace_folder(app: AppHandle) -> Result<bool, String> {
+    let Some(path) = folders::choose().await? else {
         return Ok(false);
     };
     app.state::<Mutex<Workspace>>()
@@ -183,12 +189,7 @@ pub async fn open_library_file(app: AppHandle, path: PathBuf) -> Result<NoteId, 
 
 #[tauri::command]
 pub async fn choose_markdown_file(app: AppHandle) -> Result<Option<NoteId>, String> {
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.run_on_main_thread(move || {
-        let _ = sender.send(folders::choose_markdown());
-    })
-    .map_err(|error| error.to_string())?;
-    let Some(path) = receiver.await.map_err(|error| error.to_string())?? else {
+    let Some(path) = folders::choose_markdown().await? else {
         return Ok(None);
     };
     tauri::async_runtime::spawn_blocking(move || {
@@ -234,38 +235,20 @@ pub fn read_tab_titles(
         .collect()
 }
 
-unsafe extern "C" {
-    fn jot_dropped_file_paths() -> *mut std::ffi::c_char;
-    fn free(pointer: *mut std::ffi::c_void);
+pub fn open_drop(app: &AppHandle, paths: Vec<PathBuf>) {
+    let paths: Vec<_> = paths.into_iter().filter(|p| is_document(p)).collect();
+    if paths.is_empty() {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = drop_paths(app, paths).await {
+            folders::show_error(&e);
+        }
+    });
 }
 
-#[tauri::command]
-pub async fn open_dropped_markdown(app: AppHandle, names: Vec<String>) -> Result<(), String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.run_on_main_thread(move || {
-        let raw = unsafe { jot_dropped_file_paths() };
-        let paths = unsafe {
-            serde_json::from_slice::<Vec<PathBuf>>(std::ffi::CStr::from_ptr(raw).to_bytes())
-        };
-        unsafe { free(raw.cast()) };
-        let _ = tx.send(paths);
-    })
-    .map_err(|e| e.to_string())?;
-    let paths = rx
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
-    let paths: Vec<_> = paths.into_iter().filter(|p| is_markdown(p)).collect();
-    let mut received: Vec<_> = paths
-        .iter()
-        .filter_map(|p| p.file_name()?.to_str())
-        .collect();
-    received.sort_unstable();
-    let mut names = names;
-    names.sort_unstable();
-    if paths.is_empty() || received != names {
-        return Err("无法确认这次拖入的文件，请重新拖放".into());
-    }
+pub(crate) async fn drop_paths(app: AppHandle, paths: Vec<PathBuf>) -> Result<(), String> {
     let handle = app.clone();
     let (ids, errors) = tauri::async_runtime::spawn_blocking(move || read_paths(&handle, paths))
         .await
@@ -327,8 +310,8 @@ pub fn open_paths(app: &AppHandle, paths: Vec<PathBuf>) {
     });
 }
 
-pub fn menu_add(app: &AppHandle) -> Result<(), String> {
-    if add_workspace_folder(app.clone())? {
+pub async fn menu_add(app: &AppHandle) -> Result<(), String> {
+    if add_workspace_folder(app.clone()).await? {
         desktop::open_main(app, None)?;
         app.emit_to(windows::MAIN, "desktop:workspace-added", ())
             .map_err(|error| error.to_string())?;
@@ -339,7 +322,7 @@ pub fn menu_add(app: &AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::symlink;
+    use crate::platform::test_links::directory as symlink;
 
     #[test]
     #[ignore = "capacity fixture with thousands of files"]
@@ -351,7 +334,7 @@ mod tests {
         }
         fs::write(root.join(".hidden.md"), "").unwrap();
         fs::write(root.join("sub/nested.md"), "").unwrap();
-        fs::write(root.join("ignored.txt"), "").unwrap();
+        fs::write(root.join("ignored.bin"), "").unwrap();
         symlink(&root, root.join("loop")).unwrap();
         let files = entries(&root).unwrap();
         assert_eq!(files.len(), 2_001);
@@ -365,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn roots_persist_and_only_direct_visible_markdown_children_are_listed() {
+    fn roots_persist_and_only_direct_visible_document_children_are_listed() {
         let data = std::env::temp_dir().join(format!("jot-workspace-{}", std::process::id()));
         let root = data.join("project");
         fs::create_dir_all(root.join("sub")).unwrap();
@@ -385,7 +368,7 @@ mod tests {
         let files = entries(&workspace.resolve(&root).unwrap()).unwrap();
         assert_eq!(
             files.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
-            ["sub", "a.markdown", "B.MD"]
+            ["sub", "a.markdown", "B.MD", "other.txt"]
         );
         assert!(workspace.resolve(&root.join("loop")).is_err());
         workspace.remove(&fs::canonicalize(&root).unwrap()).unwrap();

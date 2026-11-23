@@ -1,3 +1,4 @@
+import { fileName } from "../../ui/file-name";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
 import { button, element } from "../../ui/dom";
@@ -25,7 +26,7 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
     const selected = entries.find(entry => entry.id === active || entry.path === activePath);
     if (selected && !shown.includes(selected)) shown[shown.length - 1] = selected;
     rows.replaceChildren(...shown.map(entry => {
-      const name = entry.path.slice(entry.path.lastIndexOf("/") + 1);
+      const name = fileName(entry.path);
       const row = button("", async () => open(entry.id ?? await openLibraryFile(entry.path)), "note-row");
       row.append(element("strong", undefined, name));
       row.title = name;

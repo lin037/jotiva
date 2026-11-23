@@ -1,0 +1,18 @@
+{
+  "bundle": {
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "linux": {
+      "deb": {
+        "recommends": [
+          "libsecret-tools",
+          "zenity",
+          "gnome-keyring",
+          "fonts-noto-cjk"
+        ]
+      }
+    }
+  }
+}

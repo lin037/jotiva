@@ -1,9 +1,10 @@
+import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
 import { listen } from "@tauri-apps/api/event";
 import { popupMenu, copyText } from "../../ui/context-menu";
 import { attachOnSwitch, workspaceFileType } from "./document-drag";
-import { editFileName, fileName } from "../../ui/file-name";
+import { editFileName, fileName, isDescendant } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
@@ -56,7 +57,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
   function directoryRow(file: FileEntry, root = false) {
     const branch = element("section");
     const line = element("div", "library-line");
-    const name = root && roots.some(path => path !== file.path && path.slice(path.lastIndexOf("/") + 1) === file.name)
+    const name = root && roots.some(path => path !== file.path && fileName(path) === file.name)
       ? file.path : file.name;
     const entry = treeRow(name, expanded.has(file.path), async () => {
       if (expanded.has(file.path)) {
@@ -107,7 +108,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
       const active = selected;
       if (active && files.length > pageSize) {
         // Keep the open document visible without building all preceding pages.
-        const index = files.findIndex(child => child.path === active || (child.directory && active.startsWith(child.path + "/")));
+        const index = files.findIndex(child => child.path === active || (child.directory && isDescendant(active, child.path)));
         if (index >= pageSize) {
           files = files.slice();
           files.splice(pageSize - 1, 0, files.splice(index, 1)[0]);
@@ -134,7 +135,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     | { kind: "move"; directory: string } | { kind: "trash" | "duplicate" };
 
   function owningRoot(path: string) {
-    return roots.filter(root => path === root || path.startsWith(root.endsWith("/") ? root : root + "/"))
+    return roots.filter(root => path === root || isDescendant(path, root))
       .sort((a, b) => b.length - a.length)[0];
   }
 
@@ -142,7 +143,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     const result = await invoke<{path: string | null}>("workspace_action", { path, action });
     if ((action.kind === "rename" || action.kind === "move") && result.path) {
       for (const old of Array.from(expanded)) {
-        if (old === path || old.startsWith(path + "/")) {
+        if (old === path || isDescendant(old, path)) {
           expanded.delete(old);
           expanded.add(result.path + old.slice(path.length));
         }
@@ -173,7 +174,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     const row = (event.target as Element).closest<HTMLElement>("[data-directory], [data-file]");
     if (!row) return;
     const path = row.dataset.directory ?? row.dataset.file!;
-    const name = path.slice(path.lastIndexOf("/") + 1) || path;
+    const name = fileName(path) || path;
     const directory = !!row.dataset.directory;
     const menu = directory ? [
       { label: "新建文档", run: () => createFile(row) },
@@ -181,12 +182,12 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     ] : [
       { label: "打开", run: async () => openNote(await openLibraryFile(path)) },
       { label: "在新窗口打开", run: async () => invoke("open_document_window", { id: await openLibraryFile(path) }) },
-      { label: "挂载到窗口…", run: async () => attachOnSwitch(await openLibraryFile(path)) },
+      ...(desktopPlatform.hostWindows ? [{ label: "挂载到窗口…", run: async () => attachOnSwitch(await openLibraryFile(path)) }] : []),
     ];
     popupMenu(event, [
       ...menu, null,
-      { label: "在 Finder 中显示", run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(path) },
+      { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
+      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
       { label: "复制相对路径", run: () => copyText(relativePath(path)) }, null,
       { label: "重命名…", run: async () => {
         if (!directory) { renameFile(row); return; }
@@ -198,9 +199,9 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
         await invoke("remove_workspace_folder", { path });
         await refresh();
       } }] : []),
-      { label: "移到废纸篓…", run: async () => {
-        if (await fileDialog("将“" + name + "”移到废纸篓？", "移到废纸篓", undefined,
-          directory ? "文件夹及其中所有内容都会移到废纸篓。" : undefined) !== undefined) await change(path, { kind: "trash" });
+      { label: `移到${desktopPlatform.trash}…`, run: async () => {
+        if (await fileDialog(`将“${name}”移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`, undefined,
+          directory ? `文件夹及其中所有内容都会移到${desktopPlatform.trash}。` : undefined) !== undefined) await change(path, { kind: "trash" });
       } },
     ]);
   });
@@ -286,7 +287,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
       return;
     }
     for (const path of roots) {
-      panel.append(directoryRow({ name: path.slice(path.lastIndexOf("/") + 1) || path, path, directory: true }, true));
+      panel.append(directoryRow({ name: fileName(path) || path, path, directory: true }, true));
     }
   }
 

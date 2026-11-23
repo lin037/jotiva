@@ -38,4 +38,4 @@ Jotiva 支持 macOS 14 及更新版本。打开 Jotiva 后，按 `⌘O` 选一�
 
 在设置中可以切换深浅色、导入 CSS 和重新录入快捷键。常用操作和文件保存位置见 [使用手册](docs/user-guide.md)。想参与开发，读 [开发者指南](docs/developer-guide.md)。
 
-Windows 支持在计划中，会先适配打开、编辑和保存 Markdown，再做快捷键和窗口关联。欢迎提交你的使用场景。 [Windows 反馈](https://github.com/lin037/jotiva/issues/new?template=windows.yml) · [参与贡献](CONTRIBUTING.md)
+源码提供 Windows 和 Linux 桌面适配。Windows 支持原地编辑 Markdown 和 UTF-8 文本文件，并可将文档拖到其他应用窗口挂载，Linux 支持文档工作区和独立便签，兼容 EWMH 的 X11 会话还支持外部窗口关联。各平台构建环境与功能差异见 [开发者指南](docs/developer-guide.md) 和 [平台能力表](docs/architecture.md#桌面平台边界)。 [Windows 反馈](https://github.com/lin037/jotiva/issues/new?template=windows.yml) · [参与贡献](CONTRIBUTING.md)

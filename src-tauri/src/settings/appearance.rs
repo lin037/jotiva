@@ -111,10 +111,6 @@ pub struct Appearance {
     system_size: f64,
 }
 
-unsafe extern "C" {
-    fn jot_system_font_size() -> f64;
-}
-
 impl Appearance {
     pub fn load(file: PathBuf) -> io::Result<Self> {
         let saved = match fs::read(&file) {
@@ -125,7 +121,7 @@ impl Appearance {
         Ok(Self {
             file,
             saved,
-            system_size: unsafe { jot_system_font_size() },
+            system_size: crate::platform::system_font_size(),
         })
     }
 

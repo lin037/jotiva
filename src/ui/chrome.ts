@@ -2,6 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { button, report } from "./dom";
 
 const glyphs = {
+  menu: "M2.5 4h11m-11 4h11m-11 4h11",
+  minimize: "M3 8.5h10",
+  maximize: "M3.5 3.5h9v9h-9z",
+  restore: "M5.5 3h7.5v7.5M3 5.5h7.5V13H3z",
+  close: "m3.5 3.5 9 9m0-9-9 9",
   collapse: "M3 3.5h10M4.5 10.5 8 7l3.5 3.5",
   expand: "M3 12.5h10M4.5 5.5 8 9l3.5-3.5",
   pin: "m7.2 2.4 6.4 6.4m-5.4-5.4L5.7 6.9l-2.1.7 4.8 4.8.7-2.1 3.5-2.5M6 10l-3.5 3.5",
@@ -95,6 +100,7 @@ export function dragOnMouseDown(region: HTMLElement) {
   region.addEventListener("mousedown", event => {
     if (event.button !== 0 || (event.target as Element).closest("button, input, select, [data-no-drag]")) return;
     event.preventDefault();
+    event.stopPropagation();
     void invoke("drag_window").catch(report);
   });
 }

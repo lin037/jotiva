@@ -1,3 +1,4 @@
+import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { button, element } from "../ui/dom";
@@ -61,6 +62,7 @@ export function watchAccessibility(update: (trusted: boolean) => void | Promise<
 
 /** Keep the requested window action pending while the user visits System Settings. */
 export async function allowWindowAccess(title: string, signal?: AbortSignal): Promise<boolean> {
+  if (!desktopPlatform.usesAccessibilityPermission) return desktopPlatform.hostWindows && !signal?.aborted;
   const trusted = await invoke<boolean>("accessibility_trusted");
   if (signal?.aborted || trusted) return !signal?.aborted && trusted;
 

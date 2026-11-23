@@ -1,4 +1,4 @@
-// Standalone AppKit regression. Link with src-tauri/src/native_ui.m in a test executable.
+// Standalone AppKit regression. Link with src-tauri/src/platform/macos/objc/native_ui.m in a test executable.
 #import <AppKit/AppKit.h>
 
 extern NSInteger jot_popup_menu(void *window, const char *const *labels, size_t count, double x, double y);

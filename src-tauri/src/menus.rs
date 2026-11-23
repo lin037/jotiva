@@ -1,4 +1,3 @@
-use std::ffi::{CString, c_char, c_void};
 use std::{collections::HashMap, sync::Mutex};
 
 use tauri::{
@@ -10,66 +9,15 @@ use tauri::{
 };
 
 use crate::{
-    desktop, events, set_stylesheet, set_theme_mode,
+    desktop, events, open_settings, set_stylesheet, set_theme_mode,
     settings::{
         Preferences,
         appearance::Appearance,
         appearance::{AppearanceView, ThemeMode},
         shortcuts::Action,
     },
-    show_settings,
     windows::{self, SettingsSection},
 };
-
-unsafe extern "C" {
-    fn jot_popup_menu(
-        window: *mut c_void,
-        labels: *const *const c_char,
-        count: usize,
-        x: f64,
-        y: f64,
-    ) -> isize;
-    fn jot_copy_text(text: *const c_char) -> bool;
-    fn jot_close_key_window(tabbed_workspace: *mut c_void) -> bool;
-}
-
-#[tauri::command]
-pub fn context_menu(
-    window: tauri::WebviewWindow,
-    labels: Vec<Option<String>>,
-    x: f64,
-    y: f64,
-) -> Result<Option<usize>, String> {
-    let strings: Vec<_> = labels
-        .into_iter()
-        .map(|label| label.map(CString::new).transpose())
-        .collect::<Result<_, _>>()
-        .map_err(|e| e.to_string())?;
-    let labels: Vec<_> = strings
-        .iter()
-        .map(|label| label.as_ref().map_or(std::ptr::null(), |s| s.as_ptr()))
-        .collect();
-    let index = unsafe {
-        jot_popup_menu(
-            window.ns_window().map_err(|e| e.to_string())?,
-            labels.as_ptr(),
-            labels.len(),
-            x,
-            y,
-        )
-    };
-    Ok(usize::try_from(index).ok())
-}
-
-#[tauri::command]
-pub fn copy_text(text: String) -> Result<(), String> {
-    let text = CString::new(text).map_err(|e| e.to_string())?;
-    if unsafe { jot_copy_text(text.as_ptr()) } {
-        Ok(())
-    } else {
-        Err("无法写入剪贴板".into())
-    }
-}
 
 #[derive(Clone, Copy, Default, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -95,12 +43,29 @@ pub struct Context {
     multiple_tabs: bool,
 }
 
+#[tauri::command]
+pub async fn application_menu(window: tauri::WebviewWindow, x: f64, y: f64) -> Result<(), String> {
+    // Release the WebView2 IPC callback before the native menu runs its modal loop.
+    windows::on_main_thread(move || {
+        let menu = window.app_handle().menu().ok_or("应用菜单尚未就绪")?;
+        window
+            .popup_menu_at(&menu, tauri::LogicalPosition::new(x, y))
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
 pub fn build(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     menu_with_keys(app, &Preferences::default())
 }
 
 fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<Menu<tauri::Wry>> {
     let key = |id: &str| {
+        match id {
+            "document:history.undo" => return Some("Ctrl+Z"),
+            "document:history.redo" => return Some("Ctrl+Y"),
+            _ => {}
+        }
         crate::settings::shortcuts::commands()
             .iter()
             .find(|command| command.menu.as_deref() == Some(id))
@@ -123,21 +88,6 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
         MenuItem::with_id(app, id, label, enabled, key(id))
     };
 
-    let jot = Submenu::with_items(
-        app,
-        "Jotiva",
-        true,
-        &[
-            &Native::about(app, Some("关于 Jotiva"), None)?,
-            &item("jot-settings", "设置…")?,
-            &Native::separator(app)?,
-            &Native::hide(app, Some("隐藏 Jotiva"))?,
-            &Native::hide_others(app, Some("隐藏其他应用"))?,
-            &Native::show_all(app, Some("全部显示"))?,
-            &Native::separator(app)?,
-            &item("jot-quit", "退出 Jotiva")?,
-        ],
-    )?;
     let file = Submenu::with_items(
         app,
         "文件",
@@ -146,7 +96,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             &item("jot-new", "新建")?,
             &item("jot-new-window", "新建文档窗口")?,
             &item("document:open-window", "在新窗口打开当前文档")?,
-            &item("jot-open-file", "打开 Markdown…")?,
+            &item("jot-open-file", "打开文档…")?,
             &item("jot-add-workspace", "添加文件夹到工作区…")?,
             &item("jot-save", "保存")?,
             &item("jot-move", "移动便签…")?,
@@ -154,22 +104,27 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
         ],
     )?;
     file.append_items(&[&Native::separator(app)?, &item("jot-close", "关闭")?])?;
-    let edit = Submenu::with_items(
-        app,
-        "编辑",
-        true,
-        &[
+    let edit = Submenu::with_items(app, "编辑", true, &[])?;
+    if crate::platform::MACOS {
+        edit.append_items(&[
             &Native::undo(app, Some("撤销"))?,
             &Native::redo(app, Some("重做"))?,
-            &Native::separator(app)?,
-            &Native::cut(app, Some("剪切"))?,
-            &Native::copy(app, Some("复制"))?,
-            &Native::paste(app, Some("粘贴"))?,
-            &Native::select_all(app, Some("全选"))?,
-            &Native::separator(app)?,
-            &item("document:search.open", "查找当前文档…")?,
-        ],
-    )?;
+        ])?;
+    } else {
+        edit.append_items(&[
+            &item("document:history.undo", "撤销")?,
+            &item("document:history.redo", "重做")?,
+        ])?;
+    }
+    edit.append_items(&[
+        &Native::separator(app)?,
+        &Native::cut(app, Some("剪切"))?,
+        &Native::copy(app, Some("复制"))?,
+        &Native::paste(app, Some("粘贴"))?,
+        &Native::select_all(app, Some("全选"))?,
+        &Native::separator(app)?,
+        &item("document:search.open", "查找当前文档…")?,
+    ])?;
     let paragraph = Submenu::with_items(
         app,
         "段落",
@@ -272,18 +227,48 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
         true,
         &[&item("jot-shortcuts", "快捷键速查")?],
     )?;
-    Menu::with_items(
-        app,
-        &[
-            &jot, &file, &edit, &paragraph, &format, &view, &theme, &window, &help,
-        ],
-    )
+    if crate::platform::MACOS {
+        let jot = Submenu::with_items(
+            app,
+            "Jotiva",
+            true,
+            &[
+                &Native::about(app, Some("关于 Jotiva"), None)?,
+                &item("jot-settings", "设置…")?,
+                &Native::separator(app)?,
+                &Native::hide(app, Some("隐藏 Jotiva"))?,
+                &Native::hide_others(app, Some("隐藏其他应用"))?,
+                &Native::show_all(app, Some("全部显示"))?,
+                &Native::separator(app)?,
+                &item("jot-quit", "退出 Jotiva")?,
+            ],
+        )?;
+        Menu::with_items(
+            app,
+            &[
+                &jot, &file, &edit, &paragraph, &format, &view, &theme, &window, &help,
+            ],
+        )
+    } else {
+        file.append(&item("jot-quit", "退出 Jotiva")?)?;
+        let tools = Submenu::with_items(app, "工具", true, &[&item("jot-settings", "设置…")?])?;
+        help.append(&Native::about(app, Some("关于 Jotiva"), None)?)?;
+        Menu::with_items(
+            app,
+            &[
+                &file, &edit, &paragraph, &format, &view, &theme, &tools, &window, &help,
+            ],
+        )
+    }
 }
 
 /// macOS keeps an NSMenuItem's old key equivalent when muda receives None.
 /// Install freshly built menu items so clearing and swapping bindings also work.
 pub fn apply_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<()> {
     app.set_menu(menu_with_keys(app, preferences)?)?;
+    for w in app.webview_windows().into_values() {
+        crate::platform::prepare_caption(&w)?;
+    }
     let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
     sync_theme(app, &appearance)?;
     sync(app, focused(app).as_deref())
@@ -368,18 +353,7 @@ pub fn workspace_tab_menu(window: tauri::WebviewWindow, multiple: bool) -> Resul
 
 fn close_active(app: &AppHandle) -> Result<(), String> {
     let multiple = app.state::<Mutex<Context>>().lock().unwrap().multiple_tabs;
-    let workspace = app.get_webview_window(windows::MAIN).filter(|_| multiple);
-    let pointer = workspace
-        .as_ref()
-        .map(|window| window.ns_window())
-        .transpose()
-        .map_err(|error| error.to_string())?
-        .unwrap_or(std::ptr::null_mut());
-    if unsafe { jot_close_key_window(pointer) } {
-        app.emit_to(windows::MAIN, events::EDITOR_ACTION, "close-tab")
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
+    crate::platform::window::close_active(app, multiple)
 }
 
 pub fn sync(app: &AppHandle, label: Option<&str>) -> tauri::Result<()> {
@@ -435,7 +409,12 @@ pub fn sync(app: &AppHandle, label: Option<&str>) -> tauri::Result<()> {
                         && label == Some(windows::MAIN)
                 }
                 "jot-previous" => multiple_tabs,
-                "jot-attach" | "jot-outline" => document.exists && label == Some(windows::MAIN),
+                "jot-attach" => {
+                    crate::platform::host_windows()
+                        && document.exists
+                        && label == Some(windows::MAIN)
+                }
+                "jot-outline" => document.exists && label == Some(windows::MAIN),
                 "jot-locate" => document.attached && label == Some(windows::MAIN),
                 "jot-sidebar" => label == Some(windows::MAIN),
                 _ if id.starts_with("document:") => document.exists,
@@ -480,21 +459,35 @@ pub fn handle(app: &AppHandle, event: MenuEvent) {
         return;
     }
     desktop::report(match id {
-        "jot-settings" => show_settings(app.clone(), None),
-        "jot-appearance" => show_settings(app.clone(), Some(SettingsSection::Appearance)),
-        "jot-shortcuts" => show_settings(app.clone(), Some(SettingsSection::Shortcuts)),
+        "jot-settings" => open_settings(app, None),
+        "jot-appearance" => open_settings(app, Some(SettingsSection::Appearance)),
+        "jot-shortcuts" => open_settings(app, Some(SettingsSection::Shortcuts)),
         "jot-system" => set_theme_mode(app, ThemeMode::System),
         "jot-light" => set_theme_mode(app, ThemeMode::Light),
         "jot-dark" => set_theme_mode(app, ThemeMode::Dark),
         "jot-remove-css" => set_stylesheet(app.clone(), None),
         "jot-quit" => desktop::request_quit(app),
         "jot-quick" => desktop::perform(app, Action::Quick),
-        "jot-open-file" => crate::library::folders::choose_markdown().map(|path| {
-            if let Some(path) = path {
-                crate::library::workspace::open_paths(app, vec![path.into()]);
-            }
-        }),
-        "jot-add-workspace" => crate::library::workspace::menu_add(app),
+        "jot-open-file" | "jot-add-workspace" => {
+            let app = app.clone();
+            let folder = id == "jot-add-workspace";
+            tauri::async_runtime::spawn(async move {
+                if folder {
+                    desktop::report(crate::library::workspace::menu_add(&app).await)
+                } else {
+                    desktop::report(
+                        crate::library::folders::choose_markdown()
+                            .await
+                            .map(|path| {
+                                if let Some(p) = path {
+                                    crate::library::workspace::open_paths(&app, vec![p.into()]);
+                                }
+                            }),
+                    )
+                }
+            });
+            Ok(())
+        }
         "jot-main" if focused(app).as_deref().is_some_and(windows::is_quick) => {
             editor_action(app, "main")
         }

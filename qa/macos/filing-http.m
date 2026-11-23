@@ -1,4 +1,4 @@
-#import "../../src-tauri/src/settings/filing.m"
+#import "../../src-tauri/src/platform/macos/objc/filing.m"
 
 int main(int argc, const char *argv[]) {
     if (argc != 3 || !loopbackAddress(argv[1])) return 2;

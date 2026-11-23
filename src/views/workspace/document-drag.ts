@@ -1,3 +1,4 @@
+import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, sources, type NoteId } from "../../desktop/ipc";
@@ -24,7 +25,7 @@ export async function attachOnSwitch(id: NoteId) {
   const dialog = element("dialog", "sheet jot-dialog");
   dialog.setAttribute("aria-label", "切换应用挂载");
   const title = element("h2", undefined, "切换到要挂载的窗口");
-  const message = element("p", "form-message", "按 ⌘Tab 或点选目标窗口。");
+  const message = element("p", "form-message", `按 ${desktopPlatform.switchWindow} 或点选目标窗口。`);
   message.setAttribute("role", "status");
   const actions = element("div", "sheet-actions");
   let waiting = true;
@@ -61,6 +62,7 @@ export function documentDrag(
   pick: (apply: (choice: number) => Promise<void>) => void,
   reveal: (source: string) => Promise<void>,
 ) {
+  if (!desktopPlatform.hostWindows) return;
   let outgoing: Payload | undefined;
   let highlighted: Element | undefined;
 

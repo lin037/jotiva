@@ -1,3 +1,5 @@
+import { desktopPlatform, displayPath } from "../../desktop/platform";
+import { deleteSelectionPressed } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
 import { copyText, popupMenu } from "../../ui/context-menu";
 import { report } from "../../ui/dom";
@@ -61,7 +63,7 @@ export function fileSelection(panel: HTMLElement, rename: (row: HTMLElement) => 
   async function mutate(files: string[], directory?: string) {
     if (!directory) {
       const sample = files.slice(0, 3).map(fileName).join("、") + (files.length > 3 ? " 等" : "");
-      if (await fileDialog(`将选中的 ${files.length} 个文件移到废纸篓？`, "移到废纸篓", undefined, sample) === undefined) return;
+      if (await fileDialog(`将选中的 ${files.length} 个文件移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`, undefined, sample) === undefined) return;
     }
     await flush(files);
     await invoke("file_selection_action", { paths: files, action: directory ? { kind: "move", directory } : { kind: "trash" } });
@@ -78,9 +80,9 @@ export function fileSelection(panel: HTMLElement, rename: (row: HTMLElement) => 
     }
     event.stopImmediatePropagation();
     void popupMenu(event, [
-      { label: "复制绝对路径", run: () => copyText(files.join("\n")) },
+      { label: "复制绝对路径", run: () => copyText(files.map(displayPath).join("\n")) },
       { label: "复制相对路径", run: () => copyText(files.map(relative).join("\n")) }, null,
-      { label: "移到废纸篓…", run: () => mutate(files) },
+      { label: `移到${desktopPlatform.trash}…`, run: () => mutate(files) },
     ]);
   }, true);
   panel.addEventListener("keydown", event => {
@@ -91,7 +93,7 @@ export function fileSelection(panel: HTMLElement, rename: (row: HTMLElement) => 
       event.preventDefault(); rows().forEach(item => selected.add(item.dataset.file!)); paint();
     } else if (event.key === "Escape") { clear(); }
     else if (event.key === "F2" && paths(row).length === 1) { event.preventDefault(); rename(row); }
-    else if (event.metaKey && event.key === "Backspace") {
+    else if (deleteSelectionPressed(event)) {
       const files = paths(row);
       if (files.length > 1) { event.preventDefault(); void mutate(files).catch(report); }
     }

@@ -1,10 +1,7 @@
 use std::{
     collections::HashSet,
-    ffi::{CStr, CString, c_char, c_void},
     fs, io,
-    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
-    ptr,
     sync::{Mutex, MutexGuard, RwLock},
 };
 
@@ -14,63 +11,13 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::{
     folders::Folders,
     notes::{NoteId, NoteLocation, Notes, file_stem},
-    workspace::{Workspace, is_markdown},
+    workspace::{Workspace, is_document},
 };
+use crate::platform::{FileManager, Native};
 use crate::{events, storage::create_markdown};
 
 // Serialize native tree mutations, independently of the locks needed to look up roots or edit notes.
 static PATH_CHANGES: Mutex<()> = Mutex::new(());
-
-unsafe extern "C" {
-    fn jot_manage_path(
-        action: i32,
-        source: *const c_char,
-        target: *const c_char,
-        trashed: *mut *mut c_char,
-    ) -> *mut c_char;
-    fn jot_reveal_path(path: *const c_char);
-    fn free(pointer: *mut c_void);
-}
-
-fn native_path(
-    action: i32,
-    source: &Path,
-    target: Option<&Path>,
-) -> Result<Option<PathBuf>, String> {
-    let source = CString::new(source.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    let target = target
-        .map(|path| CString::new(path.as_os_str().as_bytes()))
-        .transpose()
-        .map_err(|e| e.to_string())?;
-    let mut trashed = ptr::null_mut();
-    let error = unsafe {
-        jot_manage_path(
-            action,
-            source.as_ptr(),
-            target.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
-            &mut trashed,
-        )
-    };
-    if !error.is_null() {
-        let message = unsafe { CStr::from_ptr(error) }
-            .to_string_lossy()
-            .into_owned();
-        unsafe {
-            free(error.cast());
-        }
-        return Err(message);
-    }
-    if trashed.is_null() {
-        return Ok(None);
-    }
-    let path = PathBuf::from(std::ffi::OsStr::from_bytes(
-        unsafe { CStr::from_ptr(trashed) }.to_bytes(),
-    ));
-    unsafe {
-        free(trashed.cast());
-    }
-    Ok(Some(path))
-}
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -88,27 +35,31 @@ fn filename(name: &str) -> Result<&str, String> {
     if name.is_empty()
         || name.starts_with('.')
         || name.contains(['/', ':', '\\'])
+        || name
+            .chars()
+            .any(crate::platform::storage::invalid_name_char)
+        || crate::platform::storage::reserved_name(name)
         || name.chars().any(char::is_control)
     {
-        return Err("请输入有效名称，名称不能以点开头或包含路径分隔符".into());
+        return Err("请输入有效名称，名称不能使用路径分隔符、系统保留名或非法字符".into());
     }
     Ok(name)
 }
 
 fn markdown_name(name: &str) -> Result<String, String> {
     let name = filename(name)?;
-    if is_markdown(Path::new(name)) {
+    if is_document(Path::new(name)) {
         return Ok(name.into());
     }
     if Path::new(name).extension().is_some() {
-        return Err("文件扩展名须为 .md 或 .markdown".into());
+        return Err("文件扩展名须为 .md、.markdown 或 .txt".into());
     }
     Ok(format!("{name}.md"))
 }
 
 fn archive_title(name: &str) -> Result<String, String> {
     let name = filename(name)?;
-    if is_markdown(Path::new(name)) {
+    if is_document(Path::new(name)) {
         return Ok(filename(
             Path::new(name)
                 .file_stem()
@@ -155,7 +106,7 @@ fn copy_sibling(source: &Path) -> Result<PathBuf, String> {
             Err(error) => return Err(error.to_string()),
             Ok(false) => {}
         }
-        native_path(1, source, Some(&target))?;
+        Native::copy(source, &target)?;
         return Ok(target);
     }
     unreachable!()
@@ -237,20 +188,27 @@ fn relocate(
         }
     }
     let mut result = FileResult::default();
-    let undo_from = match &target {
+    let trashed = match &target {
         Some(to) => {
-            native_path(0, source, Some(to))?;
-            to.clone()
+            Native::move_to(source, to)?;
+            None
         }
-        None => native_path(2, source, None)?.ok_or("系统未返回废纸篓位置")?,
+        None => Some(Native::trash(source)?),
     };
-    if let Err(error) = update_paths(workspace, folders, notes, source, target, &mut result) {
-        native_path(0, &undo_from, Some(source)).map_err(|undo| {
-            format!(
-                "更新记录失败（{error}），文件保留在 {}（{undo}）",
-                undo_from.display()
-            )
-        })?;
+    if let Err(error) = update_paths(
+        workspace,
+        folders,
+        notes,
+        source,
+        target.clone(),
+        &mut result,
+    ) {
+        let restored = match (target, trashed) {
+            (Some(to), _) => Native::move_to(&to, source),
+            (_, Some(saved)) => Native::restore(saved, source),
+            _ => unreachable!(),
+        };
+        restored.map_err(|undo| format!("更新记录失败（{error}），还原文件失败（{undo}）"))?;
         return Err(error);
     }
     Ok(result)
@@ -496,7 +454,7 @@ fn change_selection(
         if (!in_workspace && !in_archive)
             || (directory.is_some() && !in_workspace)
             || (path.starts_with(data) && parent != inbox)
-            || !is_markdown(&path)
+            || !is_document(&path)
             || fs::canonicalize(&path).as_ref().ok() != Some(&path)
             || !path.is_file()
         {
@@ -656,7 +614,7 @@ fn manage_note(
     {
         let metadata =
             fs::symlink_metadata(path).map_err(|e| format!("无法读取 {}：{e}", path.display()))?;
-        if !metadata.is_file() || !is_markdown(path) {
+        if !metadata.is_file() || !is_document(path) {
             return Err("原位置已不是 Markdown 文件".into());
         }
     }
@@ -701,11 +659,7 @@ pub fn reveal_file(path: PathBuf) -> Result<(), String> {
     if !path.exists() {
         return Err("此路径已不存在".into());
     }
-    let path = CString::new(path.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    unsafe {
-        jot_reveal_path(path.as_ptr());
-    }
-    Ok(())
+    Native::reveal(&path)
 }
 
 #[cfg(test)]

@@ -1,17 +1,20 @@
 use std::{
-    ffi::CString,
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Write},
-    os::unix::{ffi::OsStrExt, fs::OpenOptionsExt, io::AsRawFd},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use crate::platform::storage::{copy_metadata, open_options, rename_exclusive, swap};
 use serde::Serialize;
 
 pub fn system_temporary_roots() -> Vec<PathBuf> {
-    [std::env::temp_dir(), "/tmp".into(), "/var/tmp".into()]
-        .into_iter()
+    std::iter::once(std::env::temp_dir())
+        .chain(
+            crate::platform::storage::TEMP_ROOTS
+                .iter()
+                .map(PathBuf::from),
+        )
         .filter_map(|root| fs::canonicalize(root).ok())
         .collect()
 }
@@ -44,13 +47,11 @@ pub fn check_directory(directory: &Path) -> io::Result<()> {
 
 pub fn lock_library(data: &Path) -> io::Result<File> {
     fs::create_dir_all(data)?;
-    let lock = OpenOptions::new()
+    let lock = open_options(0o600)
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
         .open(data.join(".jot.lock"))?;
     lock.try_lock().map_err(|error| {
         io::Error::other(format!(
@@ -78,10 +79,9 @@ fn sibling(path: &Path, visible: bool) -> PathBuf {
 fn staged_file(path: &Path, mode: u32) -> io::Result<(PathBuf, File)> {
     loop {
         let temporary = sibling(path, false);
-        match OpenOptions::new()
+        match open_options(mode)
             .write(true)
             .create_new(true)
-            .mode(mode)
             .open(&temporary)
         {
             Ok(file) => return Ok((temporary, file)),
@@ -112,7 +112,7 @@ pub fn create_markdown(path: &Path, contents: &str) -> io::Result<()> {
     if let Err(error) = file
         .write_all(contents.as_bytes())
         .and_then(|()| file.sync_all())
-        .and_then(|()| rename_with(&temporary, path, libc::RENAME_EXCL))
+        .and_then(|()| rename_exclusive(&temporary, path))
     {
         let _ = fs::remove_file(temporary);
         return Err(error);
@@ -163,20 +163,10 @@ pub fn check_markdown(path: &Path, expected: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn rename_with(from: &Path, to: &Path, flags: libc::c_uint) -> io::Result<()> {
-    let from = CString::new(from.as_os_str().as_bytes())?;
-    let to = CString::new(to.as_os_str().as_bytes())?;
-    // Both C paths remain valid for this synchronous Darwin filesystem operation.
-    if unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), flags) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
 fn move_aside(path: &Path, visible: bool) -> io::Result<PathBuf> {
     loop {
         let reserved = sibling(path, visible);
-        match rename_with(path, &reserved, libc::RENAME_EXCL) {
+        match rename_exclusive(path, &reserved) {
             Ok(()) => return Ok(reserved),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
@@ -196,7 +186,7 @@ fn finish_removal(path: &Path, held: PathBuf, expected: &str) -> io::Result<()> 
     if check_markdown(&held, expected).is_ok() && fs::remove_file(&held).is_ok() {
         return Ok(());
     }
-    if rename_with(&held, path, libc::RENAME_EXCL).is_ok() {
+    if rename_exclusive(&held, path).is_ok() {
         return Err(io::Error::other(format!(
             "原文件已保留在 {}",
             path.display()
@@ -210,10 +200,13 @@ fn finish_removal(path: &Path, held: PathBuf, expected: &str) -> io::Result<()> 
 }
 
 fn exchange_markdown(temporary: &Path, path: &Path, previous: &str) -> io::Result<()> {
-    if let Err(e) = rename_with(temporary, path, libc::RENAME_SWAP) {
-        let _ = fs::remove_file(temporary);
-        return Err(e);
-    }
+    // A failed replacement can leave the displaced revision at either staging path.
+    swap(temporary, path).map_err(|e| {
+        io::Error::other(format!(
+            "无法替换 Markdown（{e}），暂存路径 {}",
+            temporary.display()
+        ))
+    })?;
     if check_markdown(temporary, previous).is_ok() {
         // A crash here may leave an old revision beside the document.
         let _ = fs::remove_file(temporary);
@@ -221,7 +214,7 @@ fn exchange_markdown(temporary: &Path, path: &Path, previous: &str) -> io::Resul
     }
     // Preserve both versions even if a third editor changes the document during recovery.
     let copy = move_aside(temporary, true).unwrap_or_else(|_| temporary.to_owned());
-    if rename_with(&copy, path, libc::RENAME_SWAP).is_ok() {
+    if swap(&copy, path).is_ok() {
         return Err(io::Error::other(format!(
             "磁盘上的 Markdown 已更改，本次编辑保留在 {}",
             copy.display()
@@ -237,11 +230,7 @@ pub fn replace_markdown(path: &Path, previous: &str, contents: &str) -> io::Resu
     if let Some(parent) = path.parent() {
         check_directory(parent)?;
     }
-    let original = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)?;
+    let original = open_options(0).read(true).write(true).open(path)?;
     let metadata = original.metadata()?;
     if !metadata.is_file() || metadata.permissions().readonly() {
         return Err(io::Error::new(
@@ -254,19 +243,7 @@ pub fn replace_markdown(path: &Path, previous: &str, contents: &str) -> io::Resu
     let prepare = (|| -> io::Result<()> {
         file.write_all(contents.as_bytes())?;
         file.set_permissions(metadata.permissions())?;
-        // Preserve Finder tags and access-control entries on the replacement.
-        let flags = libc::COPYFILE_ACL | libc::COPYFILE_XATTR;
-        if unsafe {
-            libc::fcopyfile(
-                original.as_raw_fd(),
-                file.as_raw_fd(),
-                std::ptr::null_mut(),
-                flags,
-            )
-        } != 0
-        {
-            return Err(io::Error::last_os_error());
-        }
+        copy_metadata(&original, &file)?;
         file.sync_all()?;
         check_markdown(path, previous)
     })();
@@ -274,6 +251,8 @@ pub fn replace_markdown(path: &Path, previous: &str, contents: &str) -> io::Resu
         let _ = fs::remove_file(temporary);
         return Err(error);
     }
+    drop(original);
+    drop(file);
     exchange_markdown(&temporary, path, previous)
 }
 
@@ -310,7 +289,7 @@ mod tests {
     fn a_redirected_data_root_in_system_temp_is_not_a_library() {
         let root = std::env::temp_dir().join(format!("jot-temporary-data-{}", std::process::id()));
         fs::create_dir_all(root.join("target")).unwrap();
-        std::os::unix::fs::symlink(root.join("target"), root.join("redirect")).unwrap();
+        crate::platform::test_links::directory(root.join("target"), root.join("redirect")).unwrap();
         assert!(library_path(&root.join("target")).is_err());
         assert!(library_path(&root.join("redirect")).is_err());
         assert_eq!(fs::read_dir(root.join("target")).unwrap().count(), 0);

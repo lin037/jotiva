@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fs, io,
-    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -208,6 +207,18 @@ pub struct Notes {
     next_id: NoteId,
 }
 
+fn same_regular_file(left: &Path, right: &Path) -> io::Result<bool> {
+    for path in [left, right] {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.is_file() => {}
+            Ok(_) => return Ok(false),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e),
+        }
+    }
+    same_file::is_same_file(left, right)
+}
+
 impl Notes {
     pub fn load(folder: PathBuf) -> io::Result<Self> {
         fs::create_dir_all(&folder)?;
@@ -292,9 +303,7 @@ impl Notes {
         // A crash after committing metadata may leave our staging hard link.
         for (id, stage) in stages {
             if let Some(path) = notes.records.get(&id).and_then(|e| e.note.disk_path())
-                && let (Ok(a), Ok(b)) = (fs::symlink_metadata(path), fs::symlink_metadata(&stage))
-                && a.ino() == b.ino()
-                && a.dev() == b.dev()
+                && same_regular_file(path, &stage)?
             {
                 fs::remove_file(stage)?;
             }
@@ -930,13 +939,10 @@ impl Notes {
         check_directory(&inbox)?;
         let stage = self.folder.join(format!(".{}.inbox", note.id));
         let mut published = None;
-        if let Ok(staged) = fs::symlink_metadata(&stage)
-            && staged.nlink() > 1
-        {
+        if stage.try_exists()? {
             for entry in fs::read_dir(&inbox)? {
                 let entry = entry?;
-                let info = fs::symlink_metadata(entry.path())?;
-                if info.dev() == staged.dev() && info.ino() == staged.ino() {
+                if same_regular_file(&entry.path(), &stage)? {
                     published = Some(entry.path());
                     break;
                 }
@@ -1090,9 +1096,9 @@ impl Notes {
 
     /// Paths returned by the native picker and workspace are canonicalized before indexing.
     pub fn open_file(&mut self, path: &Path) -> Result<NoteId, String> {
-        let path = fs::canonicalize(path).map_err(|error| format!("无法打开 Markdown：{error}"))?;
-        if !super::workspace::is_markdown(&path) || !path.is_file() {
-            return Err("请选择 .md 或 .markdown 文件".into());
+        let path = fs::canonicalize(path).map_err(|error| format!("无法打开文档：{error}"))?;
+        if !super::workspace::is_document(&path) || !path.is_file() {
+            return Err("请选择 .md、.markdown 或 .txt 文件".into());
         }
         let markdown = fs::read_to_string(&path)
             .map_err(|error| format!("无法读取 {}：{error}", path.display()))?;
@@ -1303,7 +1309,10 @@ fn note_name(line: &str) -> Option<String> {
         .chars()
         .take(40)
         .map(|ch| {
-            if ch.is_control() || matches!(ch, '/' | ':' | '\\') {
+            if ch.is_control()
+                || matches!(ch, '/' | ':' | '\\')
+                || crate::platform::storage::invalid_name_char(ch)
+            {
                 '-'
             } else {
                 ch
@@ -1311,6 +1320,9 @@ fn note_name(line: &str) -> Option<String> {
         })
         .collect();
     let name = name.trim_matches(['.', ' ']);
+    if crate::platform::storage::reserved_name(name) {
+        return Some(format!("_{name}"));
+    }
     (!name.is_empty()).then(|| name.to_owned())
 }
 
@@ -1324,6 +1336,14 @@ fn timestamp() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn markdown_headings_yield_usable_windows_filenames() {
+        assert_eq!(note_name("LPT1"), Some("_LPT1".into()));
+        assert_eq!(note_name("a?b<c"), Some("a-b-c".into()));
+        assert_eq!(note_name("Console"), Some("Console".into()));
+    }
 
     #[test]
     fn card_excerpt_shows_the_opening_without_repeating_the_filename() {
@@ -1681,7 +1701,7 @@ mod tests {
         let id = notes.new_note(None, "Jotiva".into());
         let inbox = notes.inbox_directory();
         fs::rename(&inbox, root.join("original")).unwrap();
-        std::os::unix::fs::symlink(&redirection, &inbox).unwrap();
+        crate::platform::test_links::directory(&redirection, &inbox).unwrap();
         assert!(notes.save(id, 0, "仍在编辑器".into()).is_err());
         assert!(!notes.metadata_path(id).exists());
         assert!(Notes::load(library).is_err());
@@ -1770,12 +1790,14 @@ mod tests {
 
     #[test]
     fn disk_document_keeps_its_identity_permissions_and_conflict_guard() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let data = std::env::temp_dir().join(format!("jot-original-{}", std::process::id()));
         let library = data.join("notes");
         let mut notes = Notes::load(library.clone()).unwrap();
         let path = data.join("meeting.md");
         fs::write(&path, "# 标题\r\n正文\r\n").unwrap();
+        #[cfg(unix)]
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let id = notes.open_file(&path).unwrap();
         assert_eq!(notes.card(id).unwrap().title, "meeting.md");
@@ -1788,6 +1810,7 @@ mod tests {
         notes.attach_to_host(id, 22, "会议 · 讨论".into()).unwrap();
         assert_eq!(notes.save(id, 1, "# 标题\n改动\n".into()).unwrap(), 2);
         assert_eq!(fs::read_to_string(&path).unwrap(), "# 标题\r\n改动\r\n");
+        #[cfg(unix)]
         assert_eq!(
             fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600

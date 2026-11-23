@@ -1,3 +1,5 @@
+import { titlebar as configureTitlebar } from "../../ui/titlebar";
+import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -5,7 +7,7 @@ import { events, notes, sources, type Card, type NoteId } from "../../desktop/ip
 import { bindWindowShortcuts, shortcutHint } from "../../desktop/shortcuts";
 import { saveBeforeClose } from "../../desktop/window-actions";
 import { NoteEditor } from "../../editor/note-editor";
-import { bindWindowMenu, dragOnMouseDown, icon, iconButton } from "../../ui/chrome";
+import { bindWindowMenu, icon, iconButton } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import { documentStatus } from "../../ui/document-status";
 import { noteList } from "../../ui/note-list";
@@ -21,7 +23,6 @@ import "./workspace.css";
 export async function mount() {
   root.className = "main-view jot-workspace";
   const titlebar = element("header", "workspace-titlebar jot-titlebar");
-  dragOnMouseDown(titlebar);
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
   const tabs = documentTabs(open, closeTab);
@@ -36,7 +37,7 @@ export async function mount() {
   outline.append(outlineHeading);
   const empty = element("div", "document-empty");
   const startActions = element("div", "workspace-start-actions");
-  startActions.append(button("打开 Markdown…", async () => {
+  startActions.append(button("打开文档…", async () => {
     const id = await invoke<NoteId | null>("choose_markdown_file");
     if (id !== null) await open(id);
   }), button("新建文档", create));
@@ -272,6 +273,7 @@ export async function mount() {
     if (!current.savedVersion) throw new Error("请先输入速记的正文");
     await invoke("float_note", { id: current.id, standalone: true });
   }, "jot-window-menu-item", "独立便签");
+  sourceButton.hidden = !desktopPlatform.hostWindows;
   windowMenu.append(hostLabel, sourceButton, floatButton);
   metadata.append(filePath.control);
   const leading = element("div", "workspace-actions workspace-leading");
@@ -279,6 +281,7 @@ export async function mount() {
   leading.append(sidebar, add);
   trailing.append(outlineButton, windowButton, settingsButton);
   titlebar.append(leading, finder.panel, trailing, windowMenu);
+  configureTitlebar(titlebar);
   workspace.append(library.sidebar, documentPane, outline);
   root.append(titlebar, workspace);
   workspaceDividers(workspace, library.sidebar, outline, () => { void editor?.remeasure().catch(report); });

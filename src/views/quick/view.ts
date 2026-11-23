@@ -1,3 +1,5 @@
+import { titlebar as configureTitlebar } from "../../ui/titlebar";
+import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -36,6 +38,7 @@ function foldedCard(view: Extract<QuickView, { kind: "summary" }>, expand: () =>
     rename();
   });
   header.append(title, iconButton("expand", "展开便签", expand));
+  if (desktopPlatform.customCaption) configureTitlebar(header, true);
   card.append(header);
   if (!view.docked) {
     card.append(excerpt);
@@ -118,7 +121,7 @@ export async function mount() {
 
   function titleBar() {
     const header = element("header", "quick-titlebar jot-titlebar");
-    dragOnMouseDown(header);
+    configureTitlebar(header, true);
     return header;
   }
 
@@ -172,7 +175,8 @@ export async function mount() {
     });
     const handle = iconButton("window", "拖动挂载或点选窗口", choose);
     handle.dataset.tip = "拖动挂载";
-    handle.draggable = true;
+    handle.hidden = !desktopPlatform.hostWindows;
+    handle.draggable = desktopPlatform.hostWindows;
     handle.addEventListener("dragstart", event => {
       if (!event.dataTransfer) return;
       event.dataTransfer.setData("application/x-jot-note", String(id));
@@ -207,7 +211,7 @@ export async function mount() {
     const label = view.standalone ? "新建独立便签" : "在此窗口新建便签";
     add.querySelector("span")!.textContent = label;
     add.setAttribute("aria-label", label);
-    editPane.querySelector("[draggable=true]")!.setAttribute("aria-description", view.source ? sourceLabel(view.source) : "独立便签");
+    editPane.querySelector("[draggable=true]")?.setAttribute("aria-description", view.source ? sourceLabel(view.source) : "独立便签");
     editPane.querySelector<HTMLElement>("[data-recall]")!.hidden = !view.source;
   }
 

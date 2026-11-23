@@ -424,7 +424,7 @@ def main():
         observer_check = work / "host-focus"
         subprocess.run([
             "xcrun", "clang", "-fobjc-arc", "-Wno-deprecated-declarations",
-            str(HERE / "host-focus.m"), str(PROJECT / "src-tauri/src/host/identity.m"),
+            str(HERE / "host-focus.m"), str(PROJECT / "src-tauri/src/platform/macos/objc/identity.m"),
             "-framework", "AppKit", "-framework", "ApplicationServices", "-o", str(observer_check),
         ], check=True)
         subprocess.run([observer_check], check=True)

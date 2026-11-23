@@ -260,7 +260,7 @@ pub(super) fn dismiss(app: &AppHandle, id: NoteId) -> Result<(), String> {
     drop(desktop);
     update(app, id, true, editing)?;
     if !editing && let Some(host) = host {
-        host::raise(host);
+        Native::raise(host);
     }
     Ok(())
 }
@@ -340,7 +340,7 @@ pub(super) fn close(window: &WebviewWindow, id: NoteId, epoch: u64) -> Result<()
     }
     windows::destroy_note(window).map_err(|e| e.to_string())?;
     if !quitting && let Some(host) = host {
-        host::raise(host);
+        Native::raise(host);
     }
     Ok(())
 }

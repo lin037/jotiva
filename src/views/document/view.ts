@@ -1,3 +1,4 @@
+import { secondaryTitlebar } from "../../ui/titlebar";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -13,6 +14,7 @@ import { folderEditor, moveDocument } from "../workspace/folder-dialog";
 import "../workspace/workspace.css";
 
 export async function mount(id: NoteId) {
+  secondaryTitlebar(document.title);
   root.className = "document-pane jot-document-window";
   const paper = element("main", "editor-root");
   const { footer, metadata, counter, status } = documentStatus();

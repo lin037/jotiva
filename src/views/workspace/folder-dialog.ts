@@ -1,3 +1,5 @@
+import { displayPath } from "../../desktop/platform";
+import { fileName } from "../../ui/file-name";
 import { folders, type Folder, type NoteId } from "../../desktop/ipc";
 import { button, element, report } from "../../ui/dom";
 
@@ -18,7 +20,7 @@ export function folderEditor(onSaved: (folder: Folder) => void) {
     const choice = await folders.choose();
     if (choice) {
       path.value = choice;
-      if (!name.value) name.value = choice.slice(choice.lastIndexOf("/") + 1).slice(0, 72);
+      if (!name.value) name.value = fileName(choice).slice(0, 72);
     }
   }));
   const classify = element("input");
@@ -61,7 +63,7 @@ export function folderEditor(onSaved: (folder: Folder) => void) {
     if (!directory) return;
     id = folder?.id ?? null;
     heading.textContent = folder ? "归档目录设置" : "导入归档目录";
-    name.value = folder?.name ?? directory.split("/").pop() ?? "";
+    name.value = folder?.name ?? fileName(directory);
     classify.checked = folder?.classify ?? false;
     description.value = folder?.description ?? "";
     path.value = directory;
@@ -101,7 +103,7 @@ export function moveDocument(
   }
   function update() {
     const choice = choices.find(folder => folder.id === target());
-    path.textContent = choice ? [choice.description, choice.path].filter(Boolean).join("\n") : inbox;
+    path.textContent = choice ? [choice.description, displayPath(choice.path)].filter(Boolean).join("\n") : displayPath(inbox);
     save.disabled = target() === current;
   }
   select.addEventListener("change", update);
