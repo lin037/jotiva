@@ -64,6 +64,8 @@ jobs:
         run: |
           xvfb-run -a dbus-run-session -- python3 qa/linux-smoke.py
           xvfb-run -a dbus-run-session -- python3 qa/linux-smoke.py --wayland
+          pnpm tauri build --debug --bundles deb
+          xvfb-run -a dbus-run-session -- python3 qa/linux-package.py src-tauri/target/debug/bundle/deb/*.deb
 
   webkit:
     name: WebKit and local integrations

@@ -23,6 +23,7 @@
       {
         "ext": ["md", "markdown"],
         "contentTypes": ["net.daringfireball.markdown"],
+        "mimeType": "text/markdown",
         "name": "Markdown",
         "role": "Editor",
         "rank": "Alternate"
@@ -30,6 +31,7 @@
       {
         "ext": ["txt"],
         "contentTypes": ["public.plain-text"],
+        "mimeType": "text/plain",
         "name": "Plain Text",
         "role": "Editor",
         "rank": "Alternate"

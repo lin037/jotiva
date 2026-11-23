@@ -62,7 +62,7 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 \
   xvfb-run -a dbus-run-session -- python3 qa/linux-smoke.py --wayland
 ```
 
-回放在临时资料目录中用 WebKitGTK 打开 Markdown，修改并验证磁盘内容，打开设置与独立文档，用 Openbox 和一个临时外部应用验证 X11 挂载、关闭解绑、自绘标题栏的拖动和原生应用菜单。Wayland 用 Weston 验证独立便签与窗口控制。两种会话都检查发给 Thunar 的文件定位请求及目标路径。Windows 和 Linux 共用 WebView 内的断言。
+回放在临时资料目录中用 WebKitGTK 打开 Markdown，修改并验证磁盘内容，打开设置与独立文档，用 Openbox 和一个临时外部应用验证 X11 挂载、关闭解绑、自绘标题栏的拖动和原生应用菜单。Wayland 用 Weston 验证独立便签与窗口控制。两种会话都检查发给 Thunar 的文件定位请求及目标路径。Windows 和 Linux 共用 WebView 内的断言。Debian 包生成后，用 `xvfb-run -a dbus-run-session -- python3 qa/linux-package.py 路径.deb` 验证安装包的文件关联。该用例通过 GIO 打开两份路径带空格的中文文档，再核对两份正文。
 
 ## macOS 桌面回放
 
