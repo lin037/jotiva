@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
 
 permissions:
@@ -55,7 +53,7 @@ jobs:
           python3 -m pip install -r scripts/requirements-macos.txt
           version="${TAG#v}"
           app=src-tauri/target/universal-apple-darwin/release/bundle/macos/Jotiva.app
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/Jotiva"
+          lipo "$app/Contents/MacOS/Jotiva" -verify_arch arm64 x86_64
           python3 scripts/package-macos.py "$app" --output-dir artifacts
           file="artifacts/Jotiva_${version}_universal"
           python3 qa/macos/installers.py "$app" "$file.dmg" "$file.pkg" --zip "$file.zip"
