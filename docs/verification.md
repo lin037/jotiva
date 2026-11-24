@@ -2,11 +2,11 @@
 
 [开发者指南](developer-guide.md)
 
-所有命令从桌面项目根目录运行。首次运行先用 `pnpm install --frozen-lockfile` 安装依赖。
+请在仓库根目录运行下面的命令。第一次运行前，先用 `pnpm install --frozen-lockfile` 安装依赖。
 
 ## 每次改动
 
-| 场景 | 命令 | 证据 |
+| 场景 | 命令 | 检查内容 |
 | --- | --- | --- |
 | 类型与前端生产构建 | `pnpm build` | TypeScript、前端打包及依赖解析。 |
 | 前端单元测试 | `pnpm test:unit` | 强调色、按钮文字和搜索高亮的可读性。 |
@@ -27,7 +27,7 @@ python3 -m playwright install webkit
 pnpm test:web
 ```
 
-浏览器脚本打开本机回环页面，使用真实的前端和发布版 Worker/Wasm，文件和桌面调用使用测试数据。每个文档分组重新创建独立的浏览器上下文和夹具。Playwright 与安装的浏览器版本需要匹配。定位问题时可以用 `WEBKIT_EXECUTABLE` 指定兼容的 WebKit。
+浏览器脚本在本机加载应用前端和发布版 Worker/Wasm，用测试数据模拟文件与桌面接口。每组文档测试都用独立的浏览器上下文和测试数据。请使用与 Playwright 版本匹配的浏览器。排查问题时，可以用 `WEBKIT_EXECUTABLE` 指定兼容的 WebKit。
 
 | 命令 | 主要检查 |
 | --- | --- |
@@ -47,7 +47,7 @@ pnpm test:web
 
 在安装了 Microsoft Edge 和 WebView2 Runtime 的 Windows 桌面运行 `pnpm build`，然后运行 `node qa/windows-smoke.mjs`。回放使用独立的 Jotiva 和 Edge 配置，以及含 350 行中文的 UTF-8 CRLF 文本文件。保持桌面已解锁，让回放控制测试窗口的焦点。
 
-回放用系统按键切换工作区标签，将标签用鼠标拖到 Edge，检查挂载标题栏的按钮命中范围，拖动、置顶便签，并用 Ctrl+End、Ctrl+Home、Ctrl+Z、Ctrl+Y、Ctrl+S 验证长文导航和编辑。折叠后，从 Edge 按全局 Ctrl+Shift+Space 重新唤起同一份便签。主窗口与挂载窗口分别修改同一文档，回放检查另一窗口、宿主关闭后的解绑、磁盘正文和换行。原生菜单、独立文档的最大化、还原、关闭，资源管理器窗口的二次挂载，以及它选中的文件也有独立断言。
+脚本用系统按键切换标签，再用鼠标把一个标签拖到 Edge。它会检查标题栏按钮的响应范围、拖动和置顶，并用 Ctrl+End、Ctrl+Home、Ctrl+Z、Ctrl+Y、Ctrl+S 检查长文导航和编辑。折叠便签后，它会在 Edge 中按全局 Ctrl+Shift+Space，确认唤起的是同一份便签。随后，脚本在主窗口和挂载窗口分别修改同一文档，检查两边是否同步、宿主关闭后是否解除挂载，以及文件正文和换行是否正确。它也会单独检查原生菜单、文档窗口的最大化、还原与关闭，以及资源管理器再次挂载和选中文件的行为。
 
 推送到 `verify/**` 分支会运行三端 CI。
 

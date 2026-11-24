@@ -4,7 +4,7 @@
 
 ## 桌面平台边界
 
-一次编辑有三个独立的结果：正文以同一版本写回磁盘、窗口以系统习惯展示、便签能够找到正确的宿主。三者分别由文档库、Tauri 窗口与菜单、平台宿主适配器负责。文档 ID 与窗口句柄独立，因此可以关闭宿主、手动重新挂载，或在另一个窗口继续编辑同一个文件。
+文档库负责保存正文和修订记录，Tauri 管理 Jotiva 自己的窗口与菜单，各平台的宿主适配器负责识别其他应用的窗口。文档 ID 独立于窗口句柄。因此，关闭原来的窗口后，仍可以重新挂载便签，也可以在另一个窗口打开同一份文档。
 
 | 能力 | macOS | Windows | Linux |
 | --- | --- | --- | --- |
@@ -15,15 +15,15 @@
 | 保存时检验被替换的版本 | Darwin 文件交换 | ReplaceFileW 保留被替换的文件 | Linux renameat2 文件交换 |
 | Jev 凭据 | 钥匙串 | Windows 凭据管理器 | 使用 Secret Service、secret-tool 和 zenity |
 
-业务代码调用 [platform](../src-tauri/src/platform/mod.rs) 导出的操作。[HostBackend 和 FileManager](../src-tauri/src/platform/contract.rs) 分别定义宿主和文件操作的契约。macos、windows、linux 为同级模块，shared 只容纳复用的 Tauri 实现。编译目标选择实现，窗口构建时把平台交给 [前端平台配置](../src/desktop/platform.ts)。添加新能力时，先判断 Tauri 是否已提供窗口、菜单、对话框或文件管理器接口。涉及操作系统特有语义时，在适配器内实现，业务层继续使用相同的命令和数据格式。
+业务代码通过 `platform` 调用系统功能。`HostBackend` 定义如何与宿主窗口交互，`FileManager` 定义文件管理操作。三个系统各有自己的模块，`shared` 放共用的 Tauri 实现。编译时选择对应模块，创建窗口时把平台信息传给前端。添加桌面功能时，先查 Tauri 是否已有接口。系统专用的操作放在适配器里，业务层仍使用同样的命令和数据格式。 [平台模块](../src-tauri/src/platform/mod.rs) · [接口定义](../src-tauri/src/platform/contract.rs) · [前端配置](../src/desktop/platform.ts)
 
 ## 窗口与编辑器
 
-TypeScript 根据 Tauri 的窗口标签加载视图。主窗 `main`、设置 `settings`、速记 `quick` 和 `quick-*`、独立文档 `document-*` 共用同一个 HTML 入口。主窗同时只运行当前标签的编辑器和 Worker，切走时保存正文，再保留该标签的撤销快照、选区、阅读位置和编辑模式。打开另一扇独立文档窗会多出一份独立编辑会话。
+所有窗口共用同一个 HTML 入口，TypeScript 根据 Tauri 的窗口标签加载视图。主窗口是 `main`，设置是 `settings`，速记是 `quick` 或 `quick-*`，独立文档是 `document-*`。主窗口只运行当前标签的编辑器和 Worker。切走时会先保存正文，再保留撤销快照、选区、阅读位置和编辑模式。每开一个独立文档窗口，就会新建一份编辑会话。
 
 速记由 `desktop.rs` 协调，额外速记窗在 `desktop/note_windows.rs` 管理。Rust 用递增的 `epoch` 标记视图切换，WebView 在准备好编辑、摘要或搜索界面后用同一个编号确认。旧确认会被丢弃。折叠便签后可回收 Worker，隐藏窗口经过空闲期后可销毁 WebView。仅菜单栏常驻时仍可以用热键唤起。 [窗口事件定义](../src-tauri/src/events.rs)
 
-macOS 宿主观察使用 AppKit 和 Accessibility，Windows 通过 Win32 观察窗口，Linux 使用 X11/EWMH。macOS 能从宿主取得足够明确的身份时可恢复绑定。当前 Windows 和 Linux 的窗口标识用于当前会话，目标关闭后可从「待重新挂载」重新选择。标题可用于列表筛选。被动切回宿主会恢复便签的显示，键盘焦点仍留在宿主。 [宿主代码](../src-tauri/src/host.rs)
+macOS 用 AppKit 和 Accessibility 监听其他应用的窗口，Windows 用 Win32，Linux 用 X11/EWMH。macOS 能确认是同一个窗口时，可以恢复挂载。Windows 和 Linux 的窗口标识只在当前会话里有效。关联窗口关闭后，可在「待重新挂载」里为便签重新选一个窗口。窗口列表可以按标题筛选。切回原窗口时，便签会重新显示，键盘焦点仍在原窗口。 [宿主代码](../src-tauri/src/host.rs)
 
 ## 文档怎样保存
 
@@ -48,7 +48,7 @@ macOS 宿主观察使用 AppKit 和 Accessibility，Windows 通过 Win32 观察�
 | `appearance.json`、`settings.json` | 外观和快捷键。快捷键设置保存三项全局键位及用户改过的应用内键位。 |
 | `filing.json` | Jev 归档开关、服务地址和模型名称。密钥由各平台的系统凭据存储管理。 |
 
-归档设置页按表单里的地址查询密钥状态。WebView 只收到是否已配置或查询错误。输入和更换密钥通过原生密码框完成，保存归档偏好可以单独进行。
+归档设置页用表单里的服务地址查询密钥。WebView 只会收到有没有配置密钥，或查询失败的原因。添加和更换密钥都用系统密码框，归档设置可以单独保存。
 
 从系统文件管理器或工作区打开的 Markdown 和 UTF-8 文本文件留在原位置。保存时沿用原文件的 CRLF 或 LF 换行。注册工作区只是把路径存起来，展开目录时才读取那一级的子项。 [便签库](../src-tauri/src/library/notes.rs) · [工作区](../src-tauri/src/library/workspace.rs)
 
