@@ -1,4 +1,4 @@
-"""Refresh the notices shipped in the macOS app after a dependency upgrade."""
+"""Refresh the notices shipped with Jotiva after a dependency upgrade."""
 
 import io
 import json
@@ -92,7 +92,8 @@ def generate():
         if not texts or not all(t.strip() for t in texts):
             raise ValueError(f'No license text found for {label}')
         for text in texts:
-            groups[text.strip()].add(label)
+            normalized = '\n'.join(line.rstrip() for line in text.splitlines())
+            groups[normalized.strip()].add(label)
 
     js = installed_js()
     for (name, version), directory in sorted(js.items()):
@@ -106,7 +107,9 @@ def generate():
 
     metadata = json.loads(subprocess.check_output([
         'cargo', 'metadata', '--format-version', '1', '--locked', '--filter-platform',
-        'aarch64-apple-darwin', '--manifest-path', str(ROOT / 'src-tauri/Cargo.toml'),
+        'aarch64-apple-darwin', '--filter-platform', 'x86_64-apple-darwin',
+        '--filter-platform', 'x86_64-pc-windows-msvc', '--filter-platform', 'x86_64-unknown-linux-gnu',
+        '--manifest-path', str(ROOT / 'src-tauri/Cargo.toml'),
     ], cwd=ROOT))
     crates = {c['name']: Path(c['manifest_path']).parent for c in metadata['packages']}
     for crate in metadata['packages']:
@@ -121,6 +124,16 @@ def generate():
                 texts = installed_notices(crates['alloc-no-stdlib'])
             elif name == 'selectors':
                 texts = installed_notices(crates['cssparser'])
+            elif name == 'libappindicator-sys':
+                texts = installed_notices(crates['libappindicator'])
+            elif name == 'tauri-plugin':
+                texts = installed_notices(crates['tauri-runtime'])
+            elif name in ('dlopen2', 'dlopen2_derive', 'webview2-com', 'webview2-com-macros', 'webview2-com-sys'):
+                repository = crate['repository'].removeprefix('https://github.com/')
+                vcs = json.loads((Path(crate['manifest_path']).parent / '.cargo_vcs_info.json').read_text())
+                revision = vcs['git']['sha1']
+                url = f'https://raw.githubusercontent.com/{repository}/{revision}/LICENSE'
+                texts = [subprocess.check_output(['curl', '--fail', '--silent', '--show-error', url], text=True)]
         # Link the unmodified sources, including every crate under the MPL.
         include(f'Rust {name} {version} — https://static.crates.io/crates/{name}/{name}-{version}.crate', texts)
 

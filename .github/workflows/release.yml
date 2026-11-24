@@ -1,7 +1,14 @@
-name: Release
+name: Release packages
 
 on:
+  push:
+    branches: ['build/v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified packages to GitHub Releases (version tags only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -11,15 +18,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-24.04
+    outputs:
+      number: ${{ steps.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, tomllib
+          from pathlib import Path
+
+          version = json.loads(Path("src-tauri/tauri.conf.json").read_text())["version"]
+          frontend = json.loads(Path("package.json").read_text())["version"]
+          rust = tomllib.loads(Path("src-tauri/Cargo.toml").read_text())["package"]["version"]
+          assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), version
+          assert version == frontend == rust, (version, frontend, rust)
+          ref = os.environ["REF_NAME"]
+          assert ref in (f"v{version}", f"build/v{version}"), (ref, version)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"number={version}", file=output)
+          PY
+
   ci:
     if: github.ref_type == 'tag'
     uses: ./.github/workflows/ci.yml
 
-  packages:
+  macos:
     name: macOS universal installers
     runs-on: macos-15
-    needs: ci
-    timeout-minutes: 40
+    needs: version
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -28,48 +63,133 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
-      - name: Check version
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          python3 - <<'PY'
-          import json, os, tomllib
-          from pathlib import Path
-
-          tag = os.environ["TAG"]
-          config = json.loads(Path("src-tauri/tauri.conf.json").read_text())
-          frontend = json.loads(Path("package.json").read_text())
-          rust = tomllib.loads(Path("src-tauri/Cargo.toml").read_text())
-          assert tag == f'v{config["version"]}' == f'v{frontend["version"]}' == f'v{rust["package"]["version"]}'
-          PY
-      - name: Build application
+      - name: Build the universal application
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           python3 scripts/build-macos.py --bundles app --target universal-apple-darwin -- --locked
       - name: Build and verify installers
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.number }}
         run: |
           python3 -m pip install -r scripts/requirements-macos.txt
-          version="${TAG#v}"
           app=src-tauri/target/universal-apple-darwin/release/bundle/macos/Jotiva.app
           lipo "$app/Contents/MacOS/Jotiva" -verify_arch arm64 x86_64
           python3 scripts/package-macos.py "$app" --output-dir artifacts
-          file="artifacts/Jotiva_${version}_universal"
+          file="artifacts/Jotiva_${VERSION}_universal"
           python3 qa/macos/installers.py "$app" "$file.dmg" "$file.pkg" --zip "$file.zip"
-          git archive --format=tar.gz --prefix="Jotiva-${version}/" --output="artifacts/Jotiva-${version}-source.tar.gz" HEAD
-          cd artifacts
-          shasum -a 256 ./*.dmg ./*.pkg ./*.zip ./*.tar.gz > SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: release-macos
+          name: packages-macos-universal
+          path: artifacts/
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-2022
+    needs: version
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-web
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: pnpm tauri build --bundles nsis -- --locked
+      - name: Check installer and executable metadata
+        shell: pwsh
+        env:
+          JOTIVA_VERSION: ${{ needs.version.outputs.number }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $target = "src-tauri/target/release"
+          $installer = @(Get-ChildItem "$target/bundle/nsis/*-setup.exe")
+          if ($installer.Count -ne 1 -or $installer[0].Name -notlike "*_${env:JOTIVA_VERSION}_x64-setup.exe") {
+            throw "Wrong installer version or architecture"
+          }
+          & 7z t $installer[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw "Invalid NSIS archive" }
+          $version = (Get-Item "$target/Jotiva.exe").VersionInfo
+          if ("$($version.ProductMajorPart).$($version.ProductMinorPart).$($version.ProductBuildPart)" -ne $env:JOTIVA_VERSION) {
+            throw "Wrong application version"
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: packages-windows-x64
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86_64 packages
+    runs-on: ubuntu-24.04
+    needs: version
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-web
+      - name: Install build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libfuse2t64 patchelf xvfb xauth dbus-x11 fonts-noto-cjk
+      - run: pnpm tauri build --bundles deb,appimage -- --locked
+      - name: Check Debian launcher and AppImage
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+          GDK_BACKEND: x11
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          packages=src-tauri/target/release/bundle
+          deb=("$packages"/deb/*.deb)
+          appimage=("$packages"/appimage/*.AppImage)
+          test "$(dpkg-deb --field "${deb[0]}" Version)" = "$VERSION"
+          test "$(dpkg-deb --field "${deb[0]}" Architecture)" = amd64
+          xvfb-run -a dbus-run-session -- python3 qa/linux-package.py "${deb[0]}"
+          "${appimage[0]}" --appimage-extract > /tmp/jotiva-appimage-files
+          test -x squashfs-root/AppRun
+          test -x squashfs-root/usr/bin/Jotiva
+          mkdir -p artifacts
+          cp "${deb[0]}" "${appimage[0]}" artifacts/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: packages-linux-x86_64
+          path: artifacts/
+          if-no-files-found: error
+
+  collect:
+    name: Assemble packages and checksums
+    runs-on: ubuntu-24.04
+    needs: [version, macos, windows, linux]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: packages-*
+          path: artifacts
+          merge-multiple: true
+      - name: Export source and hash package files
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: |
+          git archive --format=tar.gz --prefix="Jotiva-${VERSION}/" --output="artifacts/Jotiva-${VERSION}-source.tar.gz" HEAD
+          cd artifacts
+          sha256sum ./*.dmg ./*.pkg ./*.zip ./*-setup.exe ./*.deb ./*.AppImage ./*.tar.gz > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-${{ needs.version.outputs.number }}
           path: artifacts/
           if-no-files-found: error
 
   publish:
     name: GitHub Release
+    if: github.ref_type == 'tag' && inputs.publish
     runs-on: ubuntu-24.04
-    needs: packages
+    needs: [version, ci, collect]
     permissions:
       contents: write
     timeout-minutes: 10
@@ -79,9 +199,9 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: release-macos
+          name: release-${{ needs.version.outputs.number }}
           path: artifacts
-      - name: Check files and publish
+      - name: Verify and publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
