@@ -30,18 +30,6 @@ pub async fn choose() -> Result<Option<String>, String> {
 pub async fn choose_markdown() -> Result<Option<String>, String> {
     pick(false).await
 }
-pub async fn new_document_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::{Emitter, Manager};
-    let window = app
-        .webview_windows()
-        .into_values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| app.get_webview_window(crate::windows::MAIN))
-        .ok_or("请先打开一个窗口")?;
-    window
-        .emit_to(window.label(), "desktop:name-document", ())
-        .map_err(|e| e.to_string())
-}
 pub fn show_error(message: &str) {
     crate::desktop::app().dialog().message(message).show(|_| {});
 }

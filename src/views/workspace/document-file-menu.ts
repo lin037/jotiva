@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel } from "../../i18n";
 import { fileName } from "../../ui/file-name";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
@@ -78,7 +78,7 @@ export function documentPath(manage?: {
       control.hidden = !path;
       if (control.dataset.fileMenuPath === path) return;
       label.textContent = control.dataset.fileMenuPath = control.title = path;
-      control.setAttribute("aria-label", t("文件操作，") + path);
+      bindLabel(control, "aria-label", () => t("文件操作，") + path);
     },
   };
 }

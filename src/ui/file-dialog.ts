@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { localized } from "../i18n";
 import { button, element } from "./dom";
 import "../styles/dialog.css";
 
@@ -6,11 +6,9 @@ interface FileDialogOptions {
   initial?: string;
   detail?: string;
   signal?: AbortSignal;
-  label?: string;
-  commit?: (name: string) => Promise<unknown>;
 }
 
-export function fileDialog(title: string, action: string, { initial, detail, signal, label, commit }: FileDialogOptions = {}): Promise<string | undefined> {
+export function fileDialog(title: string, action: string, { initial, detail, signal }: FileDialogOptions = {}): Promise<string | undefined> {
   return new Promise(resolve => {
     const dialog = element("dialog", "sheet jot-dialog");
     const form = element("form");
@@ -21,22 +19,17 @@ export function fileDialog(title: string, action: string, { initial, detail, sig
     const ok = element("button", "primary", action);
     ok.type = "submit";
     const buttons = element("div", "sheet-actions");
-    buttons.append(button(t("取消"), () => dialog.close()), ok);
+    buttons.append(button(localized("取消"), () => dialog.close()), ok);
     form.append(heading);
     if (initial !== undefined) {
       const label = element("label", "sheet-field");
-      label.append(element("span", undefined, t("名称")), input);
+      label.append(element("span", undefined, localized("名称")), input);
       form.append(label);
     }
     if (detail) form.append(element("p", "folder-location", detail));
-    const error = element("p", "form-message");
-    error.setAttribute("role", "alert");
-    error.hidden = true;
-    form.append(error, buttons);
-    if (label) input.setAttribute("aria-label", label);
+    form.append(buttons);
     dialog.setAttribute("aria-label", title);
     dialog.append(form);
-    let busy = false;
     let composing = false;
     let confirmingCandidate = false;
     input.addEventListener("compositionstart", () => { composing = true; });
@@ -50,28 +43,10 @@ export function fileDialog(title: string, action: string, { initial, detail, sig
       event.preventDefault();
       if (!confirmingCandidate) form.requestSubmit();
     });
-    input.addEventListener("input", () => { error.hidden = true; input.removeAttribute("aria-invalid"); });
-    dialog.addEventListener("cancel", event => { if (busy || composing) event.preventDefault(); });
-    form.addEventListener("submit", async event => {
+    dialog.addEventListener("cancel", event => { if (composing) event.preventDefault(); });
+    form.addEventListener("submit", event => {
       event.preventDefault();
-      if (composing || confirmingCandidate || busy) return;
-      busy = true;
-      try {
-        if (commit) {
-          const name = input.value.trim();
-          if (!name) throw new Error(t("请输入文件名"));
-          buttons.inert = input.readOnly = true;
-          await commit(name);
-        }
-        dialog.close("submit");
-      } catch (reason) {
-        error.textContent = reason instanceof Error ? reason.message : String(reason);
-        error.hidden = false;
-        input.setAttribute("aria-invalid", "true");
-        input.focus();
-      } finally {
-        busy = buttons.inert = input.readOnly = false;
-      }
+      if (!composing && !confirmingCandidate) dialog.close("submit");
     });
     const dismiss = () => dialog.close();
     dialog.addEventListener("close", () => {

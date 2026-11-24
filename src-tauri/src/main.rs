@@ -62,15 +62,27 @@ async fn open_document_window(app: AppHandle, id: Option<NoteId>) -> Result<(), 
     }
     match id {
         Some(id) => show_document(&app, id),
-        None => platform::dialogs::new_document_window(app).await,
+        None => {
+            let id = library::file_actions::create_archive_note(
+                app.clone(),
+                None,
+                i18n::t("未命名").into(),
+            )
+            .await?;
+            show_document_with_name(&app, id, true)
+        }
     }
 }
 
 fn show_document(app: &AppHandle, id: NoteId) -> Result<(), String> {
+    show_document_with_name(app, id, false)
+}
+
+fn show_document_with_name(app: &AppHandle, id: NoteId, name_on_open: bool) -> Result<(), String> {
     let card = read_card(app.clone(), id)?;
     let label = format!("document-{id}");
     desktop::retain_editor(app, &label, id);
-    if let Err(error) = windows::document(app, id, &card.title) {
+    if let Err(error) = windows::document(app, id, &card.title, name_on_open) {
         if app.get_webview_window(&label).is_none() {
             desktop::release_editor(app, &label, id);
         }
@@ -117,7 +129,7 @@ fn tile_from(window: &WebviewWindow, id: NoteId) -> Result<(), String> {
     if app.get_webview_window(windows::MAIN).is_none() {
         desktop::open_main(app, Some(id))?;
     }
-    windows::document(app, id, &title).map_err(|e| e.to_string())?;
+    windows::document(app, id, &title, false).map_err(|e| e.to_string())?;
     let main = app
         .get_webview_window(windows::MAIN)
         .ok_or("主窗口已关闭")?;
@@ -613,6 +625,31 @@ fn save_appearance(app: AppHandle, preferences: AppearancePreferences) -> Result
     if mode_changed {
         app.set_theme(view.mode().native());
     }
+    if view.language() != i18n::language() {
+        i18n::set_language(view.language());
+        let keys = app
+            .state::<Mutex<Settings>>()
+            .lock()
+            .unwrap()
+            .preferences
+            .clone();
+        menus::apply_keys(&app, &keys).map_err(|e| e.to_string())?;
+        for (item, source) in &app.state::<TrayLabels>().0 {
+            item.set_text(i18n::t(source)).map_err(|e| e.to_string())?;
+        }
+        for (label, window) in app.webview_windows() {
+            let title = if label == windows::SETTINGS {
+                "Jotiva 设置"
+            } else if windows::is_quick(&label) {
+                "Jotiva 便签"
+            } else {
+                continue;
+            };
+            window
+                .set_title(i18n::t(title))
+                .map_err(|e| e.to_string())?;
+        }
+    }
     publish_appearance(&app, view)?;
     if resized {
         desktop::appearance_changed(&app)?;
@@ -739,23 +776,26 @@ fn finish_accessibility_request(window: WebviewWindow) {
     desktop::hold_for_accessibility(&window, false);
 }
 
+struct TrayLabels(Vec<(MenuItem<tauri::Wry>, &'static str)>);
+
 fn tray(app: &AppHandle) -> tauri::Result<()> {
-    let item =
-        |id: &str, label: &str| MenuItem::with_id(app, id, i18n::t(label), true, None::<&str>);
-    let main = item("open-main", "打开 Jotiva")?;
-    let settings = item("open-settings", "设置…")?;
-    let quick = item("open-quick", "速记")?;
-    let create = item("new-quick", "新建便签")?;
-    let search = item("search", "查找便签和文档")?;
-    let overview = item("overview", "平铺便签")?;
-    let dock = item("dock", "靠右收拢 / 还原")?;
-    let quit = item("quit", "退出 Jotiva")?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &main, &quick, &create, &search, &overview, &dock, &settings, &quit,
-        ],
-    )?;
+    let menu = Menu::new(app)?;
+    let mut labels = Vec::new();
+    for (id, source) in [
+        ("open-main", "打开 Jotiva"),
+        ("open-quick", "速记"),
+        ("new-quick", "新建便签"),
+        ("search", "查找便签和文档"),
+        ("overview", "平铺便签"),
+        ("dock", "靠右收拢 / 还原"),
+        ("open-settings", "设置…"),
+        ("quit", "退出 Jotiva"),
+    ] {
+        let item = MenuItem::with_id(app, id, i18n::t(source), true, None::<&str>)?;
+        menu.append(&item)?;
+        labels.push((item, source));
+    }
+    app.manage(TrayLabels(labels));
     TrayIconBuilder::new()
         .icon(tauri::include_image!("icons/tray.png"))
         .icon_as_template(true)
@@ -796,7 +836,7 @@ fn main() {
             app.manage(Mutex::new(desktop::Desktop::default()));
             app.manage(Mutex::new(menus::Context::default()));
             let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
-            i18n::start(appearance.language());
+            i18n::set_language(appearance.language());
             app.set_theme(appearance.mode().native());
             menus::sync_theme(app.handle(), &appearance)?;
             let keys = app
@@ -892,8 +932,10 @@ fn main() {
             library::file_actions::file_selection_action,
             library::file_actions::note_action,
             library::file_actions::create_archive_note,
+            library::file_actions::name_created_document,
             library::file_actions::reveal_file,
             workspace::workspace_children,
+            workspace::search_document_files,
             workspace::open_library_file,
             workspace::choose_markdown_file,
             #[cfg(target_os = "macos")]

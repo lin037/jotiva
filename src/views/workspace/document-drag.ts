@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -24,9 +24,9 @@ function payload(data: DataTransfer): Payload | undefined {
 export async function attachOnSwitch(id: NoteId) {
   if (!await allowWindowAccess(t("切换应用挂载"))) return;
   const dialog = element("dialog", "sheet jot-dialog");
-  dialog.setAttribute("aria-label", t("切换应用挂载"));
-  const title = element("h2", undefined, t("切换到要挂载的窗口"));
-  const message = element("p", "form-message", t("按 {shortcut} 或点选目标窗口。", { shortcut: desktopPlatform.switchWindow }));
+  bindLabel(dialog, "aria-label", localized("切换应用挂载"));
+  const title = element("h2", undefined, localized("切换到要挂载的窗口"));
+  const message = element("p", "form-message", () => t("按 {shortcut} 或点选目标窗口。", { shortcut: desktopPlatform.switchWindow }));
   message.setAttribute("role", "status");
   const actions = element("div", "sheet-actions");
   let waiting = true;
@@ -39,12 +39,12 @@ export async function attachOnSwitch(id: NoteId) {
     if (waiting) await invoke("cancel_attachment");
     waiting = false;
   }
-  actions.append(button(t("从列表选择…"), async () => {
+  actions.append(button(localized("从列表选择…"), async () => {
     await cancel();
     dialog.close();
     const { windowPicker } = await import("./source-dialog");
     windowPicker()(t("选择挂载窗口"), t("挂载"), async choice => { await invoke("attach_note", { id, choice }); });
-  }), button(t("取消"), () => dialog.close()));
+  }), button(localized("取消"), () => dialog.close()));
   dialog.addEventListener("close", () => {
     unlisten();
     void cancel().catch(report);

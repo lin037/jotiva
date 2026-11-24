@@ -18,6 +18,12 @@ async function report(message) {
 }
 try {
   if (label === "main") {
+    window.addEventListener("jot:language", () => {
+      const query = document.querySelector(".workspace-search input");
+      if (query?.placeholder === (document.documentElement.lang === "en" ? "Search notes and documents" : "搜索便签和文档")) {
+        localStorage.setItem("qa-workspace-language", document.documentElement.lang);
+      }
+    });
     if (!["windows", "linux"].includes(os) || location.protocol === "file:") throw Error("Wrong desktop origin or platform");
     const id = await waitFor(() => run("initial_note"));
     const editor = await waitFor(() => document.querySelector(".cm-content[contenteditable=true]"));
@@ -56,6 +62,11 @@ try {
       menu.click();
       await waitFor(async () => (await run("plugin:window|get_all_windows")).includes("settings"), "Tools > Settings");
     }
+    await waitFor(() => localStorage.getItem("qa-language-verified"), "the settings language round trip");
+    if (scenario.has("desktop-input")) {
+      await run("open_document_window", {id: null});
+      await waitFor(() => localStorage.getItem("qa-new-window-name"), "new window named without a modal");
+    }
     await run("open_document_window", {id});
     await waitFor(async () => !(await run("plugin:window|get_all_windows")).some(w => w.startsWith("document-")), "document close");
     const file = (await run("read_note", {id})).file;
@@ -74,6 +85,15 @@ try {
   } else if (label === "quick" && scenario.has("desktop-input")) {
     const { mounted } = await import("./windows-probe.js");
     await mounted({run, report, waitFor});
+  } else if (label.startsWith("document-") && window.__jotPlatform.nameOnOpen) {
+    const name = await waitFor(() => document.querySelector(".tree-name-field input:focus"), "new document filename");
+    if (document.querySelector("dialog[open]")) throw Error("Unexpected naming dialog");
+    name.value = "QA-new-window.md";
+    name.blur();
+    const id = Number(label.slice("document-".length));
+    await waitFor(async () => (await run("read_card", {id})).archivePath.endsWith("QA-new-window.md"), "name saved after blur");
+    localStorage.setItem("qa-new-window-name", "1");
+    await run("plugin:window|close");
   } else if (label.startsWith("document-")) {
     await waitFor(() => document.querySelector(".cm-content")?.textContent.includes(text));
     const controls = document.querySelector(".caption-controls");
@@ -101,6 +121,15 @@ try {
     controls.querySelector('[data-caption="close"]').click();
   } else if (label === "settings") {
     await waitFor(() => document.querySelector("button"));
+    const language = await waitFor(() => document.querySelector("#interface-language"));
+    const original = language.value;
+    for (const value of [original === "en" ? "zh-CN" : "en", original]) {
+      language.value = value;
+      language.dispatchEvent(new Event("change", {bubbles: true}));
+      await waitFor(() => document.documentElement.lang === value && localStorage.getItem("qa-workspace-language") === value,
+        "live language in settings and workspace: " + value);
+    }
+    localStorage.setItem("qa-language-verified", "1");
     await report("settings");
   }
 } catch (error) { await report("error " + label + " " + String(error)); }

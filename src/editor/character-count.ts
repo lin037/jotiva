@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, bindLabel, localized } from "../i18n";
 import type { MarkdownEditor } from "@jot-md/editor";
 
 function countCharacters(text: string) {
@@ -12,8 +12,8 @@ function countCharacters(text: string) {
 export function trackCharacterCount(editor: MarkdownEditor, counter: HTMLElement) {
   let previous = editor.confirmedValue;
   let total = countCharacters(previous);
-  const render = () => { counter.textContent = total.toLocaleString() + t(" 字符"); };
-  counter.title = t("Markdown 源文的字符数，包含标点，不含空格和换行");
+  const render = () => { bindLabel(counter, "text", () => total.toLocaleString() + t(" 字符")); };
+  bindLabel(counter, "title", localized("Markdown 源文的字符数，包含标点，不含空格和换行"));
   render();
   return editor.subscribe(({ appliedEdits }) => {
     if (!appliedEdits?.length) return;

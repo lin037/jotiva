@@ -169,7 +169,16 @@ impl Entry {
             archive_path: note.location.as_ref().map(|location| location.path.clone()),
             folder: note.location.as_ref().and_then(|location| location.folder),
         };
-        let searchable = format!("{} {} {}", card.title, note.source, note.markdown).to_lowercase();
+        let filename = note
+            .disk_path()
+            .and_then(Path::file_name)
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        let searchable = format!(
+            "{} {} {} {}",
+            card.title, filename, note.source, note.markdown
+        )
+        .to_lowercase();
         let source_key = note.origin.map_or_else(
             || format!("label/{}", note.source),
             |id| format!("window/{id}"),

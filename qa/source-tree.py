@@ -90,6 +90,8 @@ window.permissionRequests = 0;
 window.choiceReads = 0;
 window.populate = (path, count = 85) => tree.get(path).push(...Array.from({{length:count}}, (_, i) => '长文件名-'+i+'.md'));
 let draft = '归档草稿';
+const createdArchive = new Map();
+let openedFile;
 const actions = [];
 window.archiveActions = actions;
 window.archiveReads = [];
@@ -108,10 +110,10 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
   if(cmd==='inbox_directory') return '/notes/其他';
   if(cmd==='archive_entries') {{
     archiveReads.push(args.folder);
-    return args.folder === null ? [] : [
+    return [...(createdArchive.has(args.folder) ? [createdArchive.get(args.folder)] : []), ...(args.folder === null ? [] : [
       {{id:73,path:'/archive/'+draft+'.md',managed:true}},
       {{id:null,path:'/archive/导入前的材料.markdown',managed:false}},
-    ];
+    ])];
   }}
   if(cmd==='source_choices') {{
     window.choiceReads++;
@@ -169,7 +171,25 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
   }}
   if(cmd==='create_archive_note' || cmd==='new_note') {{
     window.fileCalls.push([cmd,args]);
-    return args.folder === 9 ? 80 : 81;
+    const id = args.folder === 9 ? 80 : 81;
+    createdArchive.set(args.folder, {{id, path:(args.folder===9?'/archive/':'/notes/其他/')+'未命名.md', managed:true}});
+    return id;
+  }}
+  if(cmd==='name_created_document') {{
+    fileCalls.push([cmd,args]);
+    if (args.id !== 42) {{
+      const entry = [...createdArchive.values()].find(row => row.id === args.id);
+      entry.path = entry.path.slice(0,entry.path.lastIndexOf('/')+1)+args.name;
+      return null;
+    }}
+    const parent = openedFile.slice(0,openedFile.lastIndexOf('/'));
+    const names = tree.get(parent);
+    const index = names.indexOf(openedFile.split('/').pop());
+    let actual = args.name;
+    for(let n=2; names.includes(actual) && names[index]!==actual; n++) actual=args.name.replace(/[.]md$/, ' ('+n+').md');
+    names[index]=actual;
+    queueMicrotask(() => testSidebar.refreshFiles());
+    return actual===args.name ? null : actual;
   }}
   if(cmd==='context_menu') {{
     window.menuLabels = args.labels;
@@ -178,6 +198,7 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
   }}
   if(['open_library_file','open_document_window','copy_text'].includes(cmd)) {{
     window.fileCalls.push([cmd,args]);
+    if(cmd==='open_library_file') openedFile = args.path;
     return cmd==='open_library_file' ? 42 : undefined;
   }}
   if(cmd==='list_notes') {{
@@ -245,45 +266,54 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         page.locator('[data-directory="/work/小组"]').drag_to(page.locator('[data-directory="/work/专题"]'))
         page.wait_for_selector('[data-file="/work/专题/小组/会议.md"]')
         assert page.locator('[data-directory="/work/小组"]').count() == 0
-        def create_at(selector, name=None, cancel=False):
+        def begin_create(selector, repeat=False):
+            page.wait_for_timeout(310)
             page.locator(selector).focus()
-            assert page.evaluate("testSidebar.createAtFocus()")
+            if repeat:
+                assert all(page.evaluate("Promise.all([testSidebar.createAtFocus(), testSidebar.createAtFocus()])"))
+            else:
+                assert page.evaluate("testSidebar.createAtFocus()")
             field = page.get_by_role("textbox", name="新文档名称")
-            assert field.evaluate("el => el === document.activeElement && el.selectionEnd === 3")
-            if name is not None:
+            expect(field).to_be_focused()
+            assert field.evaluate("el => el.selectionStart===0 && el.selectionEnd===el.value.lastIndexOf('.')")
+            expect(page.locator("dialog[open]")).to_have_count(0)
+            return field
+
+        def create_at(selector, name=None):
+            field = begin_create(selector)
+            if name:
                 field.fill(name)
-            field.press("Escape" if cancel else "Enter")
-        before = page.evaluate("window.fileCalls.length")
-        create_at('[data-directory="/work"]', "取消.md", cancel=True)
-        assert page.evaluate("window.fileCalls.length") == before
-        assert page.get_by_role("button", name="新建文档").count() == 0
-        create_at('[data-directory="/work"]')
-        page.wait_for_selector('[data-file="/work/未命名.md"][aria-current=true]')
-        assert page.evaluate("!document.querySelector('dialog[open]') && window.opened===42")
-        create_at('[data-directory="/work"]', "重名.md")
-        page.wait_for_selector('[data-file="/work/重名.md"]')
-        # Candidate confirmation and a file-tree redraw must preserve the open naming sheet.
-        page.locator('[data-directory="/work"]').focus()
-        page.evaluate("testSidebar.createAtFocus()")
-        name = page.get_by_role("textbox", name="新文档名称")
-        name.evaluate("""input => {
+            page.locator(selector).focus()
+            expect(field).to_have_count(0)
+
+        root_dir = '[data-directory="/work"]'
+        before = page.evaluate("fileCalls.filter(([cmd,a])=>cmd==='workspace_action' && a.action.kind==='createFile').length")
+        field = begin_create(root_dir, repeat=True)
+        assert page.evaluate("fileCalls.filter(([cmd,a])=>cmd==='workspace_action' && a.action.kind==='createFile').length") == before + 1
+        expect(page.locator('[data-file="/work/未命名.md"]')).to_have_count(1)
+        field.fill("取消.md")
+        field.press("Escape")
+        expect(page.locator('[data-file="/work/未命名.md"]')).to_be_visible()
+        create_at(root_dir, "重名.md")
+        field = begin_create(root_dir)
+        field.evaluate("""input => {
           input.dispatchEvent(new CompositionEvent('compositionstart', {bubbles:true}));
           input.value = '重名.md';
           input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',isComposing:true,bubbles:true}));
-          input.form.requestSubmit();
           input.dispatchEvent(new CompositionEvent('compositionend', {bubbles:true}));
-          input.form.requestSubmit();
+          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true}));
         }""")
-        expect(name).to_have_value("重名.md")
-        page.get_by_role("button", name="创建", exact=True).focus()
         page.evaluate("testSidebar.refreshFiles()")
-        expect(name).to_have_value("重名.md")
-        page.get_by_role("button", name="创建", exact=True).click()
-        expect(page.get_by_role("dialog").get_by_role("alert")).to_have_text("文件已存在")
-        name.fill("拼音确认.md")
-        page.get_by_role("button", name="创建", exact=True).dblclick()
-        page.wait_for_selector('[data-file="/work/拼音确认.md"]')
-        assert page.evaluate("fileCalls.filter(([cmd,a])=>cmd==='workspace_action' && a.action.name==='拼音确认.md').length") == 1
+        expect(field).to_be_focused()
+        page.locator(root_dir).focus()
+        expect(page.locator('[data-file="/work/重名 (2).md"]')).to_be_visible()
+        expect(page.get_by_role("status").filter(has_text="重名 (2).md")).to_be_visible()
+        assert page.evaluate("fileCalls.filter(([cmd,a])=>cmd==='name_created_document' && a.name==='重名.md').length") == 2
+        field = begin_create(root_dir)
+        field.fill("失焦保留.md")
+        field.dispatch_event("compositionstart")
+        field.blur()
+        expect(page.locator('[data-file="/work/失焦保留.md"]')).to_be_visible()
         nested = "/work/专题/小组"
         page.evaluate("path => window.populate(path)", nested)
         for title in ("未命名.md", "未命名 (2).md"):
@@ -344,7 +374,7 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         page.wait_for_function("window.opened === 80")
         assert page.locator('[data-archive-folder="9"]').get_attribute("aria-expanded") == "true"
         assert page.locator('[data-archive-folder=""]').get_attribute("aria-expanded") == "true"
-        assert page.evaluate("window.fileCalls.some(([cmd,args])=>cmd==='create_archive_note' && args.folder===9 && args.name==='会议提纲.md')")
+        assert page.evaluate("window.fileCalls.some(([cmd,args])=>cmd==='create_archive_note' && args.folder===9 && args.name==='未命名')")
         assert page.locator("dialog[open]").count() == 0
         page.evaluate("async () => { archiveReads.length=0; await testSidebar.refresh(false); }")
         assert page.evaluate("archiveReads") == []

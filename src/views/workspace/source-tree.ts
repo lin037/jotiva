@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, type Label, localized } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { popupMenu } from "../../ui/context-menu";
 import { attachOnSwitch } from "./document-drag";
@@ -7,10 +7,10 @@ import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
 import { noteList } from "../../ui/note-list";
 
-export function treeRow(title: string, expanded: boolean, toggle: () => void) {
+export function treeRow(title: Label, expanded: boolean, toggle: () => void) {
   const entry = button("", toggle, "library-node");
   entry.setAttribute("aria-expanded", String(expanded));
-  entry.title = title;
+  bindLabel(entry, "title", title);
   const caret = element("span", "tree-caret");
   caret.setAttribute("aria-hidden", "true");
   entry.append(caret, element("span", "node-title", title));
@@ -20,9 +20,9 @@ export function treeRow(title: string, expanded: boolean, toggle: () => void) {
 export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
   const panel = element("section", "source-panel jot-sources");
   panel.setAttribute("role", "region");
-  panel.setAttribute("aria-label", t("窗口便签"));
+  bindLabel(panel, "aria-label", localized("窗口便签"));
   const header = element("header", "library-section-heading");
-  header.append(element("h2", undefined, t("窗口便签")), iconButton("add", t("添加来源窗口"), add));
+  header.append(element("h2", undefined, localized("窗口便签")), iconButton("add", localized("添加来源窗口"), add));
   const body = element("div", "source-sections");
   panel.append(header, body);
   const apps = new Map<string, boolean>();
@@ -70,13 +70,13 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
     function more(container: HTMLElement, key: string, total: number) {
       const limit = limits.get(key) ?? pageSize;
       if (total <= limit) return;
-      container.append(button(t("显示更多"), () => { limits.set(key, limit + pageSize); draw(); }, "library-node"));
+      container.append(button(localized("显示更多"), () => { limits.set(key, limit + pageSize); draw(); }, "library-node"));
     }
     const sections = [true, false].map(live => {
       const lane = element("section", "source-lane");
       lane.dataset.sourceState = live ? "live" : "missing";
       const laneKey = String(live);
-      const laneName = live ? t("已挂载") : t("待重新挂载");
+      const laneName = () => live ? t("已挂载") : t("待重新挂载");
       const label = element("h3", "source-lane-label");
       label.id = "source-heading-" + lane.dataset.sourceState;
       const tree = element("div", "source-lane-tree");
@@ -100,7 +100,7 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
       })).filter(group => group.windows.length);
       lane.classList.toggle("is-empty", !groups.length);
       if (!groups.length) {
-        tree.append(element("p", "library-empty muted", live ? t("拖入文档或文本以选择窗口") : t("暂无离线窗口")));
+        tree.append(element("p", "library-empty muted", () => live ? t("拖入文档或文本以选择窗口") : t("暂无离线窗口")));
       }
       for (const group of groups.slice(0, limits.get(laneKey) ?? pageSize)) {
         const groupKey = JSON.stringify([live, group.app]);

@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, bindLabel, type Label } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { button, report } from "./dom";
 
@@ -41,13 +41,13 @@ export function icon(icon: keyof typeof glyphs) {
   return glyph;
 }
 
-export function iconButton(name: keyof typeof glyphs, label: string, action: () => unknown, key?: string, tip?: string) {
+export function iconButton(name: keyof typeof glyphs, label: Label, action: () => unknown, key?: string, tip?: Label) {
   const control = button("", action, "icon-button", tip);
-  control.setAttribute("aria-label", label);
+  bindLabel(control, "aria-label", label);
   if (key) {
     const shortcut = key.replace("⇧", "Shift+").replace("⌘", "Meta+").replace("Esc", "Escape");
     control.setAttribute("aria-keyshortcuts", shortcut);
-    control.setAttribute("aria-description", t("快捷键 ") + key);
+    bindLabel(control, "aria-description", () => t("快捷键 ") + key);
   }
   control.append(icon(name));
   return control;

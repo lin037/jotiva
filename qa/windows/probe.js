@@ -23,6 +23,31 @@ function insert(value) {
 export async function workspace(ctx) {
   const {id, run, waitFor, title} = ctx;
   if (document.documentElement.lang !== "en") throw Error("Expected the saved English interface");
+  const search = document.querySelector(".workspace-search input");
+  const folder = document.querySelector("[data-directory]").dataset.directory;
+  for (const suffix of ["01", "02", "03"]) {
+    await run("open_library_file", {path: folder + "\\QA-find-" + suffix + ".md"});
+  }
+  search.focus();
+  search.value = "QA-find-";
+  search.dispatchEvent(new Event("input", {bubbles:true}));
+  const results = document.querySelector("#jot-search-results");
+  await waitFor(() => results.querySelectorAll("[role=option]").length === 12, "first mixed search batch");
+  for (const count of [24, 31]) {
+    results.scrollTop = results.scrollHeight;
+    await waitFor(() => results.querySelectorAll("[role=option]").length === count, "search batch " + count);
+  }
+  search.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true}));
+  const dir = document.querySelector("[data-directory]");
+  dir.focus();
+  dir.dispatchEvent(new KeyboardEvent("keydown", {ctrlKey:true, key:"n", code:"KeyN", bubbles:true, cancelable:true}));
+  const name = await waitFor(() => document.querySelector('.tree-name-field input') === document.activeElement && document.activeElement, "inline name");
+  if (name.tagName !== "INPUT" || document.querySelector("dialog[open]")) throw Error("Expected inline naming");
+  name.value = "QA-find-01.md";
+  dir.focus();
+  await waitFor(() => document.querySelector('[data-file$="QA-find-01 (2).md"]'), "renamed workspace file");
+  await run("show_main", {id});
+  await waitFor(() => editor()?.textContent.includes("Desktop edit"), "original document restored");
   const settings = await run("read_settings");
   if (settings.shortcutError) throw Error(settings.shortcutError);
   const other = await run("new_note");

@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, bindLabel, localized } from "../i18n";
 import { primaryPressed } from "../desktop/platform";
 import type { MarkdownEditor, MarkdownEditorOptions } from "@jot-md/editor";
 import { normalizeInsertedText } from "@jot-md/editor/adapter";
@@ -76,7 +76,7 @@ export class NoteEditor {
   #removed = false;
   #unlisten?: UnlistenFn;
   #keys = new AbortController();
-  #fileButton = button(t("用 Jev 归档"), () => this.file(), "workspace-move");
+  #fileButton = button(localized("用 Jev 归档"), () => this.file(), "workspace-move");
   #filing?: AbortController;
   #openedFiling?: { version: number; ticket: number };
   #stopAppearance?: () => void;
@@ -235,9 +235,9 @@ export class NoteEditor {
         session.showRecovery(t("原文件当前不可用，显示上次保存的内容"));
       } else if (localStorage.getItem("jot:recovered-note") === String(id)) {
         localStorage.removeItem("jot:recovered-note");
-        status.textContent = t("原路径不可用，正在编辑「其他」中的副本");
+        bindLabel(status, "text", localized("原路径不可用，正在编辑「其他」中的副本"));
       } else {
-        status.textContent = note.version ? t("已保存") : t("新便签");
+        bindLabel(status, "text", () => note.version ? t("已保存") : t("新便签"));
       }
       root.addEventListener("focusin", event => {
         const button = event.target;
@@ -291,7 +291,7 @@ export class NoteEditor {
       void invoke("cancel_filing", { id: this.id, ...this.#openedFiling }).catch(report);
       this.#openedFiling = undefined;
     }
-    if (this.status.textContent !== t("正在编辑")) this.status.textContent = t("正在编辑");
+    if (this.status.textContent !== t("正在编辑")) bindLabel(this.status, "text", localized("正在编辑"));
     window.clearTimeout(this.#timer);
     this.#timer = window.setTimeout(() => { void this.save().catch(report); }, 650);
   }
@@ -311,7 +311,7 @@ export class NoteEditor {
     this.markdown = incoming;
     this.version = disk.version;
     if (this.editor.value === incoming) {
-      this.status.textContent = t("已保存");
+      bindLabel(this.status, "text", localized("已保存"));
     }
   }
 
@@ -360,7 +360,7 @@ export class NoteEditor {
         this.version = await notes.save(this.id, this.version, markdown);
       }
       this.markdown = markdown;
-      this.status.textContent = this.editor.value === markdown ? t("已保存") : t("正在编辑");
+      bindLabel(this.status, "text", () => this.editor.value === markdown ? t("已保存") : t("正在编辑"));
     });
     this.#tail = save;
     return save.catch(error => {
@@ -371,13 +371,13 @@ export class NoteEditor {
 
   private showRecovery(message = t("保存失败")) {
     this.status.textContent = message;
-    const recover = button(t("另存编辑并重载"), () => {
+    const recover = button(localized("另存编辑并重载"), () => {
       recover.disabled = true;
       const task = this.#tail.catch(() => {}).then(() => this.keepEdits());
       this.#tail = task;
       return task.finally(() => { recover.disabled = false; });
     });
-    recover.title = t("把当前编辑保存在「其他」，然后重新读取文档");
+    bindLabel(recover, "title", localized("把当前编辑保存在「其他」，然后重新读取文档"));
     this.status.append(recover);
   }
 
@@ -425,7 +425,7 @@ export class NoteEditor {
       this.editor.setValue(this.markdown);
       await this.editor.input.settled();
       window.clearTimeout(this.#timer);
-      this.status.textContent = t("编辑副本已保存在「其他」");
+      bindLabel(this.status, "text", localized("编辑副本已保存在「其他」"));
     } finally {
       this.editor.setReadOnly(false);
       this.editor.focus();
@@ -436,14 +436,14 @@ export class NoteEditor {
     await this.save();
     if (this.#closing || this.#removed || this.#filing || this.storage !== "draft") return;
     if (!this.version || this.editor.value !== this.markdown) {
-      this.status.textContent = t("请先输入并保存正文");
+      bindLabel(this.status, "text", localized("请先输入并保存正文"));
       return;
     }
     const version = this.version;
     const request = new AbortController();
     this.#filing = request;
     this.#fileButton.disabled = true;
-    this.status.textContent = t("正在查询归档目录…");
+    bindLabel(this.status, "text", localized("正在查询归档目录…"));
     let ticket: number | undefined;
     const cancel = () => {
       if (ticket !== undefined) void invoke("cancel_filing", { id: this.id, version, ticket }).catch(report);
@@ -458,17 +458,17 @@ export class NoteEditor {
       const reply = await invoke<Reply | null>("file_note", { id: this.id, version, manual: true, started });
       if (request.signal.aborted || !reply) return;
       if (reply.kind === "setup") {
-        this.status.replaceChildren(button(t("打开 Jev 归档设置"), () => invoke("show_settings", { section: "filing" })));
+        this.status.replaceChildren(button(localized("打开 Jev 归档设置"), () => invoke("show_settings", { section: "filing" })));
       } else if (reply.kind === "message") {
         this.status.textContent = reply.message;
       } else {
         ticket = reply.ticket;
-        this.status.textContent = t("等待确认归档目录");
+        bindLabel(this.status, "text", localized("等待确认归档目录"));
         const confirmed = await fileDialog(t("Jev 建议归入「{folder}」", { folder: reply.folder }), t("移到「{folder}」", { folder: reply.folder }), { signal: request.signal });
         if (request.signal.aborted) return;
         if (confirmed === undefined) {
           cancel();
-          this.status.textContent = t("便签保留在「其他」");
+          bindLabel(this.status, "text", localized("便签保留在「其他」"));
           return;
         }
         const message = await invoke<string>("confirm_filing", { id: this.id, version, ticket });

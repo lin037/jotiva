@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { titlebar as configureTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -32,16 +32,16 @@ export async function mount() {
   const outline = element("aside", "workspace-outline jot-document-outline");
   outline.id = "document-outline";
   outline.hidden = true;
-  const outlineHeading = element("h2", "outline-heading", t("文档大纲"));
+  const outlineHeading = element("h2", "outline-heading", localized("文档大纲"));
   outlineHeading.id = "document-outline-heading";
   outline.setAttribute("aria-labelledby", outlineHeading.id);
   outline.append(outlineHeading);
   const empty = element("div", "document-empty");
   const startActions = element("div", "workspace-start-actions");
-  startActions.append(button(t("打开文档…"), async () => {
+  startActions.append(button(localized("打开文档…"), async () => {
     const id = await invoke<NoteId | null>("choose_markdown_file");
     if (id !== null) await open(id);
-  }), button(t("新建文档"), create));
+  }), button(localized("新建文档"), create));
   empty.append(startActions);
   const { footer, metadata, counter, status } = documentStatus();
   const windowMenu = element("div", "jot-window-menu");
@@ -49,7 +49,7 @@ export async function mount() {
   windowMenu.popover = "auto";
   windowMenu.dataset.noDrag = "";
   windowMenu.setAttribute("role", "group");
-  windowMenu.setAttribute("aria-label", t("当前文档的窗口操作"));
+  bindLabel(windowMenu, "aria-label", localized("当前文档的窗口操作"));
   const hostLabel = element("div", "workspace-host-label");
   editorRoot.hidden = footer.hidden = true;
   documentPane.append(tabs.bar, editorRoot, empty, footer);
@@ -80,7 +80,7 @@ export async function mount() {
     editFolder(folder);
   }, addSource, (id, folder) => move(id, folder), saveOpenNote);
   const move = moveDocument((result, folder) => {
-    status.textContent = result.warning ?? t("已移动");
+    bindLabel(status, "text", () => result.warning ?? t("已移动"));
     void Promise.all([library.showFolder(folder), refreshCard()]).catch(report);
   }, () => {
     resumeMove = true;
@@ -122,9 +122,9 @@ export async function mount() {
     editor.setMenuContext(true, card.attached, card.file ? "file" : card.folder === null ? "draft" : "archive");
     library.setActive(id, card.file ?? card.archivePath);
     filePath.update(card);
-    const action = card.attached ? t("更换宿主窗口") : t("挂载到窗口");
-    sourceButton.textContent = action + "…";
-    sourceButton.setAttribute("aria-label", action);
+    const action = () => incoming.attached ? t("更换宿主窗口") : t("挂载到窗口");
+    bindLabel(sourceButton, "text", () => action() + "…");
+    bindLabel(sourceButton, "aria-label", action);
     hostLabel.hidden = !card.attached;
     hostLabel.textContent = card.attached ? card.source : "";
     hostLabel.title = hostLabel.textContent;
@@ -211,7 +211,7 @@ export async function mount() {
     windowButton.disabled = outlineButton.disabled = true;
     windowMenu.hidePopover();
     editorRoot.replaceChildren();
-    status.textContent = t("正在打开…");
+    bindLabel(status, "text", localized("正在打开…"));
     editorRoot.hidden = footer.hidden = id === undefined;
     empty.hidden = id !== undefined;
     if (id === undefined) {
@@ -236,11 +236,11 @@ export async function mount() {
     await refreshCard();
   }
 
-  const sidebar = shortcutHint(iconButton("sidebar", t("显示或隐藏侧栏"), toggleSidebar), "sidebar");
+  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), toggleSidebar), "sidebar");
   sidebar.setAttribute("aria-pressed", "true");
-  const add = shortcutHint(iconButton("compose", t("新建文档"), create), "newDocument");
-  add.dataset.tip = t("新建文档");
-  const outlineButton = shortcutHint(iconButton("outline", t("文档大纲"), toggleOutline), "outline");
+  const add = shortcutHint(iconButton("compose", localized("新建文档"), create), "newDocument");
+  bindLabel(add, "data-tip", localized("新建文档"));
+  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), toggleOutline), "outline");
   outlineButton.disabled = true;
   outlineButton.setAttribute("aria-controls", outline.id);
   outlineButton.setAttribute("aria-expanded", "false");
@@ -251,24 +251,24 @@ export async function mount() {
   }, { onDismiss: () => editor?.focus() });
   finder.panel.classList.add("workspace-search", "jot-search");
   finder.panel.setAttribute("role", "search");
-  finder.panel.setAttribute("aria-label", t("搜索便签和文档"));
+  bindLabel(finder.panel, "aria-label", localized("搜索便签和文档"));
   const searchField = element("label", "workspace-search-field");
   searchField.append(icon("search"), finder.input, shortcutHint(element("kbd", "workspace-search-key"), "search"));
   finder.panel.prepend(searchField);
   finder.panel.dataset.noDrag = "";
   const showOverview = () => invoke("show_find", { tiled: true });
   const showSettings = () => invoke("show_settings");
-  const settingsButton = shortcutHint(iconButton("settings", t("设置"), showSettings), "settings");
+  const settingsButton = shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings");
   const windowButton = element("button", "icon-button");
   windowButton.type = "button";
-  windowButton.setAttribute("aria-label", t("文档窗口操作"));
-  windowButton.dataset.tip = t("窗口操作");
+  bindLabel(windowButton, "aria-label", localized("文档窗口操作"));
+  bindLabel(windowButton, "data-tip", localized("窗口操作"));
   bindWindowMenu(windowButton, windowMenu);
   windowButton.disabled = true;
   windowButton.append(icon("window"));
-  const sourceButton = button(t("挂载到窗口…"), () => { windowMenu.hidePopover(); return attach(); }, "jot-window-menu-item");
+  const sourceButton = button(localized("挂载到窗口…"), () => { windowMenu.hidePopover(); return attach(); }, "jot-window-menu-item");
   const filePath = documentPath({ current: () => editor, openCopy: open, move });
-  const floatButton = button(t("作为独立便签打开"), async () => {
+  const floatButton = button(localized("作为独立便签打开"), async () => {
     windowMenu.hidePopover();
     const current = editor;
     if (!current) return;
@@ -276,7 +276,7 @@ export async function mount() {
     if (current !== editor) return;
     if (!current.savedVersion) throw new Error(t("请先输入速记的正文"));
     await invoke("float_note", { id: current.id, standalone: true });
-  }, "jot-window-menu-item", t("独立便签"));
+  }, "jot-window-menu-item", localized("独立便签"));
   sourceButton.hidden = !desktopPlatform.hostWindows;
   windowMenu.append(hostLabel, sourceButton, floatButton);
   metadata.append(filePath.control);

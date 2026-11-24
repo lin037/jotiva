@@ -9,6 +9,60 @@ fn temporary(name: &str) -> PathBuf {
 }
 
 #[test]
+fn inline_naming_preserves_existing_files_and_note_identity() {
+    let base = temporary("inline-naming");
+    let mut workspace = Workspace::load(base.join("workspace.json")).unwrap();
+    let mut folders = Folders::load_fixture(base.join("folders.json")).unwrap();
+    let mut notes = Notes::load(base.join("notes")).unwrap();
+    let id = notes
+        .create_named("未命名".into(), "draft".into(), None)
+        .unwrap();
+    let inbox = notes.inbox_directory();
+    for name in ["纪要.md", "纪要 (2).md"] {
+        fs::write(inbox.join(name), "existing").unwrap();
+    }
+    assert_eq!(
+        name_created_file(&mut workspace, &mut folders, &mut notes, id, "纪要")
+            .unwrap()
+            .as_deref(),
+        Some("纪要 (3).md")
+    );
+    let path = inbox.join("纪要 (3).md");
+    assert_eq!(notes.disk_path(id), Some(path.as_path()));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "draft");
+    assert_eq!(
+        fs::read_to_string(inbox.join("纪要.md")).unwrap(),
+        "existing"
+    );
+    assert!(
+        name_created_file(&mut workspace, &mut folders, &mut notes, id, "纪要 (3)")
+            .unwrap()
+            .is_none()
+    );
+    let txt = base.join("Untitled.md");
+    fs::write(&txt, "text").unwrap();
+    fs::write(base.join("project.txt"), "original").unwrap();
+    let external = notes.open_file(&txt).unwrap();
+    assert_eq!(
+        name_created_file(
+            &mut workspace,
+            &mut folders,
+            &mut notes,
+            external,
+            "project.txt"
+        )
+        .unwrap()
+        .as_deref(),
+        Some("project (2).txt")
+    );
+    assert_eq!(
+        fs::read_to_string(base.join("project.txt")).unwrap(),
+        "original"
+    );
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn naming_empty_capture_publishes_the_same_note_without_overwriting_files() {
     let base = temporary("rename-capture");
     let mut workspace = Workspace::load(base.join("workspace.json")).unwrap();

@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,7 +8,7 @@ import { attachOnSwitch } from "./document-drag";
 import { folders, notes, openLibraryFile, type Folder, type NoteId } from "../../desktop/ipc";
 import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
-import { editFileName, nameNewFile, fileName } from "../../ui/file-name";
+import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
@@ -23,7 +23,7 @@ export async function librarySidebar(
 ) {
   const sidebar = element("aside", "library-sidebar jot-sidebar");
   sidebar.id = "workspace-library";
-  sidebar.setAttribute("aria-label", t("文档与窗口"));
+  bindLabel(sidebar, "aria-label", localized("文档与窗口"));
   let current: NoteId | undefined;
   let currentPath: string | undefined;
   async function flush(paths: string[]) {
@@ -33,15 +33,15 @@ export async function librarySidebar(
   const archive = element("div", "archive-tree");
   const tree = element("div", "library-tree");
   tree.setAttribute("role", "region");
-  tree.setAttribute("aria-label", t("文件树"));
+  bindLabel(tree, "aria-label", localized("文件树"));
   const source = sourceTree(open, addSource);
   const bar = element("div", "library-bar");
   const tabs = element("div", "library-tabs");
   tabs.setAttribute("role", "group");
-  tabs.setAttribute("aria-label", t("文档视图"));
-  const workspaceTab = button(t("工作区"), () => switchTo(true));
-  const archiveTab = button(t("归档"), () => switchTo(false));
-  const add = iconButton("folderAdd", t("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
+  bindLabel(tabs, "aria-label", localized("文档视图"));
+  const workspaceTab = button(localized("工作区"), () => switchTo(true));
+  const archiveTab = button(localized("归档"), () => switchTo(false));
+  const add = iconButton("folderAdd", localized("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
   tabs.append(workspaceTab, archiveTab);
   bar.append(tabs, add);
   tree.append(files.panel, archive);
@@ -78,6 +78,7 @@ export async function librarySidebar(
       archive.replaceChildren();
       return;
     }
+    if (afterNaming(archive, drawFolders)) return;
     const groups = [{ id: null, name: t("其他"), description: "", path: inbox }, ...items];
     const ids = new Set(groups.map(folder => folder.id));
     for (const id of expandedFolders) if (!ids.has(id)) expandedFolders.delete(id);
@@ -89,7 +90,7 @@ export async function librarySidebar(
       const branch = element("section");
       branch.dataset.archiveGroup = String(folder.id ?? "");
       const line = element("div", "library-line");
-      const row = treeRow(folder.name, expanded, () => {
+      const row = treeRow(folder.id === null ? localized("其他") : folder.name, expanded, () => {
         if (expanded) expandedFolders.delete(folder.id);
         else expandedFolders.add(folder.id);
         drawFolders();
@@ -114,17 +115,19 @@ export async function librarySidebar(
     archive.replaceChildren(...branches);
   }
 
-  function createInArchive(row: HTMLElement) {
+  async function createInArchive(row: HTMLElement) {
     const folder = row.dataset.archiveFolder ? Number(row.dataset.archiveFolder) : null;
     if (!expandedFolders.has(folder)) {
       expandedFolders.add(folder);
       drawFolders();
       row = archive.querySelector<HTMLElement>(`[data-archive-folder="${folder ?? ""}"]`)!;
     }
-    void nameNewFile(name => invoke<NoteId>("create_archive_note", { folder, name }), async id => {
-      await lists.get(folder)?.refresh();
-      await open(id);
-    }).catch(report);
+    const id = await invoke<NoteId>("create_archive_note", { folder, name: t("未命名") });
+    await open(id);
+    const list = lists.get(folder);
+    await list?.refresh();
+    const created = list?.panel.querySelector<HTMLElement>(`[data-note="${id}"]`);
+    if (created) nameCreatedDocument(created, id);
   }
   function renameFile(row: HTMLElement) {
     const path = row.dataset.file!;
@@ -148,7 +151,7 @@ export async function librarySidebar(
     const directory = group?.path ?? inbox;
     if (!row.dataset.file) {
       void popupMenu(event, [
-        { label: t("新建文档"), run: () => createInArchive(row) },
+        { label: t("新建文档"), run: () => createInline(() => createInArchive(row)) },
         ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
         { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },
@@ -180,10 +183,10 @@ export async function librarySidebar(
     archive.hidden = workspace;
     workspaceTab.setAttribute("aria-pressed", String(workspace));
     archiveTab.setAttribute("aria-pressed", String(!workspace));
-    const label = workspace ? t("添加工作区文件夹") : t("导入归档目录");
-    add.title = label;
-    add.setAttribute("aria-label", label);
-    add.dataset.tip = workspace ? t("添加目录") : t("导入目录");
+    const label = () => workspace ? t("添加工作区文件夹") : t("导入归档目录");
+    bindLabel(add, "title", label);
+    bindLabel(add, "aria-label", label);
+    bindLabel(add, "data-tip", () => workspace ? t("添加目录") : t("导入目录"));
     drawFolders();
     if (workspace) await files.refresh();
   }
@@ -202,20 +205,18 @@ export async function librarySidebar(
       for (const list of lists.values()) list.setActive(id, path);
       source.setActive(id);
     },
-    async createInInbox() {
+    createInInbox: () => createInline(async () => {
       expandedFolders.add(null);
-      await switchTo(false);
-      const row = archive.querySelector<HTMLElement>('[data-archive-folder=""]')!;
-      row.scrollIntoView({ block: "nearest" });
-      createInArchive(row);
-    },
+      if (inWorkspace || !lists.has(null)) await switchTo(false);
+      await createInArchive(archive.querySelector<HTMLElement>('[data-archive-folder=""]')!);
+    }),
     async createAtFocus() {
       const row = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       if (!row || !sidebar.contains(row)) return false;
       const directory = row.dataset.file
         ? row.closest("section")?.querySelector<HTMLElement>(":scope > .library-line > button") : row;
       if (directory?.dataset.directory) files.createFile(directory);
-      else if (directory?.dataset.archiveFolder !== undefined) createInArchive(directory);
+      else if (directory?.dataset.archiveFolder !== undefined) await createInline(() => createInArchive(directory));
       else return false;
       return true;
     },

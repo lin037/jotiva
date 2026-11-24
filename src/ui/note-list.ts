@@ -1,18 +1,19 @@
-import { t } from "../i18n";
+import { t, bindLabel, localized } from "../i18n";
 import { primaryPressed, desktopPlatform } from "../desktop/platform";
-import { notes, type Card, type NoteId, type Scope, type SearchPage } from "../desktop/ipc";
+import { openLibraryFile, notes, type NoteId, type Scope, type SearchPage } from "../desktop/ipc";
 import { button, element, report } from "./dom";
+import { documentSearch, hitKey, type SearchHit } from "../desktop/document-search";
 import "./note-list.css";
 
-export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
+export function noteList(onChoose: (id: NoteId, card: SearchHit) => unknown, {
   source, host = null, onDismiss,
 }: { source?: Extract<Scope, { kind: "source" }>; host?: number | null; onDismiss?: () => void } = {}) {
   const inline = !!onDismiss;
   const panel = element("div", source ? "note-list library-notes" : "note-list");
   const input = element("input");
   input.type = "search";
-  input.placeholder = t("搜索便签和文档");
-  input.setAttribute("aria-label", input.placeholder);
+  bindLabel(input, "placeholder", localized("搜索便签和文档"));
+  bindLabel(input, "aria-label", () => input.placeholder);
   const list = element("div", "results");
   const browser = element("div", "note-browser");
   browser.hidden = inline;
@@ -20,7 +21,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   if (!source) {
     list.id = "jot-search-results";
     list.setAttribute("role", "listbox");
-    list.setAttribute("aria-label", t("搜索结果"));
+    bindLabel(list, "aria-label", localized("搜索结果"));
     input.setAttribute("role", "combobox");
     input.setAttribute("aria-controls", list.id);
     input.setAttribute("aria-autocomplete", "list");
@@ -29,10 +30,11 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   }
   panel.append(browser);
 
-  let records: Card[] = [];
-  const loadedIds = new Set<NoteId>();
+  let records: SearchHit[] = [];
+  const loadedIds = new Set<NoteId | string>();
   const sections = new Map<keyof Omit<SearchPage, "more">, HTMLElement>();
   let rows: HTMLButtonElement[] = [];
+  let search: ReturnType<typeof documentSearch> | undefined;
   let page = 0;
   let more = false;
   let selected = 0;
@@ -60,18 +62,19 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     if (scroll) row.scrollIntoView({ block: "nearest" });
   }
 
-  function choose(card: Card) {
+  async function choose(card: SearchHit) {
     if (inline) close();
-    return onChoose(card.id, card);
+    return onChoose(card.id ?? await openLibraryFile(card.file!), card);
   }
 
-  function appendRow(parent: HTMLElement, card: Card) {
+  function appendRow(parent: HTMLElement, card: SearchHit) {
     const index = rows.length;
     const row = button("", () => runWhenReady(() => {
-      const match = records.find(record => record.id === card.id);
+      const match = records.find(record => hitKey(record) === hitKey(card));
       if (match) return choose(match);
     }), "note-row");
-    row.dataset.note = String(card.id);
+    if (card.id === null) row.dataset.file = card.file;
+    else row.dataset.note = String(card.id);
     if (card.archivePath) row.dataset.archivePath = card.archivePath;
     if (card.id === active) row.setAttribute("aria-current", "true");
     row.draggable = !!source || inline;
@@ -79,7 +82,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     if (source) {
       row.title = card.title;
     } else {
-      row.id = "jot-search-option-" + card.id;
+      row.id = "jot-search-option-" + (card.id ?? "file-" + index);
       row.tabIndex = -1;
       row.setAttribute("role", "option");
       row.setAttribute("aria-selected", "false");
@@ -92,10 +95,10 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     rows.push(row);
   }
 
-  function appendPage(result: SearchPage | { items: Card[]; more: boolean }) {
-    const append = (parent: HTMLElement, card: Card) => {
-      if (loadedIds.has(card.id)) return;
-      loadedIds.add(card.id);
+  function appendPage(result: (SearchPage<SearchHit>) | { items: SearchHit[]; more: boolean }) {
+    const append = (parent: HTMLElement, card: SearchHit) => {
+      if (loadedIds.has(hitKey(card))) return;
+      loadedIds.add(hitKey(card));
       records.push(card);
       appendRow(parent, card);
     };
@@ -103,14 +106,14 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       for (const card of result.items) append(list, card);
       return;
     }
-    const labels = { current: t("当前窗口"), attached: host === null ? t("已挂载便签") : t("其他窗口便签"), documents: t("文档") };
+    const labels = { current: localized("当前窗口"), attached: () => host === null ? t("已挂载便签") : t("其他窗口便签"), documents: localized("文档") };
     for (const key of ["current", "attached", "documents"] as const) {
       if (!result[key].length) continue;
       let items = sections.get(key);
       if (!items) {
         const group = element("div", "note-search-group");
         group.setAttribute("role", "group");
-        group.setAttribute("aria-label", labels[key]);
+        bindLabel(group, "aria-label", labels[key]);
         items = element("div", tiled ? "note-search-items note-grid" : "note-search-items");
         group.append(element("h3", "note-search-heading", labels[key]), items);
         sections.set(key, items);
@@ -133,7 +136,10 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     }
     if (append && (!more || displayedQuery !== query)) return Promise.resolve();
     const ticket = ++serial;
-    const fetch = (index: number) => source ? notes.list(query, index * 40, source) : notes.search(query, host, index);
+    if (!append) search = undefined;
+    const fetch = source
+      ? (index: number) => notes.list(query, index * 40, source)
+      : (search ??= documentSearch(query, host));
     const work = (async () => {
       // A background refresh must not discard the loaded extent or move keyboard focus.
       const last = !append && displayedQuery === query ? page : target;
@@ -145,7 +151,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
         batches.push(result);
         if (!result.more || index >= last) break;
       }
-      const retained = displayedQuery === query ? records[selected]?.id : undefined;
+      const retained = displayedQuery === query && records[selected] ? hitKey(records[selected]) : undefined;
       const focused = list.contains(document.activeElement);
       const scroll = displayedQuery === query ? list.scrollTop : 0;
       if (!append) {
@@ -156,15 +162,17 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
         loadedIds.clear();
       }
       for (const batch of batches) appendPage(batch);
-      if (!records.length) list.append(element("p", "muted", query ? t("没有匹配的便签或文档") : t("暂无文档")));
+      if (!records.length) list.append(element("p", "muted", () => query ? t("没有匹配的便签或文档") : t("暂无文档")));
       page = index;
       more = batches[batches.length - 1].more;
       displayedQuery = query;
-      select(Math.max(0, records.findIndex(card => card.id === retained)));
+      select(Math.max(0, records.findIndex(card => hitKey(card) === retained)));
       if (!append) {
         list.scrollTop = scroll;
         if (focused) rows[selected]?.focus({ preventScroll: true });
       }
+      if (source && more) list.append(sentinel);
+      else sentinel.remove();
       if (more && list.clientHeight && list.scrollHeight <= list.clientHeight) requestAnimationFrame(nearEnd);
     })().finally(() => { if (ticket === serial) pending = undefined; });
     pending = { page: target, query, work };
@@ -172,10 +180,17 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   }
 
   function nearEnd() {
-    if (more && list.clientHeight && list.scrollTop + list.clientHeight >= list.scrollHeight - 24) {
+    if (!source && more && list.clientHeight && list.scrollTop + list.clientHeight >= list.scrollHeight - 24) {
       void load(true).catch(report);
     }
   }
+  // Source lists scroll with their enclosing tree. Observe the end in that viewport.
+  const sentinel = element("div");
+  sentinel.setAttribute("aria-hidden", "true");
+  const intersection = source && new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) void load(true).catch(report);
+  });
+  if (intersection) intersection.observe(sentinel);
   list.addEventListener("scroll", nearEnd, { passive: true });
   const size = new ResizeObserver(nearEnd);
   size.observe(list);
@@ -195,6 +210,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     ++intent;
     ++serial;
     pending = undefined;
+    search = undefined;
     displayedQuery = undefined;
     clearTimeout(timer);
   }
@@ -319,6 +335,6 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
         else row.removeAttribute("aria-current");
       }
     },
-    dispose: () => { disposed = true; size.disconnect(); invalidate(); },
+    dispose: () => { disposed = true; size.disconnect(); intersection?.disconnect(); invalidate(); },
   };
 }

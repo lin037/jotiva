@@ -4,6 +4,7 @@ interface DesktopEnvironment {
   os: "macos" | "windows" | "linux";
   hostWindows: boolean;
   language?: Language;
+  nameOnOpen?: boolean;
 }
 
 declare global {

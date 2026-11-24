@@ -18,6 +18,10 @@ const data = path.join(work, "profile");
 mkdirSync(data, {recursive: true});
 writeFileSync(path.join(data, "settings.json"), JSON.stringify({quick:"Control+Shift+F9", search:null, dock:null}));
 writeFileSync(path.join(data, "appearance.json"), JSON.stringify({language:"en"}));
+const library = path.join(work, "library");
+mkdirSync(library);
+for (let i = 1; i <= 31; i++) writeFileSync(path.join(library, "QA-find-" + String(i).padStart(2, "0") + ".md"), "Original " + i);
+writeFileSync(path.join(data, "workspace.json"), JSON.stringify([path.toNamespacedPath(library)]));
 const hostTitle = "Jotiva QA " + process.pid;
 const doc = path.join(work, "跨平台验收.txt");
 const lines = Array.from({length: 350}, (_, i) => "第 " + (i + 1) + " 行 · Plain text");
@@ -86,6 +90,8 @@ try {
   const selected = spawnSync("powershell.exe", ["-NoProfile", "-STA", "-NonInteractive", "-File",
     fileURLToPath(new URL("./windows/explorer.ps1", import.meta.url))], {env: {...process.env, JOT_QA_DOCUMENT: doc}, stdio: "inherit"});
   if (selected.status !== 0) throw Error("Explorer did not select the test document");
+  if (readFileSync(path.join(library, "QA-find-01.md"), "utf8") !== "Original 1" ||
+      !existsSync(path.join(library, "QA-find-01 (2).md"))) throw Error("Inline naming overwrote or lost a file");
   const saved = readFileSync(doc, "utf8");
   const edits = ["Desktop edit", "quick-sync", "main-sync"];
   if (!edits.every(edit => saved.includes(edit)) || edits.reduce((body, edit) => body.replace(edit, ""), saved) !== original) {

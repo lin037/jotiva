@@ -1,4 +1,4 @@
-import { t, message } from "../../i18n";
+import { t, message, type Label, bindLabel, localized } from "../../i18n";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -22,14 +22,14 @@ interface SettingsView {
 }
 
 const sections = [
-  ["appearance", t("外观"), "appearance"],
-  ["editor", t("编辑器"), "format"],
-  ["filing", t("归档"), "folder"],
-  ["shortcuts", t("快捷键"), "keys"],
-  ["windows", t("窗口关联"), "window"],
+  ["appearance", localized("外观"), "appearance"],
+  ["editor", localized("编辑器"), "format"],
+  ["filing", localized("归档"), "folder"],
+  ["shortcuts", localized("快捷键"), "keys"],
+  ["windows", localized("窗口关联"), "window"],
 ] as const;
 
-function field(name: string, controls: HTMLElement | HTMLElement[], id?: string) {
+function field(name: Label, controls: HTMLElement | HTMLElement[], id?: string) {
   const row = element("div", "settings-field");
   const label = id ? element("label", undefined, name) : element("span", undefined, name);
   const items = element("div", "settings-field-controls");
@@ -39,7 +39,7 @@ function field(name: string, controls: HTMLElement | HTMLElement[], id?: string)
   return row;
 }
 
-function select<T extends string>(id: string, options: readonly (readonly [T, string])[], changed: (value: T) => unknown) {
+function select<T extends string>(id: string, options: readonly (readonly [T, Label])[], changed: (value: T) => unknown) {
   const input = element("select");
   input.id = id;
   for (const [value, text] of options) {
@@ -54,16 +54,16 @@ function select<T extends string>(id: string, options: readonly (readonly [T, st
 type EditingPatch = Partial<EditingPreferences> | ((value: EditingPreferences) => Partial<EditingPreferences>);
 
 function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) => Promise<unknown>) {
-  const family = select<WritingFont>("writing-font", [["system", t("系统字体")], ["serif", t("衬线")], ["mono", t("等宽")]], font => change({ font }));
+  const family = select<WritingFont>("writing-font", [["system", localized("系统字体")], ["serif", localized("衬线")], ["mono", localized("等宽")]], font => change({ font }));
   const editing = element("section", "settings-group");
-  editing.append(element("h2", undefined, t("正文")), field(t("正文字体"), family, family.id));
+  editing.append(element("h2", undefined, localized("正文")), field(localized("正文字体"), family, family.id));
   const behavior = element("section", "settings-group");
-  behavior.append(element("h2", undefined, t("编辑控件")));
+  behavior.append(element("h2", undefined, localized("编辑控件")));
   const toggles = [
-    ["ruledPaper", t("横线稿纸")],
-    ["wrapCode", t("代码块内自动换行")],
-    ["foldHeadings", t("显示标题折叠控件")],
-    ["toolbar", t("显示主编辑器工具栏")],
+    ["ruledPaper", localized("横线稿纸")],
+    ["wrapCode", localized("代码块内自动换行")],
+    ["foldHeadings", localized("显示标题折叠控件")],
+    ["toolbar", localized("显示主编辑器工具栏")],
   ] as const;
   const checkboxes = new Map<typeof toggles[number][0], HTMLInputElement>();
   for (const [key, label] of toggles) {
@@ -76,10 +76,10 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
   }
   const headings = element("section", "settings-group");
   const headingBar = element("div", "settings-heading-bar");
-  const resetHeadings = button(t("恢复默认"), () => change({ headingScale: null }));
+  const resetHeadings = button(localized("恢复默认"), () => change({ headingScale: null }));
   resetHeadings.id = "reset-heading-scale";
-  headingBar.append(element("h2", undefined, t("标题字号")), resetHeadings);
-  headings.append(headingBar, element("p", "settings-detail muted", t("以正文为 100%，可设为 80%–240%。")));
+  headingBar.append(element("h2", undefined, localized("标题字号")), resetHeadings);
+  headings.append(headingBar, element("p", "settings-detail muted", localized("以正文为 100%，可设为 80%–240%。")));
   const samples = element("div", "settings-heading-samples");
   const levels = defaultHeadingScale.map((_, index) => {
     const input = element("input");
@@ -104,7 +104,7 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
     });
     const row = field("H" + (index + 1), [input, element("span", "muted", "%")], input.id);
     const label = row.querySelector("label")!;
-    input.setAttribute("aria-label", t("{level} 级标题字号", { level: index + 1 }));
+    bindLabel(input, "aria-label", () => t("{level} 级标题字号", { level: index + 1 }));
     label.style.setProperty("--sample-heading-size", "var(--jot-editor-heading-ratio-" + (index + 1) + ")");
     samples.append(row);
     return input;
@@ -133,7 +133,7 @@ function mountFilingSettings(page: HTMLElement) {
   endpoint.id = "filing-endpoint";
   endpoint.type = "url";
   endpoint.spellcheck = false;
-  const kind = select("filing-address-kind", [["base", t("基础地址")], ["endpoint", t("完整接口地址")]] as const, addressChanged);
+  const kind = select("filing-address-kind", [["base", localized("基础地址")], ["endpoint", localized("完整接口地址")]] as const, addressChanged);
   const model = element("input");
   model.id = "filing-model";
   model.placeholder = "jev-latest";
@@ -141,17 +141,17 @@ function mountFilingSettings(page: HTMLElement) {
   model.spellcheck = false;
   const saveStatus = element("p", "settings-detail muted");
   saveStatus.setAttribute("role", "status");
-  const save = element("button", "primary", t("保存设置"));
+  const save = element("button", "primary", localized("保存设置"));
   save.type = "submit";
   const actions = element("div", "settings-field-controls settings-css-actions");
   actions.append(save);
   filing.append(
-    element("h2", undefined, t("Jev 归档")),
-    element("p", "settings-detail", t("点击「用 Jev 归档」时，Jotiva 会把当前便签的前 6000 个字符和参与分类的目录名称、说明发给下方的服务。确认建议后，文件才会移动。")),
-    field(t("允许 Jev 归档"), allowFiling, allowFiling.id),
-    field(t("地址类型"), kind, kind.id),
-    field(t("服务地址"), endpoint, endpoint.id),
-    field(t("模型名称"), model, model.id),
+    element("h2", undefined, localized("Jev 归档")),
+    element("p", "settings-detail", localized("点击「用 Jev 归档」时，Jotiva 会把当前便签的前 6000 个字符和参与分类的目录名称、说明发给下方的服务。确认建议后，文件才会移动。")),
+    field(localized("允许 Jev 归档"), allowFiling, allowFiling.id),
+    field(localized("地址类型"), kind, kind.id),
+    field(localized("服务地址"), endpoint, endpoint.id),
+    field(localized("模型名称"), model, model.id),
     actions, saveStatus,
   );
 
@@ -161,12 +161,12 @@ function mountFilingSettings(page: HTMLElement) {
   keyStatus.setAttribute("role", "status");
   const keyNotice = element("p", "settings-detail muted");
   keyNotice.setAttribute("role", "status");
-  const configure = button(t("配置密钥…"), () => changeKey("set"));
-  const remove = button(t("移除密钥"), () => changeKey("remove"));
+  const configure = button(localized("配置密钥…"), () => changeKey("set"));
+  const remove = button(localized("移除密钥"), () => changeKey("remove"));
   const keyActions = element("div", "settings-field-controls settings-css-actions");
   keyActions.append(configure, remove);
-  keys.append(element("h2", undefined, t("API 密钥")),
-    element("p", "settings-detail", t("密钥保存在{store}中，仅用于上方填写的服务地址。", { store: desktopPlatform.keyStore })),
+  keys.append(element("h2", undefined, localized("API 密钥")),
+    element("p", "settings-detail", () => t("密钥保存在{store}中，仅用于上方填写的服务地址。", { store: desktopPlatform.keyStore })),
     keyStatus, keyActions, keyNotice);
   page.append(filing, keys);
 
@@ -178,13 +178,13 @@ function mountFilingSettings(page: HTMLElement) {
   function syncControls() {
     for (const control of [allowFiling, kind, endpoint, model, save]) control.disabled = busy || !loaded;
     configure.disabled = busy || !loaded || !endpoint.value.trim() || !endpoint.validity.valid;
-    configure.textContent = hasKey ? t("更换密钥…") : t("配置密钥…");
+    bindLabel(configure, "text", () => hasKey ? t("更换密钥…") : t("配置密钥…"));
     remove.hidden = hasKey !== true;
     remove.disabled = busy;
   }
   function displayKey(present: boolean) {
     hasKey = present;
-    keyStatus.textContent = present ? t("此服务已配置密钥。") : t("此服务尚未配置密钥。");
+    bindLabel(keyStatus, "text", () => present ? t("此服务已配置密钥。") : t("此服务尚未配置密钥。"));
     syncControls();
   }
   function keyRequest(action: "check" | "set" | "remove") {
@@ -198,16 +198,16 @@ function mountFilingSettings(page: HTMLElement) {
     endpoint.placeholder = kind.value === "base" ? "https://example.com/v1" : "https://example.com/v1/systemone";
     syncControls();
     if (!endpoint.value.trim() || !endpoint.validity.valid) {
-      keyStatus.textContent = endpoint.value.trim() ? t("请填写完整的服务地址。") : t("填写服务地址后，即可配置密钥。");
+      bindLabel(keyStatus, "text", () => endpoint.value.trim() ? t("请填写完整的服务地址。") : t("填写服务地址后，即可配置密钥。"));
       return;
     }
-    keyStatus.textContent = t("正在检查此服务的密钥…");
+    bindLabel(keyStatus, "text", localized("正在检查此服务的密钥…"));
     timer = window.setTimeout(async () => {
       try {
         const present = await keyRequest("check");
         if (current === revision) displayKey(present);
       } catch (error) {
-        if (current === revision) keyStatus.textContent = t("无法确认此服务的密钥状态。") + String(error);
+        if (current === revision) bindLabel(keyStatus, "text", () => t("无法确认此服务的密钥状态。") + String(error));
       }
     }, 200);
   }
@@ -247,7 +247,7 @@ function mountFilingSettings(page: HTMLElement) {
       displaySettings(await invoke<FilingState>("save_filing", {
         enabled: allowFiling.checked, endpoint: endpoint.value.trim(), addressKind: kind.value, model: model.value.trim(),
       }));
-      saveStatus.textContent = t("设置已保存。");
+      bindLabel(saveStatus, "text", localized("设置已保存。"));
     } catch (error) {
       saveStatus.textContent = String(error);
     } finally {
@@ -274,13 +274,13 @@ function mountFilingSettings(page: HTMLElement) {
 }
 
 export async function mount() {
-  secondaryTitlebar(t("Jotiva 设置"));
+  secondaryTitlebar(localized("Jotiva 设置"));
   root.className = "settings-view jot-settings";
   const current = await invoke<SettingsView>("read_settings");
   const content = element("main", "settings-content");
-  content.setAttribute("aria-label", t("设置内容"));
+  bindLabel(content, "aria-label", localized("设置内容"));
   const navigation = element("nav", "settings-nav");
-  navigation.setAttribute("aria-label", t("设置分类"));
+  bindLabel(navigation, "aria-label", localized("设置分类"));
   const panels = new Map<Section, HTMLElement>();
   const nav = new Map<Section, HTMLButtonElement>();
   for (const [id, title, glyph] of sections) {
@@ -290,7 +290,7 @@ export async function mount() {
     nav.set(id, tab);
     const page = element("section", "settings-page");
     page.hidden = true;
-    page.append(element("h1", undefined, id === "editor" ? t("编辑器画面") : title));
+    page.append(element("h1", undefined, id === "editor" ? localized("编辑器画面") : title));
     content.append(page);
     panels.set(id, page);
   }
@@ -315,38 +315,37 @@ export async function mount() {
   font.max = "18";
   font.step = "0.5";
   font.required = true;
-  const applySize = element("button", "primary", t("应用"));
+  const applySize = element("button", "primary", localized("应用"));
   applySize.type = "submit";
-  const systemSize = button(t("系统默认"), () => apply({ baseSize: null }));
+  const systemSize = button(localized("系统默认"), () => apply({ baseSize: null }));
   const language = select<AppearancePreferences["language"]>("interface-language", [["zh-CN", "简体中文"], ["en", "English"]],
     language => apply({ language }));
-  const scheme = select<ThemeMode>("theme-mode", [["system", t("跟随系统")], ["light", t("浅色")], ["dark", t("深色")]], mode => apply({ mode }));
+  const scheme = select<ThemeMode>("theme-mode", [["system", localized("跟随系统")], ["light", localized("浅色")], ["dark", localized("深色")]], mode => apply({ mode }));
   const accent = element("input");
   accent.id = "accent";
   accent.type = "color";
-  accent.setAttribute("aria-label", t("自定义强调色"));
+  bindLabel(accent, "aria-label", localized("自定义强调色"));
   accent.addEventListener("change", () => { void apply({ accent: accent.value }).catch(report); });
   const palette = element("div", "settings-palette");
   palette.setAttribute("role", "group");
-  palette.setAttribute("aria-label", t("强调色"));
+  bindLabel(palette, "aria-label", localized("强调色"));
   const swatches = accentPresets.map((preset, index) => {
     const swatch = button("", () => apply({ accent: index ? preset.light : null }), "settings-swatch");
-    swatch.setAttribute("aria-label", message(preset.name));
-    swatch.title = message(preset.name) + (index ? "" : t("（默认）"));
+    bindLabel(swatch, "aria-label", () => message(preset.name));
+    bindLabel(swatch, "title", () => message(preset.name) + (index ? "" : t("（默认）")));
     swatch.style.setProperty("--swatch-light", preset.light);
     swatch.style.setProperty("--swatch-dark", preset.dark);
     palette.append(swatch);
     return swatch;
   });
   const custom = element("label", "settings-custom-accent");
-  custom.append(accent, element("span", undefined, t("自定…")));
+  custom.append(accent, element("span", undefined, localized("自定…")));
   palette.append(custom);
   appearance.append(
-    field(t("界面语言"), language, language.id),
-    element("p", "settings-detail muted", t("重启 Jotiva 后生效。")),
-    field(t("界面模式"), scheme, scheme.id),
-    field(t("基础字号"), [font, element("span", "muted", "pt"), applySize, systemSize], font.id),
-    field(t("强调色"), palette),
+    field(localized("界面语言"), language, language.id),
+    field(localized("界面模式"), scheme, scheme.id),
+    field(localized("基础字号"), [font, element("span", "muted", "pt"), applySize, systemSize], font.id),
+    field(localized("强调色"), palette),
   );
   appearance.addEventListener("submit", event => {
     event.preventDefault();
@@ -358,8 +357,8 @@ export async function mount() {
   file.type = "file";
   file.accept = ".css,text/css";
   file.hidden = true;
-  const importCss = button(t("导入 CSS…"), () => file.click());
-  const removeCss = button(t("移除"), () => setStylesheet(null));
+  const importCss = button(localized("导入 CSS…"), () => file.click());
+  const removeCss = button(localized("移除"), () => setStylesheet(null));
   const cssActions = element("div", "settings-field-controls settings-css-actions");
   cssActions.append(file, importCss, removeCss);
   file.addEventListener("change", async () => {
@@ -374,7 +373,7 @@ export async function mount() {
     }
   });
   const css = element("section", "settings-group");
-  css.append(element("h2", undefined, t("自定义 CSS")), cssName, cssActions);
+  css.append(element("h2", undefined, localized("自定义 CSS")), cssName, cssActions);
   panels.get("appearance")!.append(appearance, css);
 
   const refreshEditor = mountEditorSettings(panels.get("editor")!, change => apply({}, change));
@@ -389,7 +388,7 @@ export async function mount() {
     const dark = document.documentElement.dataset.jotScheme === "dark";
     accent.value = selected ? selected[dark ? "dark" : "light"] : value.accent!;
     custom.classList.toggle("is-selected", !selected);
-    cssName.textContent = value.stylesheet?.name ?? t("导入 CSS 可调整界面和正文样式。");
+    bindLabel(cssName, "text", () => value.stylesheet?.name ?? t("导入 CSS 可调整界面和正文样式。"));
     removeCss.hidden = value.stylesheet === null;
     refreshEditor(value.editing);
   }
@@ -400,7 +399,7 @@ export async function mount() {
   let recording: string | undefined;
   const shortcuts = element("form");
   const controls = new Map<string, {label: string; button: HTMLButtonElement; clear?: HTMLButtonElement}>();
-  const status = element("p", "settings-detail muted", current.shortcutError ?? t("点一下要更改的键位，按下新的组合键，再保存。按 Esc 取消录入。"));
+  const status = element("p", "settings-detail muted", () => current.shortcutError ?? t("点一下要更改的键位，按下新的组合键，再保存。按 Esc 取消录入。"));
   status.setAttribute("role", "status");
 
   function valueOf(id: string) {
@@ -410,10 +409,10 @@ export async function mount() {
   function renderBindings() {
     for (const [id, {button, label, clear}] of controls) {
       const value = valueOf(id);
-      button.textContent = recording === id ? t("正在录入…") : shortcutLabel(value);
-      button.setAttribute("aria-label", label + " " + button.textContent);
+      bindLabel(button, "text", () => recording === id ? t("正在录入…") : shortcutLabel(value));
+      bindLabel(button, "aria-label", () => message(label) + " " + button.textContent);
       button.setAttribute("aria-pressed", String(recording === id));
-      button.dataset.tip = recording === id ? t("取消") : t("录入");
+      bindLabel(button, "data-tip", () => recording === id ? t("取消") : t("录入"));
       if (clear) clear.hidden = value == null;
     }
   }
@@ -437,34 +436,34 @@ export async function mount() {
       preferences = { ...preferences, local };
     }
     await record();
-    status.textContent = t("待保存");
+    bindLabel(status, "text", localized("待保存"));
   }
   function keyField(id: string, label: string) {
     const control = button("", () => record(recording === id ? undefined : id), "recording-key");
     control.id = id.startsWith("global:") ? "key-" + id.slice(7) : "key-local-" + id;
-    const clear = id === "global:quick" ? undefined : button(t("清除"), () => setKey(id, null));
-    if (clear) clear.setAttribute("aria-label", t("清除“{action}”的快捷键", { action: label }));
+    const clear = id === "global:quick" ? undefined : button(localized("清除"), () => setKey(id, null));
+    if (clear) bindLabel(clear, "aria-label", () => t("清除“{action}”的快捷键", { action: message(label) }));
     controls.set(id, {label, button:control, clear});
-    return field(label, clear ? [control, clear] : control, control.id);
+    return field(() => message(label), clear ? [control, clear] : control, control.id);
   }
-  const save = element("button", "primary", t("保存快捷键"));
+  const save = element("button", "primary", localized("保存快捷键"));
   save.type = "submit";
-  const reset = button(t("恢复默认"), async () => {
+  const reset = button(localized("恢复默认"), async () => {
     preferences = { ...current.defaults, local: {} };
     await record();
-    status.textContent = t("待保存");
+    bindLabel(status, "text", localized("待保存"));
   });
   const shortcutActions = element("div", "settings-group shortcut-actions");
   const buttons = element("div", "settings-field-controls settings-css-actions");
   buttons.append(save, reset);
   const searchKeys = element("input");
   searchKeys.type = "search";
-  searchKeys.placeholder = t("搜索操作或快捷键");
-  searchKeys.setAttribute("aria-label", searchKeys.placeholder);
+  bindLabel(searchKeys, "placeholder", localized("搜索操作或快捷键"));
+  bindLabel(searchKeys, "aria-label", () => searchKeys.placeholder);
   shortcutActions.append(searchKeys, buttons, status);
   shortcuts.append(shortcutActions);
   const globalGroup = element("section", "settings-group");
-  globalGroup.append(element("h2", undefined, t("全局快捷键")));
+  globalGroup.append(element("h2", undefined, localized("全局快捷键")));
   for (const [id, label] of globalActions) globalGroup.append(keyField("global:" + id, label));
   shortcuts.append(globalGroup);
   const groups = new Map<string, HTMLElement>();
@@ -472,14 +471,14 @@ export async function mount() {
     let section = groups.get(title);
     if (!section) {
       section = element("section", "settings-group");
-      section.append(element("h2", undefined, title));
+      section.append(element("h2", undefined, () => message(title)));
       groups.set(title, section);
       shortcuts.append(section);
     }
     return section;
   }
   for (const row of commands) group(row.group).append(keyField(row.id, row.label));
-  for (const row of fixedShortcuts) group(row.group).append(field(row.label, element("kbd", "settings-key", row.key)));
+  for (const row of fixedShortcuts) group(row.group).append(field(() => message(row.label), element("kbd", "settings-key", row.key)));
   function filterShortcuts() {
     const query = searchKeys.value.trim().toLocaleLowerCase();
     for (const section of [globalGroup, ...groups.values()]) {
@@ -494,6 +493,7 @@ export async function mount() {
     }
   }
   searchKeys.addEventListener("input", filterShortcuts);
+  window.addEventListener("jot:language", () => { renderBindings(); filterShortcuts(); });
   renderBindings();
   shortcuts.addEventListener("submit", async event => {
     event.preventDefault();
@@ -502,7 +502,7 @@ export async function mount() {
     try {
       await record();
       await invoke("save_settings", { preferences });
-      status.textContent = t("快捷键已保存");
+      bindLabel(status, "text", localized("快捷键已保存"));
     } catch (error) {
       status.textContent = String(error);
     } finally {
@@ -537,18 +537,18 @@ export async function mount() {
   permission.setAttribute("role", "status");
   const authorization = element("section", "settings-group");
   const help = accessibilityHelp();
-  const requestAccess = button(t("授权辅助功能…"), () => invoke("request_accessibility"));
+  const requestAccess = button(localized("授权辅助功能…"), () => invoke("request_accessibility"));
   authorization.append(
-    element("h2", undefined, t("macOS 辅助功能")),
-    element("p", "settings-detail", t("授权后，Jotiva 可以关联指定窗口，在切回该窗口时显示对应便签。")),
+    element("h2", undefined, localized("macOS 辅助功能")),
+    element("p", "settings-detail", localized("授权后，Jotiva 可以关联指定窗口，在切回该窗口时显示对应便签。")),
     permission, requestAccess, help,
   );
   if (desktopPlatform.usesAccessibilityPermission) panels.get("windows")!.append(authorization);
-  else panels.get("windows")!.append(element("p","settings-detail",desktopPlatform.hostWindows ? t("可以在窗口列表中选择要关联的应用窗口。") : t("当前桌面支持独立速记。")));
+  else panels.get("windows")!.append(element("p","settings-detail",() => desktopPlatform.hostWindows ? t("可以在窗口列表中选择要关联的应用窗口。") : t("当前桌面支持独立速记。")));
 
   let stopCheckingPermission: (() => void) | undefined;
   function showPermission(trusted: boolean) {
-    permission.textContent = trusted ? t("已授权") : t("当前运行的 Jotiva 尚未获得授权");
+    bindLabel(permission, "text", () => trusted ? t("已授权") : t("当前运行的 Jotiva 尚未获得授权"));
     requestAccess.hidden = help.hidden = trusted;
   }
   showPermission(current.trusted);

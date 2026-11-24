@@ -187,7 +187,6 @@ fn relocate(
             return Err("不能将文件夹移动到自身的子目录".into());
         }
     }
-    let mut result = FileResult::default();
     let trashed = match &target {
         Some(to) => {
             Native::move_to(source, to)?;
@@ -195,6 +194,18 @@ fn relocate(
         }
         None => Some(Native::trash(source)?),
     };
+    finish_relocation(workspace, folders, notes, source, target, trashed)
+}
+
+fn finish_relocation(
+    workspace: &mut Workspace,
+    folders: &mut Folders,
+    notes: &mut Notes,
+    source: &Path,
+    target: Option<PathBuf>,
+    trashed: Option<<Native as FileManager>::TrashRecord>,
+) -> Result<FileResult, String> {
+    let mut result = FileResult::default();
     if let Err(error) = update_paths(
         workspace,
         folders,
@@ -567,6 +578,85 @@ pub async fn create_archive_note(
     .map_err(|error| error.to_string())??;
     notify(&app, Vec::new(), false);
     Ok(id)
+}
+
+// Reserve each candidate with an exclusive filesystem rename. Other app windows and
+// external writers cannot overwrite a document between choosing and using its name.
+fn name_created_file(
+    workspace: &mut Workspace,
+    folders: &mut Folders,
+    notes: &mut Notes,
+    id: NoteId,
+    name: &str,
+) -> Result<Option<String>, String> {
+    let note = notes.note(id).ok_or("找不到便签")?;
+    let source = note.disk_path().ok_or("找不到文件")?;
+    if !fs::symlink_metadata(source)
+        .map_err(|e| e.to_string())?
+        .is_file()
+    {
+        return Err("原位置已不是文档".into());
+    }
+    let filename = if note.file.is_some() {
+        markdown_name(name)?
+    } else {
+        format!("{}.md", archive_title(name)?)
+    };
+    let requested = source.with_file_name(&filename);
+    let actual = crate::storage::numbered_path(
+        requested.parent().ok_or("无效名称")?,
+        requested
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or("无效名称")?,
+        requested
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or("无效名称")?,
+        |candidate| {
+            if candidate == source {
+                Ok(())
+            } else {
+                crate::platform::storage::rename_exclusive(source, candidate)
+            }
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    let adjusted =
+        (actual != requested).then(|| actual.file_name().unwrap().to_string_lossy().into_owned());
+    if actual != source {
+        finish_relocation(workspace, folders, notes, source, Some(actual), None)?;
+    }
+    Ok(adjusted)
+}
+
+#[tauri::command]
+pub async fn name_created_document(
+    app: AppHandle,
+    id: NoteId,
+    name: String,
+) -> Result<Option<String>, String> {
+    let handle = app.clone();
+    let adjusted = tauri::async_runtime::spawn_blocking(move || {
+        let _mutation = PATH_CHANGES.lock().unwrap();
+        let w = handle.state::<Mutex<Workspace>>();
+        let f = handle.state::<Mutex<Folders>>();
+        let n = handle.state::<RwLock<Notes>>();
+        name_created_file(
+            &mut w.lock().unwrap(),
+            &mut f.lock().unwrap(),
+            &mut n.write().unwrap(),
+            id,
+            &name,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let handle = app.clone();
+    app.run_on_main_thread(move || crate::desktop::note_saved(&handle, id))
+        .map_err(|e| e.to_string())?;
+    notify(&app, Vec::new(), false);
+    Ok(adjusted)
 }
 
 #[tauri::command]

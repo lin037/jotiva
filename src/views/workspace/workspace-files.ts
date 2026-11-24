@@ -1,11 +1,11 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
 import { listen } from "@tauri-apps/api/event";
 import { popupMenu, copyText } from "../../ui/context-menu";
 import { attachOnSwitch, workspaceFileType } from "./document-drag";
-import { editFileName, nameNewFile, fileName, isDescendant } from "../../ui/file-name";
+import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName, isDescendant } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
@@ -19,7 +19,7 @@ interface FileEntry {
 
 export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>) {
   const panel = element("div", "workspace-files");
-  panel.setAttribute("aria-label", t("工作区文件"));
+  bindLabel(panel, "aria-label", localized("工作区文件"));
   const expanded = new Set<string>();
   const readers = new WeakMap<HTMLElement, () => Promise<void>>();
   let roots: string[] = [];
@@ -102,9 +102,10 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
       if (request !== current || !panel.contains(branch)) return;
       if (listed?.length === files.length && listed.every((previous, index) =>
         previous.path === files[index].path && previous.directory === files[index].directory)) return;
+      if (afterNaming(children, () => void read().catch(report))) return;
       listed = files;
       children.replaceChildren();
-      if (!files.length) children.append(element("p", "library-empty muted", t("没有 Markdown 文件或子目录")));
+      if (!files.length) children.append(element("p", "library-empty muted", localized("没有 Markdown 文件或子目录")));
       const pageSize = 80;
       const active = selected;
       if (active && files.length > pageSize) {
@@ -116,7 +117,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
         }
       }
       let offset = 0;
-      const next = button(t("显示更多"), appendPage, "library-node");
+      const next = button(localized("显示更多"), appendPage, "library-node");
       function appendPage() {
         next.remove();
         const page = files.slice(offset, offset + pageSize);
@@ -132,7 +133,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     return branch;
   }
 
-  type Action = { kind: "createFile"; name?: string } | { kind: "createDirectory" | "rename"; name: string }
+  type Action = { kind: "createDirectory" | "rename"; name: string }
     | { kind: "move"; directory: string } | { kind: "trash" | "duplicate" };
 
   function owningRoot(path: string) {
@@ -150,21 +151,25 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
         }
       }
     }
-    if (action.kind === "createFile" || action.kind === "createDirectory") expanded.add(path);
-    if (action.kind === "createFile" && result.path) selected = result.path;
+    if (action.kind === "createDirectory") expanded.add(path);
     if (action.kind === "move") expanded.add(action.directory);
-    // Creation has already committed on disk. A failed directory read must not offer to create it again.
-    if (action.kind === "createFile") await refresh().catch(report);
-    else await refresh();
+    await refresh();
     return result.path;
   }
 
   function createFile(row: HTMLElement) {
     const directory = row.dataset.directory!;
-    void nameNewFile(async name => {
-      const action: Action = name === t("未命名.md") ? { kind: "createFile" } : { kind: "createFile", name };
-      return change(directory, action);
-    }, async path => { if (path) await openNote(await openLibraryFile(path)); }).catch(report);
+    return createInline(async () => {
+      const { path } = await invoke<{ path: string }>("workspace_action", { path: directory, action: { kind: "createFile" } });
+      selected = path;
+      expanded.add(directory);
+      const id = await openLibraryFile(path);
+      await openNote(id);
+      const folder = panel.querySelector<HTMLElement>(`[data-directory="${CSS.escape(directory)}"]`);
+      if (folder) await readers.get(folder)?.();
+      const created = panel.querySelector<HTMLElement>(`[data-file="${CSS.escape(path)}"]`);
+      if (created) nameCreatedDocument(created, id);
+    }).catch(report);
   }
 
   async function createDirectory(directory: string) {
@@ -282,10 +287,11 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
       await Promise.all(Array.from(visible, row => readers.get(row)!()));
       return;
     }
+    if (afterNaming(panel, () => void refresh().catch(report))) return;
     roots = paths;
     panel.replaceChildren();
     if (!roots.length) {
-      panel.append(button(t("添加工作区文件夹…"), add, "library-node"));
+      panel.append(button(localized("添加工作区文件夹…"), add, "library-node"));
       return;
     }
     for (const path of roots) {

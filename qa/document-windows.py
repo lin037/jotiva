@@ -74,6 +74,7 @@ window.__TAURI_INTERNALS__ = {
       case "inbox_directory": return "/tmp/Jotiva/其他";
       case "list_folders": case "list_sources": case "workspace_roots": return [];
       case "list_notes": return {items:[],more:false};
+      case "search_document_files": return [];
       case "search_notes": return {current:[],attached:[],documents:[],more:false};
       case "take_dropped_tabs": return (window.droppedTabs ?? []).splice(0);
       case "read_tab_titles": return args.ids.map(id => ({id,title:window.tabNames?.[id] ?? "文档 "+id}));

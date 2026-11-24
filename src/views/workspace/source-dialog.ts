@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { sources, type SourceChoice } from "../../desktop/ipc";
 import { allowWindowAccess } from "../../desktop/window-access";
 import { button, element, report } from "../../ui/dom";
@@ -16,10 +16,10 @@ export function windowPicker(): WindowPicker {
   dialog.setAttribute("aria-labelledby", heading.id);
   const search = element("input");
   search.type = "search";
-  search.placeholder = t("搜索应用或窗口");
+  bindLabel(search, "placeholder", localized("搜索应用或窗口"));
   search.autocomplete = "off";
   search.setAttribute("role", "combobox");
-  search.setAttribute("aria-label", search.placeholder);
+  bindLabel(search, "aria-label", () => search.placeholder);
   search.setAttribute("aria-autocomplete", "list");
   search.setAttribute("aria-expanded", "true");
   const list = element("div", "window-picker-list");
@@ -28,10 +28,10 @@ export function windowPicker(): WindowPicker {
   search.setAttribute("aria-controls", list.id);
   const notice = element("p", "form-message");
   notice.setAttribute("role", "status");
-  const refresh = button(t("刷新"), load);
-  const more = button(t("显示更多"), () => { visible += pageSize; draw(); search.focus(); });
+  const refresh = button(localized("刷新"), load);
+  const more = button(localized("显示更多"), () => { visible += pageSize; draw(); search.focus(); });
   more.hidden = true;
-  const cancel = button(t("取消"), () => dialog.close());
+  const cancel = button(localized("取消"), () => dialog.close());
   const actions = element("div", "sheet-actions");
   actions.append(refresh, cancel);
   dialog.append(heading, search, list, more, notice, actions);
@@ -79,7 +79,7 @@ export function windowPicker(): WindowPicker {
     visible = pageSize;
     draw();
     list.scrollTop = 0;
-    if (!loading) notice.textContent = shown.length ? "" : all.length ? t("没有匹配的窗口") : t("打开目标窗口后刷新");
+    if (!loading) bindLabel(notice, "text", () => shown.length ? "" : all.length ? t("没有匹配的窗口") : t("打开目标窗口后刷新"));
   }
 
   async function select(id: number) {
@@ -101,7 +101,7 @@ export function windowPicker(): WindowPicker {
     const ticket = ++request;
     loading = refresh.disabled = true;
     all = []; filter();
-    notice.textContent = t("正在读取窗口…");
+    bindLabel(notice, "text", localized("正在读取窗口…"));
     try {
       const choices = await sources.choices();
       if (!dialog.open || request !== ticket) return;

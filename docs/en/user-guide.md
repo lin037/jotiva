@@ -38,7 +38,7 @@ In Live Preview, you can edit the formatted document directly. Use **Cmd+/** or 
 
 Add folders you use often to the workspace sidebar. Keep related files open in tabs, or open two files in separate windows to compare them. For a long document, click a heading in the outline to jump straight to it.
 
-When creating a document in a workspace or archive folder, enter a name and click **Create** or press Enter. The naming dialog keeps your draft while you choose an IME candidate or move focus. If a name is taken, edit it and try again.
+Creating a document saves an empty file immediately and selects its name in the file tree. Type a name and click elsewhere or press Enter. If that name exists, Jotiva adds a number before the extension.
 
 Right-click a tab to copy its text, duplicate the document, open it in a new window, or close tabs to its left, right, or on both sides. Use **Cmd+Shift+9** on Mac or **Ctrl+Shift+9** on Windows and Linux to toggle task list formatting for the current or selected lines.
 
@@ -59,4 +59,4 @@ Jev filing is off by default. If you turn it on and ask for a suggestion, Jotiva
 
 ## Change the theme or shortcuts
 
-Choose **English** or **简体中文** under **Settings → Appearance → Interface language** and restart Jotiva to apply it. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
+Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)

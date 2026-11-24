@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{LazyLock, OnceLock},
+    sync::{LazyLock, RwLock},
 };
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq)]
@@ -13,18 +13,17 @@ pub enum Language {
     English,
 }
 
-// Freeze the interface language for this run, including windows created after a preference change.
-static LANGUAGE: OnceLock<Language> = OnceLock::new();
+static LANGUAGE: RwLock<Language> = RwLock::new(Language::Chinese);
 static ENGLISH: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../src/i18n/en.json")).expect("valid English catalog")
 });
 
-pub fn start(language: Language) {
-    let _ = LANGUAGE.set(language);
+pub fn set_language(language: Language) {
+    *LANGUAGE.write().unwrap() = language;
 }
 
 pub fn language() -> Language {
-    LANGUAGE.get().copied().unwrap_or_default()
+    *LANGUAGE.read().unwrap()
 }
 
 pub fn t(source: &str) -> &str {

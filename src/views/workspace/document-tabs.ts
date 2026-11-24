@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, bindLabel, localized } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { desktopPlatform } from "../../desktop/platform";
 import { notes, type NoteId } from "../../desktop/ipc";
@@ -18,7 +18,7 @@ interface Tab {
 export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>) {
   const bar = element("nav", "document-tabs");
   bar.setAttribute("role", "tablist");
-  bar.setAttribute("aria-label", t("已打开的文档"));
+  bindLabel(bar, "aria-label", localized("已打开的文档"));
   bar.hidden = true;
   const tabs = new Map<NoteId, Tab>();
   const recent = new Set<NoteId>();
@@ -40,7 +40,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     title.dataset.note = String(id);
     title.setAttribute("role", "tab");
     title.setAttribute("aria-controls", "workspace-editor-panel");
-    const dismiss = button("×", () => close([id]), "document-tab-close", t("关闭标签"));
+    const dismiss = button("×", () => close([id]), "document-tab-close", localized("关闭标签"));
     dismiss.tabIndex = -1;
     row.append(title, dismiss);
     bar.append(row);
@@ -124,7 +124,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
       const tab = tabs.get(id);
       if (!tab || tab.title.textContent === name) return;
       tab.title.textContent = tab.title.title = name;
-      tab.close.setAttribute("aria-label", t("关闭标签，") + name);
+      bindLabel(tab.close, "aria-label", () => t("关闭标签，") + name);
     },
     remember(id: NoteId, session: TabSession) {
       const tab = tabs.get(id);

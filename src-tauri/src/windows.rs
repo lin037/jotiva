@@ -76,11 +76,12 @@ pub fn document_id(label: &str) -> Option<NoteId> {
     label.strip_prefix("document-")?.parse().ok()
 }
 
-pub fn document(app: &AppHandle, id: NoteId, title: &str) -> tauri::Result<()> {
+pub fn document(app: &AppHandle, id: NoteId, title: &str, name_on_open: bool) -> tauri::Result<()> {
     let label = format!("document-{id}");
     let window = match app.get_webview_window(&label) {
         Some(window) => window,
         None => builder(app, label)
+            .initialization_script(format!("window.__jotPlatform.nameOnOpen = {name_on_open}"))
             .title(title)
             .inner_size(700.0, 560.0)
             .min_inner_size(380.0, 280.0)
