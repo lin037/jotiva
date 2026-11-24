@@ -2,14 +2,14 @@
   <img src="src/assets/jot.svg" alt="Jotiva" width="76" height="76">
 </p>
 <h1 align="center">Jotiva</h1>
-<p align="center"><strong>把便签留在你正在用的窗口旁。</strong></p>
-<p align="center">在 macOS、Windows 和 Linux 上编辑本地 Markdown 和纯文本。</p>
+<p align="center"><strong>在看资料的窗口旁，顺手记一笔。</strong></p>
+<p align="center">本地 Markdown 编辑器，适用于 macOS、Windows 和 Linux。</p>
 <p align="center">
   <a href="https://github.com/lin037/jotiva/releases"><strong>下载安装</strong></a> ·
   <a href="docs/HelloJotiva.md">打开示例</a> ·
   <a href="docs/user-guide.md">使用手册</a> ·
   <a href="docs/developer-guide.md">开发者指南</a> ·
-  <a href="docs/en/user-guide.md">English</a>
+  <a href="README.en.md">English</a>
 </p>
 <p align="center">
   <a href="docs/user-guide.md#安装"><img src="https://img.shields.io/badge/macOS-14%2B-343940?logo=apple&amp;logoColor=white" alt="macOS 14+"></a>
@@ -21,18 +21,29 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-426c5a" alt="MIT 许可证"></a>
 </p>
 
+## 便签跟着窗口
+
+查周末的路线时，在地图旁记下从哪儿上步道。切去回消息，便签会暂时隐藏。再切回地图，刚才那张便签也回来了。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/window-notes.webp">
+    <img src="docs/assets/window-notes.gif" alt="在路线窗口旁唤起便签，记下要带水并折叠。切到消息窗口时便签隐藏，回到路线窗口后又能打开同一张便签。" width="960">
+  </picture>
+</p>
+
+同一个应用开了两扇窗口，可以各写各的便签。要边看多个应用边对照，就点图钉，让同一张便签一直显示。macOS、Windows 和兼容的 Linux X11 会话支持窗口挂载。原生 Wayland 可以使用独立便签。 [打开和挂载便签](docs/user-guide.md#在另一个应用旁写便签)
+
+## 本地文件直接打开就能写
+
+从电脑里打开 Markdown 或 UTF-8 文本，改动会存回原文件。在即时预览里可以直接勾待办、改表格，想看源码时按 `⌘/`（macOS）或 `Ctrl+/`（Windows、Linux）。常用文件夹可以放在侧栏，长文可以从大纲跳到要读的段落，两份文件也能分窗口对照。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jot-dark.webp">
     <img src="docs/assets/jot-light.webp" alt="Jotiva 正在编辑 HelloJotiva，左边是本地工作区，正文有待办和表格，右边是章节大纲" width="960">
   </picture>
 </p>
-
-- **改动存回原文件。** 打开电脑里的文档就能写。可以直接勾掉待办、改表格，也可以随时切到 Markdown 源码。
-- **便签跟着窗口。** 查资料时，把便签挂在浏览器旁。切到别的应用后，再回到浏览器就能接着记。窗口挂载支持 macOS、Windows 和兼容的 Linux X11 会话。
-- **常用文件夹放在侧栏。** 可以用标签切换文档，从大纲跳到要看的段落，或把两份文档各开一个窗口来对照。界面有浅色和深色，也可以导入自己的 CSS。
-
-## 看看怎么用
 
 <details>
 <summary>勾待办、给表格加一行，再切换到 Markdown 源码</summary>
