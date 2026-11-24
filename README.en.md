@@ -30,7 +30,7 @@
 <summary>Window notes</summary>
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/window-notes.webp">
-  <img src="docs/assets/window-notes.gif" alt="A quick note opens next to a route window, hides while the user checks their messages, and comes back with the route window." width="840">
+  <img src="docs/assets/window-notes.gif" alt="Overlapping route and message windows switch places. The note hides and returns with the route window. Bilingual captions show the shortcuts." width="840">
 </picture>
 </details>
 

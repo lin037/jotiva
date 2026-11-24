@@ -40,7 +40,7 @@
 <summary>窗口便签</summary>
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/window-notes.webp">
-  <img src="docs/assets/window-notes.gif" alt="在路线窗口旁打开便签。切到消息窗口时便签隐藏，回到路线窗口后再次显示。" width="840">
+  <img src="docs/assets/window-notes.gif" alt="路线与消息窗口重叠。切到消息时便签隐藏，切回路线时便签重新显示。中英文字幕标注快捷键。" width="840">
 </picture>
 </details>
 
