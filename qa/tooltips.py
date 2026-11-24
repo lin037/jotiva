@@ -109,6 +109,46 @@ def expect_hover_appearance(row):
     row.focus()
 
 
+def verify_windows_titlebar(browser, url):
+    for scale in (1, 1.25, 1.5):
+        page = browser.new_page(device_scale_factor=scale, viewport={"width": 980, "height": 640})
+        page.add_init_script(IPC + """
+          window.__jotPlatform = {os:'windows', hostWindows:true};
+          const previous = window.__TAURI_INTERNALS__.invoke;
+          window.__TAURI_INTERNALS__.invoke = (cmd,args) => {
+            if(cmd==='plugin:window|is_maximized') return Promise.resolve(false);
+            if(cmd==='system_window_menu') {window.systemMenu=true; return Promise.resolve();}
+            return previous(cmd,args);
+          };
+        """)
+        page.goto(url)
+        bar = page.locator(".workspace-titlebar")
+        search = bar.locator(".workspace-search")
+        expect(page.locator(".document-tools [role=tab]")).to_be_visible()
+        expect(bar.locator(".titlebar-logo")).to_be_visible()
+        for width in (980, 700, 580):
+            page.set_viewport_size({"width": width, "height": 640})
+            page.locator(".cm-content").focus()
+            field = search.bounding_box()
+            caption = bar.locator(".caption-controls").bounding_box()
+            terminal = bar.locator('[aria-controls="workspace-terminal"]').bounding_box()
+            assert abs(field["x"] + field["width"] / 2 - width / 2) <= 1, (width, scale, field)
+            assert field["x"] + field["width"] <= terminal["x"]
+            assert terminal["x"] + terminal["width"] <= caption["x"]
+            assert abs(caption["x"] + caption["width"] - width) <= 1
+            if width <= 680:
+                assert field["width"] <= 34
+                search.locator("input").click()
+                expect(search.locator("input")).to_be_focused()
+                expanded = search.bounding_box()
+                assert expanded["width"] > field["width"] and expanded["y"] >= bar.bounding_box()["height"] - 1
+                assert bar.locator(".caption-controls").bounding_box() == caption
+            page.keyboard.press("Escape")
+        bar.locator(".titlebar-logo").click(button="right")
+        page.wait_for_function("window.systemMenu === true")
+        page.close()
+
+
 def verify_tree_focus(browser, url):
     page = browser.new_page()
     page.add_init_script(IPC)
@@ -773,6 +813,7 @@ def verify_filing_settings(browser, url):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--windows-titlebar", action="store_true")
     mode.add_argument("--tree-focus", action="store_true")
     mode.add_argument("--shortcut-settings", action="store_true")
     mode.add_argument("--filing-settings", action="store_true")
@@ -784,13 +825,16 @@ if __name__ == "__main__":
             with sync_playwright() as playwright:
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 url = f"http://127.0.0.1:{server.server_port}/"
-                if options.shortcut_settings:
+                if options.windows_titlebar:
+                    verify_windows_titlebar(browser, url)
+                elif options.shortcut_settings:
                     verify_shortcut_settings(browser, url)
                 elif options.filing_settings:
                     verify_filing_settings(browser, url)
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:
+                        verify_windows_titlebar(browser, url)
                         verify_language(browser, url)
                         verify(browser, url)
                 browser.close()

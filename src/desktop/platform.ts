@@ -6,6 +6,10 @@ const appKit = os === "macos";
 export const desktopPlatform = {
   pathSeparator: os === "windows" ? "\\" : "/",
   hostWindows,
+  windowsChrome: os === "windows",
+  quoteShellPath: os === "windows"
+    ? (path: string) => '"' + path.replace(/[`$"“”„]/gu, char => "`" + char) + '"'
+    : (path: string) => path.replace(/[^a-zA-Z0-9_./\-\u0080-\u{10ffff}]/gu, char => "\\" + char),
   customCaption: !appKit,
   usesAccessibilityPermission: appKit,
   nativePasteboard: appKit,

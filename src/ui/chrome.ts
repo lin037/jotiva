@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { button, report } from "./dom";
 
 const glyphs = {
+  terminal: "m2.5 4 4 4-4 4m6 0h5",
   menu: "M2.5 4h11m-11 4h11m-11 4h11",
   minimize: "M3 8.5h10",
   maximize: "M3.5 3.5h9v9h-9z",

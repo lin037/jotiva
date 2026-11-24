@@ -10,6 +10,7 @@ mod menus;
 mod platform;
 mod settings;
 mod storage;
+mod terminal;
 mod windows;
 
 use std::sync::{Mutex, RwLock};
@@ -831,6 +832,7 @@ fn main() {
             app.manage(Mutex::new(workspace::Workspace::load(
                 data.join("workspace.json"),
             )?));
+            app.manage(terminal::Terminal::default());
             app.manage(workspace::DroppedTabs::default());
             app.manage(Mutex::new(Folders::load(data.join("folders.json"))?));
             app.manage(Mutex::new(desktop::Desktop::default()));
@@ -875,6 +877,9 @@ fn main() {
                 let _ = settings::shortcuts::record(None);
             }
             if matches!(event, WindowEvent::Destroyed) {
+                if window.label() == windows::MAIN {
+                    window.state::<terminal::Terminal>().shutdown();
+                }
                 desktop::window_destroyed(window.app_handle(), window.label());
                 let _ = menus::window_destroyed(window.app_handle(), window.label());
                 Native::clear_sources(window.label());
@@ -890,6 +895,14 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(windows)]
+            platform::system_window_menu,
+            terminal::open_terminal,
+            terminal::live_terminals,
+            terminal::read_terminal,
+            terminal::write_terminal,
+            terminal::resize_terminal,
+            terminal::close_terminal,
             quick_view,
             quick_presented,
             initial_note,
@@ -985,6 +998,7 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("initialize Jotiva")
         .run(move |app, event| match event {
+            RunEvent::Exit => app.state::<terminal::Terminal>().shutdown(),
             RunEvent::Ready if !startup_files.is_empty() => {
                 workspace::open_paths(app, std::mem::take(&mut startup_files));
             }

@@ -12,6 +12,7 @@ import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName 
 import { fileSelection } from "./file-selection";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
+import type { OpenTerminal } from "./terminal";
 import { workspaceFiles } from "./workspace-files";
 
 export async function librarySidebar(
@@ -20,6 +21,7 @@ export async function librarySidebar(
   addSource: () => void,
   moveArchive: (id: NoteId, folder: number | null) => unknown,
   saveOpenNote: (id: NoteId) => Promise<void>,
+  newTerminal: OpenTerminal,
 ) {
   const sidebar = element("aside", "library-sidebar jot-sidebar");
   sidebar.id = "workspace-library";
@@ -29,7 +31,7 @@ export async function librarySidebar(
   async function flush(paths: string[]) {
     if (current !== undefined && currentPath && paths.includes(currentPath)) await saveOpenNote(current);
   }
-  const files = workspaceFiles(open, flush);
+  const files = workspaceFiles(open, flush, newTerminal);
   const archive = element("div", "archive-tree");
   const tree = element("div", "library-tree");
   tree.setAttribute("role", "region");
@@ -149,9 +151,11 @@ export async function librarySidebar(
     const key = row.closest<HTMLElement>("[data-archive-group]")!.dataset.archiveGroup;
     const group = key ? items.find(item => item.id === Number(key)) : undefined;
     const directory = group?.path ?? inbox;
+    const terminal = {label:t("在此处新建终端"), run: () => newTerminal({kind:"archive", folder:group?.id ?? null})};
     if (!row.dataset.file) {
       void popupMenu(event, [
         { label: t("新建文档"), run: () => createInline(() => createInArchive(row)) },
+        terminal,
         ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
         { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },
@@ -168,7 +172,7 @@ export async function librarySidebar(
       ...(desktopPlatform.hostWindows ? [{ label: t("挂载到窗口…"), run: async () => attachOnSwitch(await resolveId()) }] : []), null,
       { label: t("重命名…"), run: () => renameFile(row) },
       ...(row.dataset.archivePath ? [{ label: t("移到归档目录…"), run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
-      actions.duplicate, null,
+      actions.duplicate, terminal, null,
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
       { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
       { label: t("复制相对路径"), run: () => copyText(name) }, null, actions.trash,

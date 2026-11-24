@@ -17,6 +17,8 @@ import { documentDrag } from "./document-drag";
 import { documentPath } from "./document-file-menu";
 import { folderEditor, moveDocument } from "./folder-dialog";
 import { librarySidebar } from "./library-sidebar";
+import type { TerminalLocation } from "./terminal";
+import { fileDialog } from "../../ui/file-dialog";
 import { workspaceDividers } from "./pane-divider";
 import { windowPicker } from "./source-dialog";
 import "./workspace.css";
@@ -26,7 +28,7 @@ export async function mount() {
   const titlebar = element("header", "workspace-titlebar jot-titlebar");
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
-  const tabs = documentTabs(open, closeTabs, saveOpenNote);
+  const tabs = documentTabs(open, closeTabs, saveOpenNote, newTerminal);
   const editorRoot = element("div", "editor-root");
   editorRoot.id = "workspace-editor-panel";
   const outline = element("aside", "workspace-outline jot-document-outline");
@@ -78,7 +80,7 @@ export async function mount() {
   const library = await librarySidebar(open, folder => {
     resumeMove = false;
     editFolder(folder);
-  }, addSource, (id, folder) => move(id, folder), saveOpenNote);
+  }, addSource, (id, folder) => move(id, folder), saveOpenNote, newTerminal);
   const move = moveDocument((result, folder) => {
     bindLabel(status, "text", () => result.warning ?? t("已移动"));
     void Promise.all([library.showFolder(folder), refreshCard()]).catch(report);
@@ -180,7 +182,7 @@ export async function mount() {
   }
 
   function closeActive() {
-    if (tabs.multiple && editor) return closeTabs([editor.id]);
+    if (editor) return closeTabs([editor.id]);
   }
 
   function closeTabs(ids: NoteId[]) {
@@ -257,8 +259,30 @@ export async function mount() {
   finder.panel.prepend(searchField);
   finder.panel.dataset.noDrag = "";
   const showOverview = () => invoke("show_find", { tiled: true });
+  let terminal: Promise<ReturnType<typeof import("./terminal").terminalPanel>> | undefined;
+  let mountedTerminal: Awaited<NonNullable<typeof terminal>> | undefined;
+  function currentLocation(): TerminalLocation {
+    const row = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (row && library.sidebar.contains(row)) {
+      if (row.dataset.directory || row.dataset.file && row.closest(".workspace-files"))
+        return {kind:"workspace", path:(row.dataset.directory ?? row.dataset.file)!};
+      const group = row.closest<HTMLElement>("[data-archive-group]");
+      if (group) return {kind:"archive", folder:Number(group.dataset.archiveGroup) || null};
+    }
+    return { kind: "document", id: Number(row?.closest<HTMLElement>('[role=tab][data-note]')?.dataset.note) || editor?.id || null };
+  }
+  function panel() {
+    return terminal ??= import("./terminal").then(({terminalPanel}) => mountedTerminal = terminalPanel(documentPane, terminalButton, currentLocation, () => editor?.focus()));
+  }
+  async function newTerminal(location = currentLocation()) {
+    if (location.kind === "document" && location.id) await saveOpenNote(location.id);
+    await (await panel()).start(location);
+  }
+  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), async () => (await panel()).toggle());
+  terminalButton.setAttribute("aria-expanded", "false");
+  terminalButton.setAttribute("aria-controls", "workspace-terminal");
+  bindLabel(terminalButton, "data-tip", localized("显示或隐藏终端"));
   const showSettings = () => invoke("show_settings");
-  const settingsButton = shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings");
   const windowButton = element("button", "icon-button");
   windowButton.type = "button";
   bindLabel(windowButton, "aria-label", localized("文档窗口操作"));
@@ -282,8 +306,22 @@ export async function mount() {
   metadata.append(filePath.control);
   const leading = element("div", "workspace-actions workspace-leading");
   const trailing = element("div", "workspace-actions workspace-trailing");
-  leading.append(sidebar, add);
-  trailing.append(outlineButton, windowButton, settingsButton);
+  leading.append(sidebar);
+  trailing.append(terminalButton);
+  if (desktopPlatform.windowsChrome) {
+    const documentTools = element("div", "document-tools");
+    add.replaceChildren(icon("add"));
+    documentTools.append(tabs.bar, add, outlineButton, windowButton);
+    documentPane.prepend(documentTools);
+    windowMenu.addEventListener("beforetoggle", () => {
+      const rect = windowButton.getBoundingClientRect();
+      windowMenu.style.top = (rect.bottom + 4) + "px";
+      windowMenu.style.right = Math.max(0, innerWidth - rect.right) + "px";
+    });
+  } else {
+    leading.append(add);
+    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings"));
+  }
   titlebar.append(leading, finder.panel, trailing, windowMenu);
   configureTitlebar(titlebar);
   workspace.append(library.sidebar, documentPane, outline);
@@ -301,8 +339,9 @@ export async function mount() {
     editor: () => editor?.focus(), workspace: () => focusFiles(true), archive: () => focusFiles(false),
     tile: () => editor?.command("tile"),
     previousDocument,
-    get closeActive() { return tabs.multiple ? closeActive : undefined; },
+    get closeActive() { return editor && (tabs.multiple || desktopPlatform.windowsChrome || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
     newDocument: newDocument,
+    terminal: () => newTerminal(),
     save: () => editor?.save(),
     search: finder.focus,
     overview: showOverview,
@@ -374,6 +413,10 @@ export async function mount() {
     library.refreshFiles();
   });
   await saveBeforeClose(async () => {
+    if (terminal) await (await terminal).ready();
+    if (await invoke<number>("live_terminals") > 0 && await fileDialog(t("结束终端并关闭窗口？"), t("结束并关闭"), {
+      detail: t("关闭主窗口会结束所有终端会话及其前台任务。")
+    }) === undefined) { await invoke("cancel_quit"); return; }
     await tail.catch(() => {});
     await editor?.close();
     editor = undefined;

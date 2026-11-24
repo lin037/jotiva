@@ -1,5 +1,6 @@
 import { t, bindLabel, localized } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
+import type { OpenTerminal } from "./terminal";
 import { desktopPlatform } from "../../desktop/platform";
 import { notes, type NoteId } from "../../desktop/ipc";
 import type { TabSession } from "../../editor/note-editor";
@@ -15,7 +16,7 @@ interface Tab {
 }
 
 // The order on screen is independent of the order in which documents were last visited.
-export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>) {
+export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>, newTerminal: OpenTerminal) {
   const bar = element("nav", "document-tabs");
   bar.setAttribute("role", "tablist");
   bindLabel(bar, "aria-label", localized("已打开的文档"));
@@ -36,7 +37,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     if (existing) return existing;
     const row = element("div", "document-tab");
     const title = button("", () => open(id), "document-tab-name");
-    title.draggable = desktopPlatform.hostWindows;
+    title.draggable = true;
     title.dataset.note = String(id);
     title.setAttribute("role", "tab");
     title.setAttribute("aria-controls", "workspace-editor-panel");
@@ -60,6 +61,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
           await copyText((await notes.read(id)).markdown);
         } },
         duplicate,
+        { label: t("在此处新建终端"), run: () => newTerminal({ kind: "document", id }) },
         { label: t("在新窗口打开"), run: async () => { await save(id); await invoke("open_document_window", { id }); } },
         null, { label: t("关闭标签"), run: () => close([id]) },
         ...(left.length ? [{ label: t("关闭左侧标签"), run: () => close(left) }] : []),
@@ -82,7 +84,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
         void close([id]).then(() => active !== undefined && !bar.hidden && tabs.get(active)?.title.focus()).catch(report);
       }
     });
-    bar.hidden = tabs.size < 2;
+    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2;
     return tab;
   }
 
@@ -101,7 +103,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     active = id;
     recent.delete(id);
     recent.add(id);
-    bar.hidden = tabs.size < 2;
+    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2;
     tab.title.tabIndex = 0;
     tab.title.setAttribute("aria-selected", "true");
     if (!bar.hidden) tab.row.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -113,7 +115,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     syncMenu();
     recent.delete(id);
     if (active === id) active = undefined;
-    bar.hidden = tabs.size === 0 || (tabs.size === 1 && active !== undefined);
+    bar.hidden = tabs.size === 0 || (!desktopPlatform.windowsChrome && tabs.size === 1 && active !== undefined);
   }
 
   return {

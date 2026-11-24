@@ -42,6 +42,14 @@ Creating a document saves an empty file immediately and selects its name in the 
 
 Right-click a tab to copy its text, duplicate the document, open it in a new window, or close tabs to its left, right, or on both sides. Use **Cmd+Shift+9** on Mac or **Ctrl+Shift+9** on Windows and Linux to toggle task list formatting for the current or selected lines.
 
+## Use the integrated terminal
+
+While editing, press **Ctrl + Shift + Backquote** to start a shell in the document’s directory. Choose **New Terminal Here** from the context menu on a workspace entry, archive entry, or document tab to pick the starting location. With no saved document, a new shell starts in the default archive directory.
+
+The title bar terminal button hides the panel or brings back your last session. Use **+** to start another shell, the directory selector to switch sessions, and the panel’s top edge to resize it. Switching or closing a document keeps its shell and running commands alive.
+
+Drag a file or a document tab into the terminal to insert its quoted path at the cursor. Press Enter when the command is ready. Scripts can read `JOTIVA_INBOX_DIR` to place generated or synced documents in the default archive. Use `$env:JOTIVA_INBOX_DIR` in PowerShell or `"$JOTIVA_INBOX_DIR"` in Bash or Zsh. **Terminate terminal** closes the selected session. If shells are running when you close the main window or quit the app, Jotiva asks for confirmation.
+
 ## Find your notes
 
 Scroll or press **Down** to load more search results. Press **Up** to revisit earlier results.

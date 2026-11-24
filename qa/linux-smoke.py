@@ -47,12 +47,19 @@ with tempfile.TemporaryDirectory(dir=cache) as directory, ExitStack() as stack:
     dist = work / "dist"
     shutil.copytree(project / "dist", dist)
     shutil.copyfile(project / "qa/desktop-probe.js", dist / "probe.js")
+    shutil.copyfile(project / "qa/terminal-probe.js", dist / "terminal-probe.js")
     host_title = f"Jotiva-QA-{os.getpid()}"
     scenario = "wayland=1" if wayland else "host=" + host_title
     page = dist / "index.html"
     page.write_text(page.read_text().replace("</body>", f'<script type="module" src="/probe.js?{scenario}"></script></body>'))
     doc = work / "跨平台验收.md"
     doc.write_text("# smoke\n")
+    library = work / "library"
+    nested = library / "posts"
+    nested.mkdir(parents=True)
+    (nested / "a ' $ file.md").write_text("jotiva-drop-proof\n")
+    (work / "profile").mkdir(exist_ok=True)
+    (work / "profile/workspace.json").write_text(json.dumps([str(library)]))
     config = {"identifier": f"io.github.lin037.jot.desktop.qa{os.getpid()}",
               "build": {"frontendDist": os.path.relpath(dist, native)},
               "app": {"appDirectoriesOverride": str(work / "profile")}}
@@ -92,8 +99,6 @@ with tempfile.TemporaryDirectory(dir=cache) as directory, ExitStack() as stack:
     opened_menu = False
     dragged = False
     while time.monotonic() < deadline:
-        if app.poll() is not None:
-            raise RuntimeError(f"Application exited early with {app.returncode}")
         results = {json.loads(record.read_bytes())["markdown"] for record in (work / "profile/notes").glob("[0-9]*.json")}
         errors = [line for line in results if line.startswith("# QA error")]
         if errors:
@@ -111,9 +116,15 @@ with tempfile.TemporaryDirectory(dir=cache) as directory, ExitStack() as stack:
             dragged = True
         if {"# QA settings", "# QA main", "# QA document"} <= results:
             break
+        if app.poll() is not None:
+            raise RuntimeError(f"Application exited early with {app.returncode}")
         time.sleep(0.25)
     else:
         raise TimeoutError("WebKitGTK probe timed out: " + repr(results))
+    assert app.wait(timeout=12) == 0, "Confirmed quit did not exit cleanly"
+    shell_pid = int((nested / "terminal-pid.txt").read_text())
+    assert shell_pid > 0 and not Path(f"/proc/{shell_pid}").exists(), "Closed terminal shell is still running"
+    assert (work / "terminal-context.txt").read_text().splitlines() == [str(work), str(work / "profile/notes/其他")]
     assert "Desktop edit" in doc.read_text()
     assert doc.as_uri() in log.read_text(), "Missing FileManager1.ShowItems for the test document"
     print("WebKitGTK passed on", env["GDK_BACKEND"], "with Markdown save, caption controls, multiple windows and file-manager reveal.")

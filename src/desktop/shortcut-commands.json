@@ -12,6 +12,7 @@
   {"id": "overview", "label": "平铺便签", "group": "查找与窗口", "key": "Primary+Shift+KeyO", "desktopKey": "Control+Shift+F8", "menu": "jot-overview"},
   {"id": "sidebar", "label": "显示或隐藏侧栏", "group": "查找与窗口", "key": "Primary+Shift+KeyL", "desktopKey": "Control+Alt+KeyL", "menu": "jot-sidebar"},
   {"id": "outline", "label": "显示或隐藏文档大纲", "group": "查找与窗口", "key": null, "menu": "jot-outline"},
+  {"id": "terminal", "label": "在当前位置新建终端", "group": "查找与窗口", "key": "Control+Shift+Backquote"},
   {"id": "previousDocument", "label": "上一份文档", "group": "查找与窗口", "key": "Control+Tab", "menu": "jot-previous"},
   {"id": "main", "label": "返回主窗口", "group": "查找与窗口", "key": "Primary+Backquote", "menu": "jot-main"},
   {"id": "pin", "label": "切换置顶", "group": "查找与窗口", "key": "Primary+Alt+KeyP", "menu": "jot-pin"},

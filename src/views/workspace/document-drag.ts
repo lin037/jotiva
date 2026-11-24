@@ -63,7 +63,6 @@ export function documentDrag(
   pick: (apply: (choice: number) => Promise<void>) => void,
   reveal: (source: string) => Promise<void>,
 ) {
-  if (!desktopPlatform.hostWindows) return;
   let outgoing: Payload | undefined;
   let highlighted: Element | undefined;
 
@@ -102,7 +101,11 @@ export function documentDrag(
       const selected = document.getSelection()?.toString();
       if (selected?.trim()) outgoing = { kind: "text", text: selected };
     }
-    if (outgoing) void invoke("observe_document_drag", { started: true }).catch(report);
+    if (desktopPlatform.hostWindows && outgoing) void invoke("observe_document_drag", { started: true }).catch(report);
+  });
+  if (!desktopPlatform.hostWindows) return;
+  document.addEventListener("drop", event => {
+    if (event.defaultPrevented) outgoing = undefined;
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") { outgoing = undefined; clearHighlight(); }

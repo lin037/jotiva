@@ -75,7 +75,7 @@ impl Workspace {
         Ok(())
     }
 
-    pub(super) fn resolve(&self, path: &Path) -> Result<PathBuf, String> {
+    pub(crate) fn resolve(&self, path: &Path) -> Result<PathBuf, String> {
         let path = fs::canonicalize(path).map_err(|error| error.to_string())?;
         if !self.roots.iter().any(|root| path.starts_with(root)) {
             return Err("文件已移出工作区".into());

@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { desktopPlatform } from "../desktop/platform";
 import { dragOnMouseDown, icon, iconButton } from "./chrome";
 import { element, report } from "./dom";
+import appIcon from "../assets/jot.svg";
 import "./titlebar.css";
 
 function appMenu() {
@@ -44,11 +45,27 @@ export function titlebar(region: HTMLElement, compact = false) {
     void win.onResized(() => void sync().catch(report)).catch(report);
     controls.append(captionButton("minimize", localized("最小化"), () => win.minimize()), maximize);
     const leading = region.querySelector(".workspace-leading");
-    if (leading) leading.prepend(appMenu());
+    if (leading) {
+      leading.prepend(appMenu());
+      if (desktopPlatform.windowsChrome) {
+        const logo = element("img", "titlebar-logo");
+        logo.src = appIcon;
+        logo.alt = "Jotiva";
+        logo.draggable = false;
+        leading.prepend(logo);
+        for (const part of [logo, leading, region.querySelector(".workspace-trailing")]) part?.setAttribute("data-tauri-drag-region", "");
+        region.addEventListener("contextmenu", event => {
+          if (!(event.target instanceof Element) || !event.target.hasAttribute("data-tauri-drag-region")) return;
+          event.preventDefault();
+          void invoke("system_window_menu").catch(report);
+        });
+      }
+    }
     else region.prepend(appMenu());
   }
   controls.append(captionButton("close", localized("关闭窗口"), () => win.close()));
-  region.append(controls);
+  const trailing = desktopPlatform.windowsChrome && region.querySelector(".workspace-trailing");
+  (trailing || region).append(controls);
 }
 
 export function secondaryTitlebar(title: Label) {

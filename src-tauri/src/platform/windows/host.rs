@@ -193,6 +193,13 @@ impl HostBackend for Native {
         }
     }
 
+    fn editor_target_after_denied_raise(id: u64) -> Option<Target> {
+        // Windows can deny foreground transfer after an OLE drop even while we own focus.
+        // Present our editor for the verified host without activating another application.
+        foreground().filter(|w| w.pid == std::process::id())?;
+        Self::register_source(id).ok()
+    }
+
     fn activate(pid: i32) {
         if let Some(w) = enumerate().into_iter().find(|w| w.pid == pid as u32) {
             unsafe {

@@ -116,7 +116,8 @@ export function bindWindowShortcuts(handlers: Partial<Record<string, Handler>>, 
     const action = actions.get(chord);
     // Respect local remaps before the editor handles its context-specific keys.
     // An attached note also needs Command-Enter before the editor consumes it.
-    const beforeEditor = action === "returnHost" || !!(action && local[action]);
+    if (action !== "terminal" && event.target instanceof Element && event.target.closest(".terminal-screen")) return;
+    const beforeEditor = action === "terminal" || action === "returnHost" || !!(action && local[action]);
     if (capture !== beforeEditor) return;
     const handle = action ? handlers[action] : chord === "Escape" ? escape : undefined;
     if (!handle) return;

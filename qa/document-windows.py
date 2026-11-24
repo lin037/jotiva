@@ -64,6 +64,7 @@ window.__TAURI_INTERNALS__ = {
       case "plugin:event|unlisten": return;
       case "plugin:window|set_title": return;
       case "plugin:window|close": notify("tauri://close-requested"); return;
+      case "live_terminals": return 0;
       case "close_editor_window": window.wasClosed = true; return;
       case "document_menu": window.menu = args; return;
       case "workspace_tab_menu": window.multipleTabs = args.multiple; return;

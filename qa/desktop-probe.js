@@ -38,6 +38,8 @@ try {
     historyKey(true);
     await waitFor(() => editor.textContent.includes(text), "Ctrl+Shift+Z");
     await waitFor(async () => (await run("read_note", {id})).markdown.includes(text));
+    const { checkTerminal } = await import("./terminal-probe.js");
+    await checkTerminal(os, waitFor, run, report);
     const title = scenario.get("host");
     if (window.__jotPlatform.hostWindows !== Boolean(title)) throw Error("Incorrect host capability");
     if (scenario.has("desktop-input")) {
@@ -80,8 +82,12 @@ try {
       if (!card.attached || !card.source.includes(folder)) throw Error("Explorer attachment missing");
       await run("clear_source_choices");
     }
+    document.querySelector('[aria-controls="workspace-terminal"]').click();
+    await waitFor(async () => await run("live_terminals") === 1, "shell running before exit");
+    await run("quit");
+    const confirm = await waitFor(() => document.querySelector("dialog[open] .sheet-actions button[type=submit]"), "confirm exit with a running shell");
     await report("main");
-    if (os === "windows") await run("quit");
+    confirm.click();
   } else if (label === "quick" && scenario.has("desktop-input")) {
     const { mounted } = await import("./windows-probe.js");
     await mounted({run, report, waitFor});

@@ -9,6 +9,7 @@ import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName,
 import { fileSelection } from "./file-selection";
 import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
+import type { OpenTerminal } from "./terminal";
 import { treeRow } from "./source-tree";
 
 interface FileEntry {
@@ -17,7 +18,7 @@ interface FileEntry {
   directory: boolean;
 }
 
-export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>) {
+export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>, newTerminal: OpenTerminal) {
   const panel = element("div", "workspace-files");
   bindLabel(panel, "aria-label", localized("工作区文件"));
   const expanded = new Set<string>();
@@ -192,7 +193,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
       ...(desktopPlatform.hostWindows ? [{ label: t("挂载到窗口…"), run: async () => attachOnSwitch(await openLibraryFile(path)) }] : []),
     ];
     popupMenu(event, [
-      ...menu, null,
+      ...menu, { label: t("在此处新建终端"), run: () => newTerminal({kind:"workspace", path}) }, null,
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
       { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
       { label: t("复制相对路径"), run: () => copyText(relativePath(path)) }, null,

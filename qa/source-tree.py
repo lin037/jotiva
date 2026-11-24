@@ -208,7 +208,7 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
   }}
   throw Error(cmd);
 }} }};
-librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.movedArchive=[id,folder], async()=>{{}}).then(sidebar => {{
+librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.movedArchive=[id,folder], async()=>{{}}, async location=>{{window.terminalOrigin=location}}).then(sidebar => {{
   documentDrag(sidebar.sidebar, async()=>{{}}, ()=>{{}}, async()=>{{}});
   document.querySelector('.workspace').prepend(sidebar.sidebar);
   window.testSidebar = sidebar; window.noteReads = () => reads; window.sourceReads = () => sourceReads;
@@ -242,6 +242,14 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         page.evaluate("async () => { window.workspaceRoots=['/work']; await window.testSidebar.showWorkspace(); }")
         page.locator('[data-directory="/work"]').click()
         row = page.locator('[data-file="/work/会议.md"]')
+        def terminal_here(target, origin):
+            page.evaluate("window.pick = '在此处新建终端'; window.terminalOrigin = null")
+            target.click(button="right")
+            page.wait_for_function("window.terminalOrigin !== null")
+            assert page.evaluate("window.terminalOrigin") == origin
+
+        terminal_here(row, {"kind": "workspace", "path": "/work/会议.md"})
+        terminal_here(page.locator('[data-directory="/work/小组"]'), {"kind": "workspace", "path": "/work/小组"})
         for action, value in [("复制绝对路径", "/work/会议.md"), ("复制相对路径", "会议.md")]:
             page.evaluate("action => window.pick = action", action)
             row.click(button="right")
@@ -372,6 +380,8 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         page.wait_for_function("window.opened === 81")
         create_at('[data-archive-folder="9"]', '会议提纲.md')
         page.wait_for_function("window.opened === 80")
+        terminal_here(page.locator('[data-archive-folder="9"]'), {"kind": "archive", "folder": 9})
+        terminal_here(page.locator('[data-archive-folder=""]'), {"kind": "archive", "folder": None})
         assert page.locator('[data-archive-folder="9"]').get_attribute("aria-expanded") == "true"
         assert page.locator('[data-archive-folder=""]').get_attribute("aria-expanded") == "true"
         assert page.evaluate("window.fileCalls.some(([cmd,args])=>cmd==='create_archive_note' && args.folder===9 && args.name==='未命名')")
@@ -382,6 +392,7 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         assert page.evaluate("archiveReads") == [None, 9]
         imported = page.locator('[data-file="/archive/导入前的材料.markdown"]')
         assert imported.is_visible()
+        terminal_here(imported, {"kind": "archive", "folder": 9})
         assert not page.evaluate("fileCalls.some(([cmd,args])=>cmd==='open_library_file' && args.path.startsWith('/archive/'))")
         imported.click()
         assert page.evaluate("fileCalls.some(([cmd,args])=>cmd==='open_library_file' && args.path==='/archive/导入前的材料.markdown')")

@@ -360,8 +360,14 @@ pub fn workspace_tab_menu(window: tauri::WebviewWindow, multiple: bool) -> Resul
 }
 
 fn close_active(app: &AppHandle) -> Result<(), String> {
-    let multiple = app.state::<Mutex<Context>>().lock().unwrap().multiple_tabs;
-    crate::platform::window::close_active(app, multiple)
+    let state = app.state::<Mutex<Context>>();
+    let context = state.lock().unwrap();
+    let document = context.windows.contains_key(windows::MAIN);
+    let multiple = context.multiple_tabs;
+    drop(context);
+    let close_tab = multiple
+        || document && (cfg!(windows) || app.state::<crate::terminal::Terminal>().has_sessions());
+    crate::platform::window::close_active(app, close_tab)
 }
 
 pub fn sync(app: &AppHandle, label: Option<&str>) -> tauri::Result<()> {

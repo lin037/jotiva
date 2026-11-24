@@ -1,0 +1,18 @@
+@layer jot-ui {
+  .terminal-panel {
+    position: relative; display: flex; flex-direction: column; flex: none;
+    height: clamp(96px, 30vh, 240px); max-height: 75%; min-width: 0;
+    border-top: var(--jot-line-width) solid var(--jot-color-line);
+    color: var(--jot-color-text); background: var(--jot-color-bg);
+  }
+  .terminal-divider { position: absolute; z-index: 2; top: -3px; width: 100%; height: 6px; cursor: ns-resize; touch-action: none; }
+  .terminal-divider:focus-visible { outline: 2px solid var(--jot-color-accent); }
+  .terminal-heading { display: flex; align-items: center; gap: var(--jot-space-2); padding: 2px var(--jot-space-3);
+    background: var(--jot-color-chrome); font-size: var(--jot-type-small); }
+  .terminal-heading strong { margin-inline-end: auto; }
+  .terminal-directory { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .terminal-heading select { max-width: 45%; min-width: 0; }
+  .terminal-body { flex: 1; min-height: 0; overflow: hidden; }
+  .terminal-screen { box-sizing: border-box; height:100%; min-height: 0; min-width: 0; overflow: hidden; padding: 4px 8px; }
+  .terminal-screen .xterm { height: 100%; }
+}
