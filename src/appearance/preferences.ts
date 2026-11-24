@@ -18,6 +18,7 @@ export interface EditingPreferences {
 }
 
 export interface AppearancePreferences {
+  language: import("../i18n").Language;
   baseSize: number | null;
   mode: ThemeMode;
   accent: string | null;

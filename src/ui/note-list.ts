@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { primaryPressed, desktopPlatform } from "../desktop/platform";
 import { notes, type Card, type NoteId, type Scope, type SearchPage } from "../desktop/ipc";
 import { button, element, report } from "./dom";
@@ -10,22 +11,16 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   const panel = element("div", source ? "note-list library-notes" : "note-list");
   const input = element("input");
   input.type = "search";
-  input.placeholder = "搜索便签和文档";
+  input.placeholder = t("搜索便签和文档");
   input.setAttribute("aria-label", input.placeholder);
   const list = element("div", "results");
   const browser = element("div", "note-browser");
   browser.hidden = inline;
-  const pager = element("div", "note-pagination");
-  pager.setAttribute("aria-label", "分页");
-  const previous = button("上一页", () => flip(-1));
-  const next = button("下一页", () => flip(1));
-  pager.append(previous, next);
-  pager.hidden = true;
-  browser.append(list, pager);
+  browser.append(list);
   if (!source) {
     list.id = "jot-search-results";
     list.setAttribute("role", "listbox");
-    list.setAttribute("aria-label", "搜索结果");
+    list.setAttribute("aria-label", t("搜索结果"));
     input.setAttribute("role", "combobox");
     input.setAttribute("aria-controls", list.id);
     input.setAttribute("aria-autocomplete", "list");
@@ -35,7 +30,8 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   panel.append(browser);
 
   let records: Card[] = [];
-  let groups: SearchPage | undefined;
+  const loadedIds = new Set<NoteId>();
+  const sections = new Map<keyof Omit<SearchPage, "more">, HTMLElement>();
   let rows: HTMLButtonElement[] = [];
   let page = 0;
   let more = false;
@@ -96,68 +92,93 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
     rows.push(row);
   }
 
-  function render() {
-    rows = [];
-    list.replaceChildren();
-    if (groups) {
-      const domains: [string, Card[]][] = [
-        ["当前窗口", groups.current], [host === null ? "已挂载便签" : "其他窗口便签", groups.attached], ["文档", groups.documents],
-      ];
-      for (const [label, cards] of domains) {
-        if (!cards.length) continue;
+  function appendPage(result: SearchPage | { items: Card[]; more: boolean }) {
+    const append = (parent: HTMLElement, card: Card) => {
+      if (loadedIds.has(card.id)) return;
+      loadedIds.add(card.id);
+      records.push(card);
+      appendRow(parent, card);
+    };
+    if ("items" in result) {
+      for (const card of result.items) append(list, card);
+      return;
+    }
+    const labels = { current: t("当前窗口"), attached: host === null ? t("已挂载便签") : t("其他窗口便签"), documents: t("文档") };
+    for (const key of ["current", "attached", "documents"] as const) {
+      if (!result[key].length) continue;
+      let items = sections.get(key);
+      if (!items) {
         const group = element("div", "note-search-group");
         group.setAttribute("role", "group");
-        group.setAttribute("aria-label", label);
-        const heading = element("h3", "note-search-heading", label);
-        const items = element("div", tiled ? "note-search-items note-grid" : "note-search-items");
-        group.append(heading, items);
-        for (const card of cards) appendRow(items, card);
+        group.setAttribute("aria-label", labels[key]);
+        items = element("div", tiled ? "note-search-items note-grid" : "note-search-items");
+        group.append(element("h3", "note-search-heading", labels[key]), items);
+        sections.set(key, items);
         list.append(group);
       }
-    } else {
-      for (const card of records) appendRow(list, card);
+      for (const card of result[key]) append(items, card);
     }
-    if (!records.length) list.append(element("p", "muted", input.value ? "没有匹配的便签或文档" : "暂无文档"));
-    select(selected);
   }
 
-  function load(target = 0): Promise<void> {
+  function load(append = false): Promise<void> {
     if (disposed || browser.hidden) return Promise.resolve();
     const query = input.value;
-    if (pending?.query === query && pending.page === target) return pending.work;
+    const target = append ? page + 1 : 0;
+    if (pending?.query === query) {
+      if (pending.page === target) return pending.work;
+      if (append) {
+        const version = intent;
+        return pending.work.then(() => { if (version === intent && page < target) return load(true); });
+      }
+    }
+    if (append && (!more || displayedQuery !== query)) return Promise.resolve();
     const ticket = ++serial;
+    const fetch = (index: number) => source ? notes.list(query, index * 40, source) : notes.search(query, host, index);
     const work = (async () => {
-      const result = source ? await notes.list(query, target * 40, source) : await notes.search(query, host, target);
-      if (ticket !== serial || disposed) return;
-      const items = "items" in result ? result.items : [...result.current, ...result.attached, ...result.documents];
-      if (!items.length && target > 0) return load(0);
-      const retained = target === page && displayedQuery === query ? records[selected]?.id : undefined;
-      groups = "items" in result ? undefined : result;
-      records = items;
-      if (target !== page || query !== displayedQuery) list.scrollTop = 0;
-      page = target;
-      more = result.more;
-      selected = Math.max(0, records.findIndex(card => card.id === retained));
+      // A background refresh must not discard the loaded extent or move keyboard focus.
+      const last = !append && displayedQuery === query ? page : target;
+      const batches = [];
+      let index = target;
+      for (;; index++) {
+        const result = await fetch(index);
+        if (disposed || ticket !== serial) return;
+        batches.push(result);
+        if (!result.more || index >= last) break;
+      }
+      const retained = displayedQuery === query ? records[selected]?.id : undefined;
+      const focused = list.contains(document.activeElement);
+      const scroll = displayedQuery === query ? list.scrollTop : 0;
+      if (!append) {
+        list.replaceChildren();
+        sections.clear();
+        rows = [];
+        records = [];
+        loadedIds.clear();
+      }
+      for (const batch of batches) appendPage(batch);
+      if (!records.length) list.append(element("p", "muted", query ? t("没有匹配的便签或文档") : t("暂无文档")));
+      page = index;
+      more = batches[batches.length - 1].more;
       displayedQuery = query;
-      previous.disabled = page === 0;
-      next.disabled = !more;
-      pager.hidden = previous.disabled && next.disabled;
-      render();
+      select(Math.max(0, records.findIndex(card => card.id === retained)));
+      if (!append) {
+        list.scrollTop = scroll;
+        if (focused) rows[selected]?.focus({ preventScroll: true });
+      }
+      if (more && list.clientHeight && list.scrollHeight <= list.clientHeight) requestAnimationFrame(nearEnd);
     })().finally(() => { if (ticket === serial) pending = undefined; });
     pending = { page: target, query, work };
     return work;
   }
 
-  function flip(direction: number) {
-    return runWhenReady(async () => {
-      if (direction > 0 ? !more : page === 0) return;
-      const version = intent;
-      await load(page + direction);
-      if (disposed || browser.hidden || version !== intent) return;
-      select(direction > 0 ? 0 : rows.length - 1, true);
-      if (!source) input.focus();
-    });
+  function nearEnd() {
+    if (more && list.clientHeight && list.scrollTop + list.clientHeight >= list.scrollHeight - 24) {
+      void load(true).catch(report);
+    }
   }
+  list.addEventListener("scroll", nearEnd, { passive: true });
+  const size = new ResizeObserver(nearEnd);
+  size.observe(list);
 
   // Keep a fast "type, ↓, Return" sequence in order, including before the debounced query returns.
   function runWhenReady(action: () => unknown) {
@@ -243,19 +264,25 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       }
       return;
     }
-    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || pager.contains(event.target as Node)) return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
     if (event.key === "Enter" && event.target === input) {
       event.preventDefault();
       void runWhenReady(() => { const card = records[selected]; if (card) return choose(card); });
-    } else if (event.key === "PageDown" || event.key === "PageUp") {
-      event.preventDefault();
-      void flip(event.key === "PageDown" ? 1 : -1);
-    } else if (["ArrowDown", "ArrowUp"].includes(event.key) ||
+    } else if (["PageDown", "PageUp", "ArrowDown", "ArrowUp"].includes(event.key) ||
       (tiled && !input.value && ["ArrowLeft", "ArrowRight"].includes(event.key))) {
       event.preventDefault();
-      void runWhenReady(() => {
+      const key = event.key;
+      const version = intent;
+      void runWhenReady(async () => {
         if (!rows.length) return;
-        select(nextIndex(event.key), true);
+        const forward = ["ArrowDown", "ArrowRight", "PageDown"].includes(key);
+        const step = () => key.startsWith("Page")
+          ? Math.max(0, Math.min(rows.length - 1, selected + (forward ? 1 : -1) *
+            Math.max(1, Math.floor(list.clientHeight / (rows[selected].offsetHeight || 1)))))
+          : nextIndex(key);
+        if (more && forward && (key === "PageDown" ? step() === rows.length - 1 : step() <= selected)) await load(true);
+        if (version !== intent || disposed || !rows.length) return;
+        select(step(), true);
         if (event.target !== input) rows[selected].focus({ preventScroll: true });
       });
     }
@@ -271,7 +298,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
   return {
     panel, input,
     focus: () => { input.focus(); reveal(); },
-    refresh: () => load(displayedQuery === input.value ? page : 0),
+    refresh: () => load(),
     setHost(next: number | null) {
       if (host === next) return;
       host = next;
@@ -282,7 +309,8 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       if (tiled === value) return;
       tiled = value;
       showKeys(false);
-      render();
+      for (const items of sections.values()) items.classList.toggle("note-grid", tiled);
+      if (!browser.hidden) void load().catch(report);
     },
     setActive(id: NoteId) {
       active = id;
@@ -291,6 +319,6 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
         else row.removeAttribute("aria-current");
       }
     },
-    dispose: () => { disposed = true; invalidate(); },
+    dispose: () => { disposed = true; size.disconnect(); invalidate(); },
   };
 }

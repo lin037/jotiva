@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { currentAppearance } from "../../appearance/preferences";
 import { element, report } from "../../ui/dom";
@@ -7,13 +8,13 @@ const maximumWidth = 440;
 
 export function workspaceDividers(workspace: HTMLElement, sidebar: HTMLElement, outline: HTMLElement, remeasure: () => void) {
   const layout = { ...currentAppearance().workspace };
-  addDivider("sidebar", sidebar, "调整侧栏宽度");
-  addDivider("outline", outline, "调整大纲宽度");
+  addDivider("sidebar", sidebar, t("调整侧栏宽度"));
+  addDivider("outline", outline, t("调整大纲宽度"));
 
   function addDivider(side: keyof typeof layout, pane: HTMLElement, label: string) {
     const divider = element("div", "workspace-divider");
     divider.tabIndex = 0;
-    divider.title = "拖动调整宽度，双击恢复默认";
+    divider.title = t("拖动调整宽度，双击恢复默认");
     divider.setAttribute("role", "separator");
     divider.setAttribute("aria-orientation", "vertical");
     divider.setAttribute("aria-controls", pane.id);

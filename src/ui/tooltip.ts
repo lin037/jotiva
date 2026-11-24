@@ -1,3 +1,4 @@
+import { t, message, language } from "../i18n";
 // Long action names stay on the control for VoiceOver. These are the compact,
 // visible names for Jotiva and the buttons supplied by the released editor.
 const names: Readonly<Record<string, string>> = {
@@ -26,23 +27,25 @@ const names: Readonly<Record<string, string>> = {
 function shortName(button: HTMLElement, origin: Element) {
   const expanded = button.getAttribute("aria-expanded");
   const requested = button.dataset.tip;
-  if (requested && /^[\p{Script=Han}]{1,4}$/u.test(requested)) return requested;
+  if (requested && (language === "en" || /^[\p{Script=Han}]{1,4}$/u.test(requested))) return requested;
   if (button.matches(".jot-outline__row")) {
-    return expanded !== null && origin.closest(".jot-outline__toggle") ? expanded === "true" ? "折叠" : "展开" : "定位";
+    return expanded !== null && origin.closest(".jot-outline__toggle") ? expanded === "true" ? t("折叠") : t("展开") : t("定位");
   }
   if (button.matches(".jot-heading-fold-button, .library-node[aria-expanded]")) {
-    if (button.getAttribute("aria-busy") === "true") return "取消";
-    return expanded === "true" ? "折叠" : "展开";
+    if (button.getAttribute("aria-busy") === "true") return t("取消");
+    return expanded === "true" ? t("折叠") : t("展开");
   }
-  if (button.matches(".note-row, .workspace-file")) return "打开";
-  if (button.matches(".note-rail-row")) return "定位";
-  if (button.matches(".recording-key")) return button.getAttribute("aria-pressed") === "true" ? "取消" : "录入";
-  if (button.matches("[data-rows][data-columns]")) return "插表";
+  if (button.matches(".note-row, .workspace-file")) return t("打开");
+  if (button.matches(".note-rail-row")) return t("定位");
+  if (button.matches(".recording-key")) return button.getAttribute("aria-pressed") === "true" ? t("取消") : t("录入");
+  if (button.matches("[data-rows][data-columns]")) return t("插表");
+  if (button.dataset.jotHeadingLevel && language === "en") return "Heading " + button.dataset.jotHeadingLevel;
   if (button.dataset.jotHeadingLevel) return "一二三四五六"[Number(button.dataset.jotHeadingLevel) - 1] + "级标题";
   const command = button.hasAttribute("data-jot-command");
   const label = (button.getAttribute("aria-label") || (command && button.firstElementChild?.firstChild?.textContent)
     || button.textContent || button.title).trim().replace(/…$/u, "");
-  return names[label] ?? (/^[\p{Script=Han}]{1,4}$/u.test(label) ? label : command ? "执行" : "选择");
+  if (language === "en") return message(names[label] ?? label);
+  return names[label] ?? (/^[\p{Script=Han}]{1,4}$/u.test(label) ? label : command ? t("执行") : t("选择"));
 }
 
 const controls = 'button, [role="button"], input[type="button"], input[type="submit"], [data-tip]';

@@ -66,6 +66,7 @@ pub struct WorkspaceLayout {
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Preferences {
+    pub language: crate::i18n::Language,
     pub base_size: Option<f64>,
     pub mode: ThemeMode,
     pub accent: Option<String>,
@@ -96,6 +97,10 @@ pub struct AppearanceView {
 }
 
 impl AppearanceView {
+    pub fn language(&self) -> crate::i18n::Language {
+        self.saved.preferences.language
+    }
+
     pub fn mode(&self) -> ThemeMode {
         self.saved.preferences.mode
     }
@@ -261,6 +266,11 @@ mod tests {
             system_size: 13.0,
         };
         let mut preferences = appearance.saved.preferences.clone();
+        assert!(matches!(
+            preferences.language,
+            crate::i18n::Language::Chinese
+        ));
+        preferences.language = crate::i18n::Language::English;
         assert!(preferences.editing.heading_scale.is_none());
         assert!(!preferences.editing.ruled_paper);
         assert!(!preferences.editing.toolbar);
@@ -278,6 +288,10 @@ mod tests {
         assert!(appearance.save(preferences).is_err());
         let persisted: SavedAppearance = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
         assert_eq!(persisted.preferences.editing.heading_scale.unwrap()[0], 1.9);
+        assert!(matches!(
+            persisted.preferences.language,
+            crate::i18n::Language::English
+        ));
         assert!(persisted.preferences.editing.ruled_paper);
         assert!(!persisted.preferences.editing.toolbar);
         assert_eq!(persisted.workspace.sidebar, Some(253));

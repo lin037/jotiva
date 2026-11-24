@@ -1,7 +1,10 @@
+import { t } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { desktopPlatform } from "../../desktop/platform";
-import type { NoteId } from "../../desktop/ipc";
+import { notes, type NoteId } from "../../desktop/ipc";
 import type { TabSession } from "../../editor/note-editor";
+import { copyText, popupMenu } from "../../ui/context-menu";
+import { noteActions } from "./document-file-menu";
 import { button, element, report } from "../../ui/dom";
 
 interface Tab {
@@ -12,10 +15,10 @@ interface Tab {
 }
 
 // The order on screen is independent of the order in which documents were last visited.
-export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: NoteId) => Promise<void>) {
+export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>) {
   const bar = element("nav", "document-tabs");
   bar.setAttribute("role", "tablist");
-  bar.setAttribute("aria-label", "已打开的文档");
+  bar.setAttribute("aria-label", t("已打开的文档"));
   bar.hidden = true;
   const tabs = new Map<NoteId, Tab>();
   const recent = new Set<NoteId>();
@@ -37,7 +40,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
     title.dataset.note = String(id);
     title.setAttribute("role", "tab");
     title.setAttribute("aria-controls", "workspace-editor-panel");
-    const dismiss = button("×", () => close(id), "document-tab-close", "关闭标签");
+    const dismiss = button("×", () => close([id]), "document-tab-close", t("关闭标签"));
     dismiss.tabIndex = -1;
     row.append(title, dismiss);
     bar.append(row);
@@ -46,6 +49,24 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
     title.setAttribute("aria-selected", "false");
     tabs.set(id, tab);
     syncMenu();
+    row.addEventListener("contextmenu", event => {
+      const ids = [...tabs.keys()];
+      const index = ids.indexOf(id);
+      const left = ids.slice(0, index), right = ids.slice(index + 1);
+      const { duplicate } = noteActions(() => id, title.textContent, open, save);
+      void popupMenu(event, [
+        { label: t("复制文档内容"), run: async () => {
+          await save(id);
+          await copyText((await notes.read(id)).markdown);
+        } },
+        duplicate,
+        { label: t("在新窗口打开"), run: async () => { await save(id); await invoke("open_document_window", { id }); } },
+        null, { label: t("关闭标签"), run: () => close([id]) },
+        ...(left.length ? [{ label: t("关闭左侧标签"), run: () => close(left) }] : []),
+        ...(right.length ? [{ label: t("关闭右侧标签"), run: () => close(right) }] : []),
+        ...(ids.length > 1 ? [{ label: t("关闭其他标签"), run: () => close([...left, ...right]) }] : []),
+      ]);
+    });
     title.addEventListener("keydown", event => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       const ids = [...tabs.keys()];
@@ -58,7 +79,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
         void open(target).then(() => tabs.get(target)?.title.focus()).catch(report);
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
-        void close(id).then(() => active !== undefined && !bar.hidden && tabs.get(active)?.title.focus()).catch(report);
+        void close([id]).then(() => active !== undefined && !bar.hidden && tabs.get(active)?.title.focus()).catch(report);
       }
     });
     bar.hidden = tabs.size < 2;
@@ -103,7 +124,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
       const tab = tabs.get(id);
       if (!tab || tab.title.textContent === name) return;
       tab.title.textContent = tab.title.title = name;
-      tab.close.setAttribute("aria-label", "关闭标签，" + name);
+      tab.close.setAttribute("aria-label", t("关闭标签，") + name);
     },
     remember(id: NoteId, session: TabSession) {
       const tab = tabs.get(id);
@@ -115,6 +136,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
       if (tab) tab.session = undefined;
       return session;
     },
-    previous: () => [...recent].reverse().find(id => id !== active) ?? [...tabs.keys()].find(id => id !== active),
+    previous: (keep: (id: NoteId) => boolean = () => true) =>
+      [...recent].reverse().find(id => id !== active && keep(id)) ?? [...tabs.keys()].find(id => id !== active && keep(id)),
   };
 }

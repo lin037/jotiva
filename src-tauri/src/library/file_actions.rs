@@ -323,7 +323,7 @@ fn perform_workspace(
                 create_markdown(&path, "").map_err(|e| e.to_string())?;
                 path
             } else {
-                crate::storage::create_named_markdown(source, "未命名", "")?
+                crate::storage::create_named_markdown(source, crate::i18n::t("未命名"), "")?
             };
             return result(path);
         }

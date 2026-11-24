@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -7,7 +8,7 @@ import { attachOnSwitch } from "./document-drag";
 import { folders, notes, openLibraryFile, type Folder, type NoteId } from "../../desktop/ipc";
 import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
-import { editFileName, fileName } from "../../ui/file-name";
+import { editFileName, nameNewFile, fileName } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
@@ -22,7 +23,7 @@ export async function librarySidebar(
 ) {
   const sidebar = element("aside", "library-sidebar jot-sidebar");
   sidebar.id = "workspace-library";
-  sidebar.setAttribute("aria-label", "文档与窗口");
+  sidebar.setAttribute("aria-label", t("文档与窗口"));
   let current: NoteId | undefined;
   let currentPath: string | undefined;
   async function flush(paths: string[]) {
@@ -32,15 +33,15 @@ export async function librarySidebar(
   const archive = element("div", "archive-tree");
   const tree = element("div", "library-tree");
   tree.setAttribute("role", "region");
-  tree.setAttribute("aria-label", "文件树");
+  tree.setAttribute("aria-label", t("文件树"));
   const source = sourceTree(open, addSource);
   const bar = element("div", "library-bar");
   const tabs = element("div", "library-tabs");
   tabs.setAttribute("role", "group");
-  tabs.setAttribute("aria-label", "文档视图");
-  const workspaceTab = button("工作区", () => switchTo(true));
-  const archiveTab = button("归档", () => switchTo(false));
-  const add = iconButton("folderAdd", "添加工作区文件夹", () => inWorkspace ? files.add() : editFolder());
+  tabs.setAttribute("aria-label", t("文档视图"));
+  const workspaceTab = button(t("工作区"), () => switchTo(true));
+  const archiveTab = button(t("归档"), () => switchTo(false));
+  const add = iconButton("folderAdd", t("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
   tabs.append(workspaceTab, archiveTab);
   bar.append(tabs, add);
   tree.append(files.panel, archive);
@@ -77,7 +78,7 @@ export async function librarySidebar(
       archive.replaceChildren();
       return;
     }
-    const groups = [{ id: null, name: "其他", description: "", path: inbox }, ...items];
+    const groups = [{ id: null, name: t("其他"), description: "", path: inbox }, ...items];
     const ids = new Set(groups.map(folder => folder.id));
     for (const id of expandedFolders) if (!ids.has(id)) expandedFolders.delete(id);
     for (const id of lists.keys()) {
@@ -120,15 +121,14 @@ export async function librarySidebar(
       drawFolders();
       row = archive.querySelector<HTMLElement>(`[data-archive-folder="${folder ?? ""}"]`)!;
     }
-    editFileName(row.closest<HTMLElement>(".library-line")!, "未命名.md", true, async name => {
-      const id = await invoke<NoteId>("create_archive_note", { folder, name });
-      try { await lists.get(folder)?.refresh(); await open(id); }
-      catch (error) { report(error); }
-    });
+    void nameNewFile(name => invoke<NoteId>("create_archive_note", { folder, name }), async id => {
+      await lists.get(folder)?.refresh();
+      await open(id);
+    }).catch(report);
   }
   function renameFile(row: HTMLElement) {
     const path = row.dataset.file!;
-    editFileName(row, fileName(path), false, async name => {
+    editFileName(row, fileName(path), async name => {
       await flush([path]);
       const id = row.dataset.note ? Number(row.dataset.note) : await openLibraryFile(path);
       await notes.rename(id, name);
@@ -148,10 +148,10 @@ export async function librarySidebar(
     const directory = group?.path ?? inbox;
     if (!row.dataset.file) {
       void popupMenu(event, [
-        { label: "新建文档", run: () => createInArchive(row) },
-        ...(group ? [{ label: "归档目录设置…", run: () => editFolder(group) }] : []),
+        { label: t("新建文档"), run: () => createInArchive(row) },
+        ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
-        { label: "复制绝对路径", run: () => copyText(displayPath(directory)) },
+        { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },
       ]);
       return;
     }
@@ -160,15 +160,15 @@ export async function librarySidebar(
     const resolveId = () => row.dataset.note ? Number(row.dataset.note) : openLibraryFile(path);
     const actions = noteActions(resolveId, name, open, saveOpenNote);
     void popupMenu(event, [
-      { label: "打开", run: async () => open(await resolveId()) },
-      { label: "在新窗口打开", run: async () => invoke("open_document_window", { id: await resolveId() }) },
-      ...(desktopPlatform.hostWindows ? [{ label: "挂载到窗口…", run: async () => attachOnSwitch(await resolveId()) }] : []), null,
-      { label: "重命名…", run: () => renameFile(row) },
-      ...(row.dataset.archivePath ? [{ label: "移到归档目录…", run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
+      { label: t("打开"), run: async () => open(await resolveId()) },
+      { label: t("在新窗口打开"), run: async () => invoke("open_document_window", { id: await resolveId() }) },
+      ...(desktopPlatform.hostWindows ? [{ label: t("挂载到窗口…"), run: async () => attachOnSwitch(await resolveId()) }] : []), null,
+      { label: t("重命名…"), run: () => renameFile(row) },
+      ...(row.dataset.archivePath ? [{ label: t("移到归档目录…"), run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
       actions.duplicate, null,
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
-      { label: "复制相对路径", run: () => copyText(name) }, null, actions.trash,
+      { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
+      { label: t("复制相对路径"), run: () => copyText(name) }, null, actions.trash,
     ]);
   });
 
@@ -180,10 +180,10 @@ export async function librarySidebar(
     archive.hidden = workspace;
     workspaceTab.setAttribute("aria-pressed", String(workspace));
     archiveTab.setAttribute("aria-pressed", String(!workspace));
-    const label = workspace ? "添加工作区文件夹" : "导入归档目录";
+    const label = workspace ? t("添加工作区文件夹") : t("导入归档目录");
     add.title = label;
     add.setAttribute("aria-label", label);
-    add.dataset.tip = workspace ? "添加目录" : "导入目录";
+    add.dataset.tip = workspace ? t("添加目录") : t("导入目录");
     drawFolders();
     if (workspace) await files.refresh();
   }

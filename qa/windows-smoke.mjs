@@ -14,6 +14,10 @@ const buildTarget = path.join(target, "desktop-qa-build");
 const work = mkdtempSync(path.join(target, "windows-smoke-"));
 const dist = path.join(work, "dist");
 const data = path.join(work, "profile");
+// The installed copy can legitimately own the default global shortcut.
+mkdirSync(data, {recursive: true});
+writeFileSync(path.join(data, "settings.json"), JSON.stringify({quick:"Control+Shift+F9", search:null, dock:null}));
+writeFileSync(path.join(data, "appearance.json"), JSON.stringify({language:"en"}));
 const hostTitle = "Jotiva QA " + process.pid;
 const doc = path.join(work, "跨平台验收.txt");
 const lines = Array.from({length: 350}, (_, i) => "第 " + (i + 1) + " 行 · Plain text");

@@ -66,6 +66,11 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
     if (cmd==='list_notes') return {items:[card], more:false};
     if (cmd==='search_notes') {
       const live={...card,id:7,title:'议程',source:'会议窗口',attached:true};
+      if (args.query === '连续') {
+        const start = args.page * 12;
+        (window.searchBatches ??= []).push(args.page);
+        return {current:[], attached:[], documents:Array.from({length:Math.min(12,26-start)}, (_,i)=>({...card,id:100+start+i,title:'结果 '+(start+i)})), more:start+12<26};
+      }
       if (args.query === '待办') return {current:[],attached:[{...live,id:8,title:'待办'}],documents:[],more:false};
       if (args.page) return {current:[],attached:[],documents:[{...card,id:9,title:'下一页'}],more:false};
       return {current:args.host===11?[{...live,id:6,title:'本窗口议程'}]:[], attached:[live],documents:[card],more:true};
@@ -404,10 +409,23 @@ def verify(browser, url):
     query.press("PageDown")
     expect(page.get_by_role("option", name="下一页")).to_be_visible()
     query.press("PageUp")
-    expect(page.get_by_role("option")).to_have_count(3)
-    query.press("ArrowUp")
+    expect(page.get_by_role("option")).to_have_count(4)
+    query.press("ArrowDown")
     query.press("Enter")
     page.wait_for_function("window.located === 7")
+
+    query.fill("连续")
+    expect(page.get_by_role("option")).to_have_count(12)
+    for _ in range(12):
+        query.press("ArrowDown")
+    expect(query).to_have_attribute("aria-activedescendant", "jot-search-option-112")
+    results = page.locator("#jot-search-results")
+    results.evaluate("list => list.scrollTop = list.scrollHeight")
+    expect(page.get_by_role("option")).to_have_count(26)
+    assert page.evaluate("searchBatches") == [0, 1, 2]
+    query.press("ArrowUp")
+    query.press("Enter")
+    page.wait_for_function("window.located === 111")
     # Type and submit within the same turn, before the normal debounce can replace the old row.
     page.locator('.quick-query input').evaluate("""input => {
       input.value = '待办';
@@ -419,7 +437,7 @@ def verify(browser, url):
     expect(query).to_have_value("待办")
     expect(page.locator(".note-grid .note-row")).to_have_count(1)
     query.fill("")
-    expect(page.locator(".note-grid .note-row")).to_have_count(3)
+    expect(page.locator(".note-grid .note-row").nth(2)).to_be_visible()
     query.press("ArrowDown")
     expect(query).to_have_attribute("aria-activedescendant", "jot-search-option-7")
     query.press("Meta+3")
@@ -498,6 +516,45 @@ def verify(browser, url):
     hover(page.get_by_role("button", name="保存快捷键"), "保存")
     expect(page.locator(".error")).to_be_hidden()
     assert not errors, errors
+
+
+def verify_language(browser, url):
+    context = browser.new_context()
+    context.add_init_script(IPC + r"""
+      const persisted = JSON.parse(localStorage.getItem('qa:appearance') ?? '{}');
+      Object.assign(appearance, persisted);
+      window.__jotPlatform.language = appearance.language ?? 'zh-CN';
+      const nativeInvoke = window.__TAURI_INTERNALS__.invoke;
+      window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
+        if (cmd === 'save_appearance') {
+          localStorage.setItem('qa:appearance', JSON.stringify(args.preferences));
+          Object.assign(appearance, args.preferences);
+          window.testEvent('desktop:appearance-changed', appearance);
+          return;
+        }
+        return nativeInvoke(cmd, args);
+      };
+    """)
+    settings = context.new_page()
+    settings.goto(url + "?view=settings")
+    settings.get_by_label("界面语言").select_option("en")
+    settings.wait_for_function("JSON.parse(localStorage.getItem('qa:appearance')).language === 'en'")
+    settings.reload()
+    expect(settings.locator("html")).to_have_attribute("lang", "en")
+    expect(settings.get_by_label("Interface language")).to_have_value("en")
+    settings.get_by_role("button", name="Shortcuts", exact=True).click()
+    expect(settings.get_by_label("Search actions or shortcuts")).to_be_visible()
+    settings.get_by_label("Search actions or shortcuts").fill("task list")
+    expect(settings.locator('[id="key-local-format.task-list"]')).to_be_visible()
+    workspace = context.new_page()
+    workspace.goto(url)
+    expect(workspace.get_by_role("combobox", name="Search notes and documents")).to_be_visible()
+    # Titles and document text supplied by users retain the original language.
+    expect(workspace.locator(".cm-content")).to_contain_text("会议纪要")
+    workspace.get_by_role("combobox").focus()
+    expect(workspace.get_by_role("group", name="Documents", exact=True)).to_contain_text("项目记录")
+    context.close()
+    print("Language choice survived restart and localized settings, shortcut search and a second window.")
 
 
 def verify_shortcut_settings(browser, url):
@@ -706,6 +763,7 @@ if __name__ == "__main__":
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:
+                        verify_language(browser, url)
                         verify(browser, url)
                 browser.close()
         finally:

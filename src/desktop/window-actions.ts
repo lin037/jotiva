@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -28,7 +29,7 @@ export async function bindNewDocumentDialog() {
     if (document.querySelector("dialog[open]")) return;
     try {
       const { fileDialog } = await import("../ui/file-dialog");
-      const name = await fileDialog("新建文档窗口", "创建", "未命名");
+      const name = await fileDialog(t("新建文档窗口"), t("创建"), { initial: t("未命名") });
       if (!name) return;
       const id = await invoke<number>("create_archive_note", { folder: null, name });
       await invoke("open_document_window", { id });

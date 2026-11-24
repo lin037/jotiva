@@ -1,3 +1,4 @@
+import { t, message } from "../i18n";
 import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -9,13 +10,13 @@ import { report } from "../ui/dom";
 export interface ShortcutCommand { id: string; label: string; group: string; key: string | null; desktopKey?: string | null; menu?: string; editor?: string }
 export const commands: ShortcutCommand[] = [...commandRows, ...editorRows].map((row: ShortcutCommand) => {
   const key = desktopPlatform.shortcutSymbols ? row.key : row.desktopKey ?? row.key;
-  return {...row, key: key?.replace("Primary", desktopPlatform.primary) ?? null};
+  return {...row, label: message(row.label), group: message(row.group), key: key?.replace("Primary", desktopPlatform.primary) ?? null};
 });
 export const fixedShortcuts = referenceRows.flatMap(row => {
   const key = desktopPlatform.shortcutSymbols ? row.key : "desktopKey" in row ? row.desktopKey : row.key.replace(/⌘/g, "Ctrl+").replace(/⇧/g, "Shift+").replace(/⌥/g, "Alt+").replace(/⌃/g, "Ctrl+").replace(/↩/g,"Enter");
-  return key ? [{...row, key}] : [];
+  return key ? [{...row, label: message(row.label), group: message(row.group), key}] : [];
 });
-export const globalActions = [["quick", "速记"], ["search", "查找便签和文档"], ["dock", "靠右收拢 / 还原"]] as const;
+export const globalActions = [["quick", t("速记")], ["search", t("查找便签和文档")], ["dock", t("靠右收拢 / 还原")]] as const;
 export type GlobalAction = typeof globalActions[number][0];
 export type LocalBindings = Record<string, string | null>;
 export type GlobalBindings = Record<GlobalAction, string | null> & { quick: string; local?: LocalBindings };
@@ -25,7 +26,7 @@ let local: LocalBindings = {};
 let actions = new Map<string, string>();
 
 const symbols: Record<string, string> = {
-  Control:"⌃", Alt:"⌥", Shift:"⇧", Super:"⌘", Space:"空格", Enter:"↩", Backquote:"`",
+  Control:"⌃", Alt:"⌥", Shift:"⇧", Super:"⌘", Space:t("空格"), Enter:"↩", Backquote:"`",
   Comma:",", Period:".", Slash:"/", Backslash:"\\", Minus:"-", Equal:"=", BracketLeft:"[",
   BracketRight:"]", Semicolon:";", Quote:"'", Tab:"Tab", Backspace:"⌫", ArrowLeft:"←",
   ArrowRight:"→", ArrowUp:"↑", ArrowDown:"↓",
@@ -39,7 +40,7 @@ function normalized(chord: string): string {
   return [...modifiers.filter(mod => mods.includes(mod)), key].join("+");
 }
 export function shortcutLabel(chord: string | null | undefined) {
-  if (!chord) return "未设置";
+  if (!chord) return t("未设置");
   const keys = normalized(chord).split("+");
   if (desktopPlatform.shortcutSymbols) return keys.map(part => symbols[part] ?? part.replace(/^(Key|Digit)/, "")).join("");
   return keys.map(part => ({Control:"Ctrl",Super:"Super"}[part] ?? (modifiers.includes(part) ? part : symbols[part] ?? part.replace(/^(Key|Digit)/,"")))).join("+");
@@ -71,7 +72,7 @@ function updateHint(element: HTMLElement) {
   } else if (key) {
     const chord = normalized(key).replace("Super+", "Meta+").replace(/(Key|Digit)([A-Z0-9])$/, "$2");
     element.setAttribute("aria-keyshortcuts", chord);
-    element.setAttribute("aria-description", "快捷键 " + shortcutLabel(key));
+    element.setAttribute("aria-description", t("快捷键 ") + shortcutLabel(key));
   } else {
     element.removeAttribute("aria-keyshortcuts");
     element.removeAttribute("aria-description");

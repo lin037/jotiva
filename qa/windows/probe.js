@@ -22,6 +22,9 @@ function insert(value) {
 
 export async function workspace(ctx) {
   const {id, run, waitFor, title} = ctx;
+  if (document.documentElement.lang !== "en") throw Error("Expected the saved English interface");
+  const settings = await run("read_settings");
+  if (settings.shortcutError) throw Error(settings.shortcutError);
   const other = await run("new_note");
   await run("save_note", {id: other, version: 0, markdown: "Second tab"});
   await run("show_main", {id: other});
@@ -81,6 +84,11 @@ export async function mounted(ctx) {
   await waitFor(() => editor().textContent.includes("LAST-PAGE") && document.querySelector(".cm-scroller").scrollTop > 0, "last page");
   await input(ctx, "Ctrl+Home", {keys: ["ControlKey", "Home"]});
   await waitFor(() => editor().textContent.includes("Desktop edit") && document.querySelector(".cm-scroller").scrollTop < 5, "first page");
+  const beforeTask = (await run("read_note", {id})).markdown;
+  await input(ctx, "Ctrl+Shift+9", {keys: ["ControlKey", "ShiftKey", "D9"]});
+  await waitFor(async () => (await run("read_note", {id})).markdown === "- [ ] " + beforeTask, "task list shortcut");
+  await input(ctx, "undo task list", {keys: ["ControlKey", "Z"]});
+  await waitFor(async () => (await run("read_note", {id})).markdown === beforeTask, "task list undo");
   insert("quick-sync");
   await waitFor(async () => (await run("read_note", {id})).markdown.includes("quick-sync"), "mounted input on disk");
   await input(ctx, "Ctrl+Z", {keys: ["ControlKey", "Z"]});
@@ -96,10 +104,10 @@ export async function mounted(ctx) {
   await waitFor(async () => (await run("read_note", {id})).markdown.includes("quick-sync"), "saved text");
   mark("quick-edited");
   await waitFor(() => flag("main-edited") && editor()?.textContent.includes("main-sync"), "pinned editor receives workspace edit");
-  const collapse = await waitFor(() => document.querySelector('.quick-edit-pane button[aria-label="折叠便签"]'), "fold action");
+  const collapse = await waitFor(() => document.querySelector('.quick-edit-pane button[aria-label="Collapse note"]'), "fold action");
   collapse.click();
   await waitFor(() => visible(document.querySelector(".quick-folded-bar [data-caption=close]")), "folded window controls");
-  await input(ctx, "global quick capture from Edge", {external: true, keys: ["ControlKey", "ShiftKey", "Space"]});
+  await input(ctx, "global quick capture from Edge", {external: true, keys: ["ControlKey", "ShiftKey", "F9"]});
   await waitFor(async () => document.querySelector(".quick-view[data-mode=edit]") && visible(editor()) &&
     editor().textContent.includes("main-sync") && await run("plugin:window|is_focused"), "global shortcut reopened mounted note");
   mark("quick-received");

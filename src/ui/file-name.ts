@@ -1,5 +1,7 @@
+import { t } from "../i18n";
 import { desktopPlatform } from "../desktop/platform";
 import { element, report } from "./dom";
+import { fileDialog } from "./file-dialog";
 import "./file-name.css";
 
 export const fileName = (path: string) => path.slice(path.lastIndexOf(desktopPlatform.pathSeparator) + 1);
@@ -9,23 +11,34 @@ export function isDescendant(path: string, parent: string) {
   return path.startsWith(parent.endsWith(separator) ? parent : parent + separator);
 }
 
+/** Keep the draft outside the file tree so a directory refresh cannot discard its name. */
+export async function nameNewFile<T>(create: (name: string) => Promise<T>, open: (file: T) => unknown) {
+  if (document.querySelector("dialog[open]")) return;
+  let created: T | undefined;
+  await fileDialog(t("新建文档"), t("创建"), {
+    initial: t("未命名.md"),
+    label: t("新文档名称"),
+    commit: async value => { created = await create(value); },
+  });
+  if (created !== undefined) await open(created);
+}
+
 /** Escape or leaving the field cancels. Enter commits through the owning file operation. */
-export function editFileName(anchor: HTMLElement, initial: string, create: boolean, commit: (name: string) => Promise<unknown>) {
+export function editFileName(anchor: HTMLElement, initial: string, commit: (name: string) => Promise<unknown>) {
   const field = element("div", "tree-name-field");
   const input = element("input");
-  input.setAttribute("aria-label", create ? "新文档名称" : "重命名");
+  input.setAttribute("aria-label", t("重命名"));
   input.value = initial;
   const error = element("span", "tree-name-error");
   error.setAttribute("role", "alert");
   field.append(input, error);
   anchor.after(field);
-  if (!create) anchor.hidden = true;
-  else field.classList.add("tree-name-new");
+  anchor.hidden = true;
   let saving = false;
   function close(focus: boolean) {
     field.remove();
-    if (!create) anchor.hidden = false;
-    if (focus && anchor.isConnected) (create ? anchor.querySelector("button") : anchor)?.focus({ preventScroll: true });
+    anchor.hidden = false;
+    if (focus && anchor.isConnected) anchor.focus({ preventScroll: true });
   }
   input.addEventListener("input", () => { error.textContent = ""; input.removeAttribute("aria-invalid"); });
   input.addEventListener("blur", () => { if (!saving) close(false); });
@@ -34,13 +47,13 @@ export function editFileName(anchor: HTMLElement, initial: string, create: boole
     event.preventDefault();
     event.stopPropagation();
     if (saving) return;
-    if (event.key === "Escape" || (!create && input.value.trim() === initial)) { close(true); return; }
+    if (event.key === "Escape" || input.value.trim() === initial) { close(true); return; }
     saving = true;
     input.readOnly = true;
     try {
-      if (!input.value.trim()) throw new Error("请输入文件名");
+      if (!input.value.trim()) throw new Error(t("请输入文件名"));
       await commit(input.value.trim());
-      close(!create);
+      close(true);
     } catch (reason) {
       if (field.isConnected) {
         error.textContent = reason instanceof Error ? reason.message : String(reason);

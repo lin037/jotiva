@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { report } from "../ui/dom";
 
@@ -15,7 +16,7 @@ function target(region: HTMLElement) {
 }
 function name(region: HTMLElement) {
   return region.getAttribute("aria-label") || document.getElementById(region.getAttribute("aria-labelledby") || "")?.textContent
-    || ({ MAIN: "正文", HEADER: "工具栏", FOOTER: "状态栏" }[region.tagName]) || "标签页";
+    || ({ MAIN: t("正文"), HEADER: t("工具栏"), FOOTER: t("状态栏") }[region.tagName]) || t("标签页");
 }
 export function bindFocusRegions() {
   window.addEventListener("keydown", event => {

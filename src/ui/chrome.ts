@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { button, report } from "./dom";
 
@@ -46,7 +47,7 @@ export function iconButton(name: keyof typeof glyphs, label: string, action: () 
   if (key) {
     const shortcut = key.replace("⇧", "Shift+").replace("⌘", "Meta+").replace("Esc", "Escape");
     control.setAttribute("aria-keyshortcuts", shortcut);
-    control.setAttribute("aria-description", "快捷键 " + key);
+    control.setAttribute("aria-description", t("快捷键 ") + key);
   }
   control.append(icon(name));
   return control;

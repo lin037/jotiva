@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { popupMenu } from "../../ui/context-menu";
 import { attachOnSwitch } from "./document-drag";
@@ -19,9 +20,9 @@ export function treeRow(title: string, expanded: boolean, toggle: () => void) {
 export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
   const panel = element("section", "source-panel jot-sources");
   panel.setAttribute("role", "region");
-  panel.setAttribute("aria-label", "窗口便签");
+  panel.setAttribute("aria-label", t("窗口便签"));
   const header = element("header", "library-section-heading");
-  header.append(element("h2", undefined, "窗口便签"), iconButton("add", "添加来源窗口", add));
+  header.append(element("h2", undefined, t("窗口便签")), iconButton("add", t("添加来源窗口"), add));
   const body = element("div", "source-sections");
   panel.append(header, body);
   const apps = new Map<string, boolean>();
@@ -47,15 +48,15 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
     if (row?.dataset.note) {
       const id = Number(row.dataset.note);
       void popupMenu(event, [
-        { label: "在主窗口编辑", run: () => open(id) },
-        ...(live ? [{ label: "定位到便签", run: () => invoke("locate", { id }) }] : []),
-        { label: "切换应用挂载…", run: () => attachOnSwitch(id) },
-        null, { label: "解除此便签挂载", run: () => invoke("detach_note", { id }) },
+        { label: t("在主窗口编辑"), run: () => open(id) },
+        ...(live ? [{ label: t("定位到便签"), run: () => invoke("locate", { id }) }] : []),
+        { label: t("切换应用挂载…"), run: () => attachOnSwitch(id) },
+        null, { label: t("解除此便签挂载"), run: () => invoke("detach_note", { id }) },
       ]);
     } else {
       void popupMenu(event, [
-        ...(live ? [{ label: "定位到来源窗口", run: () => invoke("locate_source", { key }) }] : []),
-        { label: live ? "关闭窗口挂载" : "移除窗口关联", run: () => invoke("close_source", { key }) },
+        ...(live ? [{ label: t("定位到来源窗口"), run: () => invoke("locate_source", { key }) }] : []),
+        { label: live ? t("关闭窗口挂载") : t("移除窗口关联"), run: () => invoke("close_source", { key }) },
       ]);
     }
   });
@@ -69,13 +70,13 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
     function more(container: HTMLElement, key: string, total: number) {
       const limit = limits.get(key) ?? pageSize;
       if (total <= limit) return;
-      container.append(button("显示更多", () => { limits.set(key, limit + pageSize); draw(); }, "library-node"));
+      container.append(button(t("显示更多"), () => { limits.set(key, limit + pageSize); draw(); }, "library-node"));
     }
     const sections = [true, false].map(live => {
       const lane = element("section", "source-lane");
       lane.dataset.sourceState = live ? "live" : "missing";
       const laneKey = String(live);
-      const laneName = live ? "已挂载" : "待重新挂载";
+      const laneName = live ? t("已挂载") : t("待重新挂载");
       const label = element("h3", "source-lane-label");
       label.id = "source-heading-" + lane.dataset.sourceState;
       const tree = element("div", "source-lane-tree");
@@ -99,7 +100,7 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
       })).filter(group => group.windows.length);
       lane.classList.toggle("is-empty", !groups.length);
       if (!groups.length) {
-        tree.append(element("p", "library-empty muted", live ? "拖入文档或文本以选择窗口" : "暂无离线窗口"));
+        tree.append(element("p", "library-empty muted", live ? t("拖入文档或文本以选择窗口") : t("暂无离线窗口")));
       }
       for (const group of groups.slice(0, limits.get(laneKey) ?? pageSize)) {
         const groupKey = JSON.stringify([live, group.app]);
@@ -118,7 +119,7 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
           const category = untitled(item.title) ? "" : item.title;
           const count = (counts.get(category) ?? 0) + 1;
           counts.set(category, count);
-          const title = untitled(item.title) ? (single ? group.app : "窗口 " + count)
+          const title = untitled(item.title) ? (single ? group.app : t("窗口 ") + count)
             : count > 1 ? item.title + "（" + count + "）" : item.title;
           const shown = windows.has(item.key);
           const windowBranch = element("section", "source-window");

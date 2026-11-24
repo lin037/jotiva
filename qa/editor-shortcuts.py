@@ -57,6 +57,10 @@ def verify(page, url):
     page.wait_for_function("menu.mode === 'source'")
 
     content.focus()
+    page.keyboard.press("Meta+Shift+9")
+    expect(content).to_have_text("- [ ] hello")
+    page.keyboard.press("Meta+z")
+    expect(content).to_have_text("hello")
     page.keyboard.press("Meta+a")
     page.keyboard.press("Meta+b")
     assert "**" not in content.inner_text()
@@ -94,6 +98,25 @@ if __name__ == "__main__":
             with sync_playwright() as playwright:
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 verify(browser.new_page(), f"http://127.0.0.1:{server.server_port}/")
+                windows = browser.new_page()
+                windows.add_init_script(IPC + TEST_IPC + """
+                  window.__jotPlatform = {os:'windows', hostWindows:true, language:'en'};
+                  Object.defineProperty(navigator,'platform',{configurable:true,value:'Win32'});
+                  const dispatch = window.__TAURI_INTERNALS__.invoke;
+                  window.__TAURI_INTERNALS__.invoke = (cmd,args) => cmd.startsWith("plugin:window|is_")
+                    ? Promise.resolve(false) : dispatch(cmd,args);
+                """)
+                windows.goto(f"http://127.0.0.1:{server.server_port}/")
+                windows.wait_for_function("window.menu?.editable")
+                body = windows.locator(".cm-content")
+                body.focus()
+                windows.keyboard.press("Control+Shift+9")
+                windows.keyboard.press("Control+s")
+                windows.wait_for_function("async () => (await window.__TAURI_INTERNALS__.invoke('read_note')).markdown === '- [ ] hello'")
+                windows.keyboard.press("Control+z")
+                windows.keyboard.press("Control+s")
+                windows.wait_for_function("async () => (await window.__TAURI_INTERNALS__.invoke('read_note')).markdown === 'hello'")
+                print("Windows Ctrl+Shift+9 created a task and Ctrl+Z restored the original text.")
                 browser.close()
         finally:
             server.shutdown()

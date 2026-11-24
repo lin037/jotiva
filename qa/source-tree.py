@@ -130,6 +130,7 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
     const action = args.action;
     if(action.kind==='createFile') {{
       const children = tree.get(args.path);
+      if (action.name && children.includes(action.name)) throw Error('文件已存在');
       let number = 1;
       let name = action.name ?? '未命名.md';
       while(children.includes(name)) name = '未命名 (' + (++number) + ').md';
@@ -259,6 +260,30 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         create_at('[data-directory="/work"]')
         page.wait_for_selector('[data-file="/work/未命名.md"][aria-current=true]')
         assert page.evaluate("!document.querySelector('dialog[open]') && window.opened===42")
+        create_at('[data-directory="/work"]', "重名.md")
+        page.wait_for_selector('[data-file="/work/重名.md"]')
+        # Candidate confirmation and a file-tree redraw must preserve the open naming sheet.
+        page.locator('[data-directory="/work"]').focus()
+        page.evaluate("testSidebar.createAtFocus()")
+        name = page.get_by_role("textbox", name="新文档名称")
+        name.evaluate("""input => {
+          input.dispatchEvent(new CompositionEvent('compositionstart', {bubbles:true}));
+          input.value = '重名.md';
+          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',isComposing:true,bubbles:true}));
+          input.form.requestSubmit();
+          input.dispatchEvent(new CompositionEvent('compositionend', {bubbles:true}));
+          input.form.requestSubmit();
+        }""")
+        expect(name).to_have_value("重名.md")
+        page.get_by_role("button", name="创建", exact=True).focus()
+        page.evaluate("testSidebar.refreshFiles()")
+        expect(name).to_have_value("重名.md")
+        page.get_by_role("button", name="创建", exact=True).click()
+        expect(page.get_by_role("dialog").get_by_role("alert")).to_have_text("文件已存在")
+        name.fill("拼音确认.md")
+        page.get_by_role("button", name="创建", exact=True).dblclick()
+        page.wait_for_selector('[data-file="/work/拼音确认.md"]')
+        assert page.evaluate("fileCalls.filter(([cmd,a])=>cmd==='workspace_action' && a.action.name==='拼音确认.md').length") == 1
         nested = "/work/专题/小组"
         page.evaluate("path => window.populate(path)", nested)
         for title in ("未命名.md", "未命名 (2).md"):

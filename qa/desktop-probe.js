@@ -80,9 +80,9 @@ try {
     if (!controls) throw Error("Missing custom titlebar");
     const zoom = controls.querySelector('[data-caption="maximize"]');
     zoom.click();
-    await waitFor(() => zoom.title === "还原窗口", "maximize");
+    await waitFor(() => zoom.title === (os === "windows" ? "Restore window" : "还原窗口"), "maximize");
     zoom.click();
-    await waitFor(() => zoom.title === "最大化", "restore");
+    await waitFor(() => zoom.title === (os === "windows" ? "Maximize" : "最大化"), "restore");
     if (!scenario.has("wayland")) {
       const title = document.querySelector(".caption-title");
       const rect = title.getBoundingClientRect();

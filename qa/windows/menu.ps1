@@ -53,8 +53,8 @@ public static class MenuProbe {
         Point previous;
         GetCursorPos(out previous);
         try {
-            Select(process,"\u5de5\u5177",false);
-            Select(process,"\u8bbe\u7f6e",true);
+            Select(process,"Tools",false);
+            Select(process,"Settings",true);
         } finally { SetCursorPos(previous.X,previous.Y); }
     }
 }

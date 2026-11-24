@@ -31,6 +31,7 @@
 | --- | --- | --- |
 | 切换即时预览和源码 | ⌘/ | Ctrl+/ |
 | 粗体 / 斜体 | ⌘B / ⌘I | Ctrl+B / Ctrl+I |
+| 切换任务列表 | ⇧⌘9 | Ctrl+Shift+9 |
 | 插入行内代码 / 链接 | ⌃⇧C / ⌃⇧K | Ctrl+Shift+C / Ctrl+Shift+K |
 | 改为 1 至 6 级标题 | ⌃⇧1 至 ⌃⇧6 | Ctrl+Shift+1 至 Ctrl+Shift+6 |
 | 撤销 / 重做 | ⌘Z / ⇧⌘Z | Ctrl+Z / Ctrl+Y |

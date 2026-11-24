@@ -4,6 +4,7 @@ use crate::platform::{HostBackend, Native};
 mod desktop;
 mod events;
 mod host;
+mod i18n;
 mod library;
 mod menus;
 mod platform;
@@ -739,14 +740,16 @@ fn finish_accessibility_request(window: WebviewWindow) {
 }
 
 fn tray(app: &AppHandle) -> tauri::Result<()> {
-    let main = MenuItem::with_id(app, "open-main", "打开 Jotiva", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "open-settings", "设置…", true, None::<&str>)?;
-    let quick = MenuItem::with_id(app, "open-quick", "速记", true, None::<&str>)?;
-    let create = MenuItem::with_id(app, "new-quick", "新建便签", true, None::<&str>)?;
-    let search = MenuItem::with_id(app, "search", "查找便签和文档", true, None::<&str>)?;
-    let overview = MenuItem::with_id(app, "overview", "平铺便签", true, None::<&str>)?;
-    let dock = MenuItem::with_id(app, "dock", "靠右收拢 / 还原", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 Jotiva", true, None::<&str>)?;
+    let item =
+        |id: &str, label: &str| MenuItem::with_id(app, id, i18n::t(label), true, None::<&str>);
+    let main = item("open-main", "打开 Jotiva")?;
+    let settings = item("open-settings", "设置…")?;
+    let quick = item("open-quick", "速记")?;
+    let create = item("new-quick", "新建便签")?;
+    let search = item("search", "查找便签和文档")?;
+    let overview = item("overview", "平铺便签")?;
+    let dock = item("dock", "靠右收拢 / 还原")?;
+    let quit = item("quit", "退出 Jotiva")?;
     let menu = Menu::with_items(
         app,
         &[
@@ -793,6 +796,7 @@ fn main() {
             app.manage(Mutex::new(desktop::Desktop::default()));
             app.manage(Mutex::new(menus::Context::default()));
             let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
+            i18n::start(appearance.language());
             app.set_theme(appearance.mode().native());
             menus::sync_theme(app.handle(), &appearance)?;
             let keys = app
@@ -801,7 +805,7 @@ fn main() {
                 .unwrap()
                 .preferences
                 .clone();
-            if !keys.local.is_empty() {
+            if !keys.local.is_empty() || appearance.language() == i18n::Language::English {
                 menus::apply_keys(app.handle(), &keys)?;
             }
             desktop::start(app.handle())?;

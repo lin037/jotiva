@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { fileName } from "../../ui/file-name";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
@@ -38,8 +39,8 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
       if (selected === entry) row.setAttribute("aria-current", "true");
       return row;
     }));
-    if (!shown.length) rows.append(element("p", "muted", "暂无 Markdown 文件"));
-    if (shown.length < entries.length) rows.append(button("显示更多", () => { visible += 80; draw(); }, "library-node"));
+    if (!shown.length) rows.append(element("p", "muted", t("暂无 Markdown 文件")));
+    if (shown.length < entries.length) rows.append(button(t("显示更多"), () => { visible += 80; draw(); }, "library-node"));
   }
   return {
     panel,
@@ -52,7 +53,7 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
         if (turn !== request) return;
         loaded = false;
         entries = [];
-        rows.replaceChildren(element("p", "muted", "无法读取目录"));
+        rows.replaceChildren(element("p", "muted", t("无法读取目录")));
         throw error;
       }
       if (turn !== request) return;

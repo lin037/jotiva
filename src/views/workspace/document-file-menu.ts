@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { fileName } from "../../ui/file-name";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,20 +10,20 @@ import { fileDialog } from "../../ui/file-dialog";
 
 export function noteActions(resolveId: () => NoteId | Promise<NoteId>, name: string, openCopy: (id: NoteId) => unknown, save: (id: NoteId) => Promise<void>) {
   return {
-    rename: { label: "重命名…", run: async () => {
-      const next = await fileDialog("重命名", "保存", name);
+    rename: { label: t("重命名…"), run: async () => {
+      const next = await fileDialog(t("重命名"), t("保存"), { initial: name });
       if (!next || next === name) return;
       const id = await resolveId();
       await save(id);
       await notes.rename(id, next);
     } },
-    duplicate: { label: "制作副本", run: async () => {
+    duplicate: { label: t("制作副本"), run: async () => {
       const id = await resolveId();
       await save(id);
       await openCopy(await invoke<NoteId>("note_action", { id, action: { kind: "duplicate" } }));
     } },
-    trash: { label: `移到${desktopPlatform.trash}…`, run: async () => {
-      if (await fileDialog(`将“${name}”移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`) === undefined) return;
+    trash: { label: t("移到{trash}…", { trash: desktopPlatform.trash }), run: async () => {
+      if (await fileDialog(t("将“{name}”移到{trash}？", { name, trash: desktopPlatform.trash }), t("移到{trash}", { trash: desktopPlatform.trash })) === undefined) return;
       const id = await resolveId();
       await save(id);
       await invoke("note_action", { id, action: { kind: "trash" } });
@@ -48,7 +49,7 @@ export function documentPath(manage?: {
     if (!active || !path) return;
     const location = [
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
+      { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
     ];
     if (!manage) {
       void popupMenu(event, location);
@@ -60,7 +61,7 @@ export function documentPath(manage?: {
     const actions = noteActions(() => editor.id, name, manage.openCopy, () => editor.save());
     void popupMenu(event, [
       ...location,
-      ...(!active.file ? [{ label: "移到归档目录…", run: async () => {
+      ...(!active.file ? [{ label: t("移到归档目录…"), run: async () => {
         await editor.save();
         await manage.move(active.id, active.folder);
       } }] : []),
@@ -77,7 +78,7 @@ export function documentPath(manage?: {
       control.hidden = !path;
       if (control.dataset.fileMenuPath === path) return;
       label.textContent = control.dataset.fileMenuPath = control.title = path;
-      control.setAttribute("aria-label", "文件操作，" + path);
+      control.setAttribute("aria-label", t("文件操作，") + path);
     },
   };
 }

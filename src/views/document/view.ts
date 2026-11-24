@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -24,7 +25,7 @@ export async function mount(id: NoteId) {
     openCopy: copy => invoke("open_document_window", { id: copy }),
     move: async (note, folder) => {
       move ??= moveDocument(result => {
-        status.textContent = result.warning ?? "已移动";
+        status.textContent = result.warning ?? t("已移动");
         void refresh().catch(report);
       }, () => {
         editFolder ??= folderEditor(newFolder => {
@@ -36,16 +37,16 @@ export async function mount(id: NoteId) {
     },
   });
   let editFolder: ReturnType<typeof folderEditor> | undefined;
-  const pin = iconButton("pin", "置顶文档窗口", async () => {
+  const pin = iconButton("pin", t("置顶文档窗口"), async () => {
     const pinned = pin.getAttribute("aria-pressed") !== "true";
     pin.disabled = true;
     try {
       await getCurrentWindow().setAlwaysOnTop(pinned);
       pin.setAttribute("aria-pressed", String(pinned));
-      pin.dataset.tip = pinned ? "取消置顶" : "置顶";
+      pin.dataset.tip = pinned ? t("取消置顶") : t("置顶");
     } finally { pin.disabled = false; }
   });
-  pin.dataset.tip = "置顶";
+  pin.dataset.tip = t("置顶");
   pin.setAttribute("aria-pressed", "false");
   metadata.append(pin, filePath.control);
   root.append(paper, footer);

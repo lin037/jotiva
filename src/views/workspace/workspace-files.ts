@@ -1,10 +1,11 @@
+import { t } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
 import { listen } from "@tauri-apps/api/event";
 import { popupMenu, copyText } from "../../ui/context-menu";
 import { attachOnSwitch, workspaceFileType } from "./document-drag";
-import { editFileName, fileName, isDescendant } from "../../ui/file-name";
+import { editFileName, nameNewFile, fileName, isDescendant } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
@@ -18,7 +19,7 @@ interface FileEntry {
 
 export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>) {
   const panel = element("div", "workspace-files");
-  panel.setAttribute("aria-label", "工作区文件");
+  panel.setAttribute("aria-label", t("工作区文件"));
   const expanded = new Set<string>();
   const readers = new WeakMap<HTMLElement, () => Promise<void>>();
   let roots: string[] = [];
@@ -29,7 +30,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
 
   function renameFile(row: HTMLElement) {
     const path = row.dataset.file!;
-    editFileName(row, fileName(path), false, async name => {
+    editFileName(row, fileName(path), async name => {
       await flush([path]);
       await change(path, { kind: "rename", name });
     });
@@ -103,7 +104,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
         previous.path === files[index].path && previous.directory === files[index].directory)) return;
       listed = files;
       children.replaceChildren();
-      if (!files.length) children.append(element("p", "library-empty muted", "没有 Markdown 文件或子目录"));
+      if (!files.length) children.append(element("p", "library-empty muted", t("没有 Markdown 文件或子目录")));
       const pageSize = 80;
       const active = selected;
       if (active && files.length > pageSize) {
@@ -115,7 +116,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
         }
       }
       let offset = 0;
-      const next = button("显示更多", appendPage, "library-node");
+      const next = button(t("显示更多"), appendPage, "library-node");
       function appendPage() {
         next.remove();
         const page = files.slice(offset, offset + pageSize);
@@ -152,21 +153,22 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     if (action.kind === "createFile" || action.kind === "createDirectory") expanded.add(path);
     if (action.kind === "createFile" && result.path) selected = result.path;
     if (action.kind === "move") expanded.add(action.directory);
-    await refresh();
+    // Creation has already committed on disk. A failed directory read must not offer to create it again.
+    if (action.kind === "createFile") await refresh().catch(report);
+    else await refresh();
     return result.path;
   }
 
   function createFile(row: HTMLElement) {
     const directory = row.dataset.directory!;
-    editFileName(row.closest<HTMLElement>(".library-line")!, "未命名.md", true, async name => {
-      const action: Action = name === "未命名.md" ? { kind: "createFile" } : { kind: "createFile", name };
-      const path = await change(directory, action);
-      if (path) await openNote(await openLibraryFile(path));
-    });
+    void nameNewFile(async name => {
+      const action: Action = name === t("未命名.md") ? { kind: "createFile" } : { kind: "createFile", name };
+      return change(directory, action);
+    }, async path => { if (path) await openNote(await openLibraryFile(path)); }).catch(report);
   }
 
   async function createDirectory(directory: string) {
-    const name = await fileDialog("新建文件夹", "创建", "未命名文件夹");
+    const name = await fileDialog(t("新建文件夹"), t("创建"), { initial: t("未命名文件夹") });
     if (name) await change(directory, { kind: "createDirectory", name });
   }
 
@@ -177,31 +179,31 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     const name = fileName(path) || path;
     const directory = !!row.dataset.directory;
     const menu = directory ? [
-      { label: "新建文档", run: () => createFile(row) },
-      { label: "新建文件夹…", run: () => createDirectory(path) },
+      { label: t("新建文档"), run: () => createFile(row) },
+      { label: t("新建文件夹…"), run: () => createDirectory(path) },
     ] : [
-      { label: "打开", run: async () => openNote(await openLibraryFile(path)) },
-      { label: "在新窗口打开", run: async () => invoke("open_document_window", { id: await openLibraryFile(path) }) },
-      ...(desktopPlatform.hostWindows ? [{ label: "挂载到窗口…", run: async () => attachOnSwitch(await openLibraryFile(path)) }] : []),
+      { label: t("打开"), run: async () => openNote(await openLibraryFile(path)) },
+      { label: t("在新窗口打开"), run: async () => invoke("open_document_window", { id: await openLibraryFile(path) }) },
+      ...(desktopPlatform.hostWindows ? [{ label: t("挂载到窗口…"), run: async () => attachOnSwitch(await openLibraryFile(path)) }] : []),
     ];
     popupMenu(event, [
       ...menu, null,
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
-      { label: "复制相对路径", run: () => copyText(relativePath(path)) }, null,
-      { label: "重命名…", run: async () => {
+      { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
+      { label: t("复制相对路径"), run: () => copyText(relativePath(path)) }, null,
+      { label: t("重命名…"), run: async () => {
         if (!directory) { renameFile(row); return; }
-        const next = await fileDialog("重命名", "保存", name);
+        const next = await fileDialog(t("重命名"), t("保存"), { initial: name });
         if (next && next !== name) await change(path, { kind: "rename", name: next });
       } },
-      ...(!row.dataset.root ? [{ label: "制作副本", run: () => change(path, { kind: "duplicate" }) }] : []),
-      ...(row.dataset.root ? [{ label: "从工作区移除", run: async () => {
+      ...(!row.dataset.root ? [{ label: t("制作副本"), run: () => change(path, { kind: "duplicate" }) }] : []),
+      ...(row.dataset.root ? [{ label: t("从工作区移除"), run: async () => {
         await invoke("remove_workspace_folder", { path });
         await refresh();
       } }] : []),
-      { label: `移到${desktopPlatform.trash}…`, run: async () => {
-        if (await fileDialog(`将“${name}”移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`, undefined,
-          directory ? `文件夹及其中所有内容都会移到${desktopPlatform.trash}。` : undefined) !== undefined) await change(path, { kind: "trash" });
+      { label: t("移到{trash}…", { trash: desktopPlatform.trash }), run: async () => {
+        if (await fileDialog(t("将“{name}”移到{trash}？", { name, trash: desktopPlatform.trash }), t("移到{trash}", { trash: desktopPlatform.trash }), {
+          detail: directory ? t("文件夹及其中所有内容都会移到{trash}。", { trash: desktopPlatform.trash }) : undefined }) !== undefined) await change(path, { kind: "trash" });
       } },
     ]);
   });
@@ -283,7 +285,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     roots = paths;
     panel.replaceChildren();
     if (!roots.length) {
-      panel.append(button("添加工作区文件夹…", add, "library-node"));
+      panel.append(button(t("添加工作区文件夹…"), add, "library-node"));
       return;
     }
     for (const path of roots) {

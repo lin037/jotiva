@@ -31,7 +31,7 @@
   {"id": "format.paragraph", "label": "正文", "group": "文字与段落", "key": null, "editor": "format.paragraph", "menu": "format:format.paragraph"},
   {"id": "format.bullet-list", "label": "切换无序列表", "group": "文字与段落", "key": null, "editor": "format.bullet-list", "menu": "format:format.bullet-list"},
   {"id": "format.ordered-list", "label": "切换有序列表", "group": "文字与段落", "key": null, "editor": "format.ordered-list", "menu": "format:format.ordered-list"},
-  {"id": "format.task-list", "label": "切换任务列表", "group": "文字与段落", "key": null, "editor": "format.task-list", "menu": "format:format.task-list"},
+  {"id": "format.task-list", "label": "切换任务列表", "group": "文字与段落", "key": "Primary+Shift+Digit9", "editor": "format.task-list", "menu": "format:format.task-list"},
   {"id": "format.quote", "label": "切换引用", "group": "文字与段落", "key": null, "editor": "format.quote", "menu": "format:format.quote"},
   {"id": "insert.code-block", "label": "插入代码块", "group": "插入", "key": null, "editor": "insert.code-block"},
   {"id": "insert.math-block", "label": "插入公式块", "group": "插入", "key": null, "editor": "insert.math-block"},
