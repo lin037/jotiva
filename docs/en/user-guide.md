@@ -28,7 +28,7 @@ If you already have a document open, right-click it in the sidebar and choose ã€
 - **Windows** lets you pick a window or drag a document onto it.
 - **Linux** supports attachment in EWMH-compatible X11 sessions. Standalone notes work on native Wayland. Global shortcuts depend on your desktop session.
 
-[Watch a note follow its window](../../README.en.md#see-it-in-action)
+[Watch a note follow its window](../../README.en.md#demos)
 
 ## Open a file and start writing
 
