@@ -185,7 +185,12 @@ jobs:
         run: |
           git archive --format=tar.gz --prefix="Jotiva-${VERSION}/" --output="artifacts/Jotiva-${VERSION}-source.tar.gz" HEAD
           cd artifacts
-          sha256sum ./*.dmg ./*.pkg ./*.zip ./*-setup.exe ./*.deb ./*.AppImage ./*.tar.gz > SHA256SUMS
+          files=(./*.dmg ./*.pkg ./*.zip ./*-setup.exe ./*.deb ./*.AppImage ./*.tar.gz)
+          if [[ -f ../docs/HelloJotiva.md ]]; then
+            cp ../docs/HelloJotiva.md .
+            files+=(./HelloJotiva.md)
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS
           sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

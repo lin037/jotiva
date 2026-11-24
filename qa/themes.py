@@ -2,13 +2,14 @@
 from functools import partial
 from http.server import ThreadingHTTPServer
 import os
+import re
 from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
 
 from tooltips import IPC, PROJECT, Static
 
-THEME = PROJECT / "showcase/themes/ink-and-steel.css"
+THEME = PROJECT / "docs/assets/ink-and-steel.css"
 STYLESHEET_IPC = r"""
 const originalInvoke = window.__TAURI_INTERNALS__.invoke;
 const storageKey = 'qa:appearance';
@@ -73,7 +74,9 @@ def verify(browser, url):
     check_dialog_backdrop(workspace, "rgba(0, 0, 0, 0.3)")
     for page, size in ((workspace, 16), (quick, 15), (document, 16)):
         expect(page.locator(".cm-content")).to_have_css("font-size", f"{size}px")
-    expect(workspace.locator(".cm-content")).to_have_css("font-family", 'Georgia, "Songti SC", serif')
+    expect(workspace.locator(".cm-content")).to_have_css(
+        "font-family", re.compile(r'^(?:Georgia|"Georgia"), (?:Songti SC|"Songti SC"), serif$')
+    )
 
     settings.locator("#theme-mode").select_option("dark")
     for page in (settings, workspace, quick, document):

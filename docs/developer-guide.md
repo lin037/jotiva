@@ -2,13 +2,13 @@
 
 [项目首页](../README.md) · [使用手册](user-guide.md) · [English](en/developer-guide.md)
 
-Jotiva 是用 Tauri 2 构建的 Markdown 桌面应用。TypeScript 负责窗口里的界面与编辑交互，Rust 负责文档状态、磁盘和窗口协调，Objective-C 对接 macOS。应用通过发布包使用编辑器组件 `@jot-md/editor`。首次接触项目时，从这个目录启动便能开发桌面功能。组件本身的语法和渲染实现在 [Jot Markdown Engine](https://github.com/lin037/jot-md-engine)。
+Jotiva 用 Tauri 2 连接桌面窗口与编辑器。TypeScript 管理界面和编辑会话，Rust 管理文档、文件和窗口状态。系统差异由各自的平台模块处理，正文编辑使用锁定版本的组件。 [Jot Markdown Engine](https://github.com/lin037/jot-md-engine)
 
 ## 从源码启动
 
 三端均使用 Rustup、Node.js 24 和 pnpm。项目锁定 pnpm 11.11.0 和 Rust 1.100.0。macOS 需要 Xcode Command Line Tools，Windows 需要 MSVC C++ 桌面开发工具与 WebView2 Runtime，Linux 需要 WebKitGTK 4.1、GTK、AppIndicator、OpenSSL 和 libxdo 的开发包。 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)
 
-在 Windows 和 WSL 同时开发时，两个系统各自安装前端依赖。WSL 可以把工作副本放在 Linux 用户目录，并设置 `CARGO_TARGET_DIR="$HOME/.cache/jotiva-target"`，这样 Vite 的原生模块与 Cargo 构建缓存都使用本端架构。X11 和 Wayland 的原生回放命令见[测试指南](verification.md#linux-桌面回放)。
+在 Windows 和 WSL 同时开发时，两端各自安装前端依赖。WSL 的工作副本可以放在 Linux 用户目录，便于用本端的依赖和 Cargo 缓存。 [Linux 桌面回放](verification.md#linux-桌面回放)
 
 在包含本项目 `package.json` 的目录运行。
 
@@ -33,16 +33,22 @@ pnpm tauri dev
 | `src-tauri/src/library/`、`storage.rs` | 管理便签、工作区、归档、索引和文件操作。底层文件写入由 `storage.rs` 提供。 |
 | `src-tauri/src/host.rs`、`platform/{macos,windows,linux}/`、`menus.rs` | 宿主数据、各桌面适配器与应用菜单。AppKit 桥接源码位于 `platform/macos/objc/`。 |
 | `src-tauri/src/settings/` | 保存外观、快捷键和其他应用偏好。 |
-| `qa/`、`showcase/` | 测试夹具和供人试用的虚构文档。 |
+| `qa/`、`docs/HelloJotiva.md` | 自动回放与实机检查。HelloJotiva 是供用户下载并修改的示例。 |
 
 改保存时，从 `src/editor/note-editor.ts` 的保存队列往下读，经过 Rust 的 `save_note`，最后到 `Notes::save`。改速记时，从 `desktop.rs` 的宿主事件和视图转场往下读。磁盘布局、同步和窗口生命周期见[实现说明](architecture.md)。
+
+## 给桌面能力加一个平台实现
+
+从 `src-tauri/src/platform/contract.rs` 查看外部窗口和文件管理接口。编译目标在 `platform/mod.rs` 选择 macOS、Windows 或 Linux 模块。`platform/shared/` 提供 Windows 和 Linux 已共用的窗口、对话框、快捷键和网络操作。扩展时先检查 Tauri 的公共 API，再把系统调用放入对应的平台目录。
+
+例如给窗口挂载增加一个系统事件时，在平台模块接收事件，共用的 `desktop.rs` 决定便签显示、隐藏或留在「待重新挂载」。给保存增加一种文件系统行为时，从 `storage.rs` 进入平台文件替换实现。已有的修订检查、快照和恢复逻辑继续从文档库调用。 [桌面平台与保存流程](architecture.md)
 
 ## 代码约定
 
 - TypeScript 沿用项目的严格类型检查。窗口专用 DOM 与样式跟着视图走，跨窗口共用后再放进 `ui/` 或 `editor/`。
 - 改 IPC 时同时核对 Rust 命令和前端调用，包括字段、事件作用范围、失败反馈。窗口 ID 和文档 ID 的含义不同，按各自生命周期使用。
 - Rust 用 `rustfmt` 格式化。涉及文件写入、重命名和删除时，优先复用 `library/` 与 `storage.rs` 的既有入口。覆盖失败、重复触发和重启恢复。
-- 系统回调和窗口显示遵守 macOS 主线程约束。慢磁盘操作与网络请求沿用现有后台执行路径。原生代码与 TypeScript 都要保留可供用户处理的错误。
+- 系统调用在当前平台适配器中实现。遵守各平台的界面线程要求，耗时操作沿用后台执行路径。原生代码与 TypeScript 都要返回可供用户处理的错误。
 - 升级编辑器时，更新依赖与锁文件。用实际安装的编辑器依赖跑 WebKit 回归，检查切标签、输入法、撤销、大纲、公式和图表。 [运行测试](verification.md)
 
 ## 提交问题和改动

@@ -12,4 +12,4 @@
 
 用 Issue 报告能复现的问题。请附上 Jotiva 版本、系统版本、操作步骤和实际结果；涉及窗口关联时，补充宿主应用以及是否全屏。尽量使用可公开分享的最小 Markdown 示例。 [提交反馈](https://github.com/lin037/jotiva/issues/new/choose)
 
-Windows 支持计划覆盖本地 Markdown 的打开、编辑、保存和恢复，再适配快捷键和窗口关联。欢迎在问题模板中说明你的 Windows 版本、架构和实际用法。发现安全问题时，请按安全说明私下报告。 [安全问题报告](SECURITY.md)
+反馈桌面问题时，请注明 macOS、Windows 或 Linux 的具体版本与架构。Linux 还请写上桌面环境以及 X11 或 Wayland。发现安全问题时，请按安全说明私下报告。 [安全问题报告](SECURITY.md)

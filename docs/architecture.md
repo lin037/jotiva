@@ -23,7 +23,7 @@ TypeScript 根据 Tauri 的窗口标签加载视图。主窗 `main`、设置 `se
 
 速记由 `desktop.rs` 协调，额外速记窗在 `desktop/note_windows.rs` 管理。Rust 用递增的 `epoch` 标记视图切换，WebView 在准备好编辑、摘要或搜索界面后用同一个编号确认。旧确认会被丢弃。折叠便签后可回收 Worker，隐藏窗口经过空闲期后可销毁 WebView。仅菜单栏常驻时仍可以用热键唤起。 [窗口事件定义](../src-tauri/src/events.rs)
 
-macOS 宿主观察使用 AppKit 和 Accessibility。窗口能唯一确认时，Jotiva 会恢复绑定。系统窗口已重建时，自动恢复依赖宿主提供的稳定文档身份，遇到歧义就留在「待重新挂载」。标题可用于列表筛选。被动切回宿主会恢复便签的显示，键盘焦点仍留在宿主。 [宿主代码](../src-tauri/src/host.rs)
+macOS 宿主观察使用 AppKit 和 Accessibility，Windows 通过 Win32 观察窗口，Linux 使用 X11/EWMH。macOS 能从宿主取得足够明确的身份时可恢复绑定。当前 Windows 和 Linux 的窗口标识用于当前会话，目标关闭后可从「待重新挂载」重新选择。标题可用于列表筛选。被动切回宿主会恢复便签的显示，键盘焦点仍留在宿主。 [宿主代码](../src-tauri/src/host.rs)
 
 ## 文档怎样保存
 
@@ -46,13 +46,13 @@ macOS 宿主观察使用 AppKit 和 Accessibility。窗口能唯一确认时，J
 | `notes/closing-sources/` | 解除来源时的中间状态，用于下次启动继续处理。 |
 | `workspace.json`、`folders.json` | 工作区目录，归档名称、路径、说明和分类选择。 |
 | `appearance.json`、`settings.json` | 外观和快捷键。快捷键设置保存三项全局键位及用户改过的应用内键位。 |
-| `filing.json` | Jev 归档开关、服务地址和模型名称。密钥由原生端读写 macOS 钥匙串。 |
+| `filing.json` | Jev 归档开关、服务地址和模型名称。密钥由各平台的系统凭据存储管理。 |
 
 归档设置页按表单里的地址查询密钥状态。WebView 只收到是否已配置或查询错误。输入和更换密钥通过原生密码框完成，保存归档偏好可以单独进行。
 
 从系统文件管理器或工作区打开的 Markdown 和 UTF-8 文本文件留在原位置。保存时沿用原文件的 CRLF 或 LF 换行。注册工作区只是把路径存起来，展开目录时才读取那一级的子项。 [便签库](../src-tauri/src/library/notes.rs) · [工作区](../src-tauri/src/library/workspace.rs)
 
-应用内默认键位由 `src/desktop/shortcut-commands.json` 和 `shortcut-editor.json` 定义。设置页、AppKit 菜单和编辑器共用这两份清单。保存后，各窗口收到更新事件，已打开的文档也会使用新键位。系统编辑操作、方向键选择和特定控件的导航操作列在 `shortcut-reference.json`。 [快捷键说明](shortcuts.md)
+应用内默认键位由 `src/desktop/shortcut-commands.json` 和 `shortcut-editor.json` 定义。设置页、应用菜单和编辑器共用这两份清单。保存后，各窗口收到更新事件，已打开的文档也会使用新键位。系统编辑操作、方向键选择和特定控件的导航操作列在 `shortcut-reference.json`。 [快捷键说明](shortcuts.md)
 
 ## Jev 归档
 
@@ -75,6 +75,6 @@ sequenceDiagram
 
 归档对接 Jev 协议的 `choice` 类型。每次请求只有一道单选题 `questions.destination`。每个参与分类的目录占一个选项，键为 `folder_<id>`，说明包含目录名称和用途。服务在 `answers.destination` 返回 `type: "choice"` 和选中的 `choice`，例如 `folder_7`。选择 `other` 表示没有匹配。Jotiva 校验返回值，用本地目录记录查找磁盘路径。 [请求与响应处理](../src-tauri/src/settings/filing.rs)
 
-自建服务可以使用路径前缀。例如基础地址 `https://example.org/team` 对应的 POST 地址是 `https://example.org/team/v1/systemone`。基础地址以 `/v1` 结尾时只追加 `/systemone`。「完整接口地址」直接使用填写的请求路径。远程接口必须使用 HTTPS。HTTP 仅接受本机回环地址 `127.0.0.1` 和 `[::1]`，可以指定端口。Jotiva 会直接连接这两种地址上的服务。密钥与最终的请求地址绑定，平台适配器从系统凭据存储读取密钥并设置 Bearer 认证，请求不跟随重定向。 [原生网络与钥匙串](../src-tauri/src/platform/macos/objc/filing.m)
+自建服务可以使用路径前缀。例如基础地址 `https://example.org/team` 对应的 POST 地址是 `https://example.org/team/v1/systemone`。基础地址以 `/v1` 结尾时只追加 `/systemone`。「完整接口地址」直接使用填写的请求路径。远程接口必须使用 HTTPS。HTTP 仅接受本机回环地址 `127.0.0.1` 和 `[::1]`，可以指定端口。Jotiva 会直接连接这两种地址上的服务。密钥与最终的请求地址绑定，平台适配器从系统凭据存储读取密钥并设置 Bearer 认证，请求不跟随重定向。 [macOS 请求与钥匙串](../src-tauri/src/platform/macos/objc/filing.m) · [Windows 与 Linux 请求](../src-tauri/src/platform/shared/filing.rs)
 
 每次网络请求限时 25 秒。连接中断、超时或 HTTP 502、503、504 会在 750 毫秒后重试一次，发送前再次核对请求是否有效。认证错误、限流和格式异常会在编辑器中提示。用户可以修改设置或稍后再发起一次。模拟服务的测试入口是 `pnpm test:filing`。 [测试说明](verification.md)

@@ -1,41 +1,49 @@
 <p align="center">
-<img src="src/assets/jot.svg" alt="Jotiva" width="72" height="72">
+  <img src="src/assets/jot.svg" alt="Jotiva" width="76" height="76">
 </p>
 <h1 align="center">Jotiva</h1>
-<p align="center">在 macOS 上原地编辑 Markdown，把手边的文档留在工作窗口旁。</p>
+<p align="center"><strong>把笔记留在你正在工作的窗口旁。</strong></p>
+<p align="center">原地编辑 Markdown 和纯文本，适用于 macOS、Windows 和 Linux。</p>
 <p align="center">
-<a href="https://github.com/lin037/jotiva/releases/latest"><strong>下载</strong></a> ·
-<a href="docs/user-guide.md">使用手册</a> ·
-<a href="showcase/README.md">示例文档</a> ·
-<a href="docs/developer-guide.md">开发者指南</a> ·
-<a href="docs/en/user-guide.md">English</a>
+  <a href="https://github.com/lin037/jotiva/releases"><strong>下载安装</strong></a> ·
+  <a href="docs/HelloJotiva.md">试写 HelloJotiva</a> ·
+  <a href="docs/user-guide.md">使用手册</a> ·
+  <a href="docs/developer-guide.md">开发者指南</a> ·
+  <a href="docs/en/user-guide.md">English</a>
 </p>
 <p align="center">
-<a href="https://github.com/lin037/jotiva/actions/workflows/ci.yml"><img src="https://github.com/lin037/jotiva/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-<a href="docs/user-guide.md#安装和打开"><img src="https://img.shields.io/badge/macOS-14%2B-343940?logo=apple&amp;logoColor=white" alt="macOS 14 或更新版本"></a>
-<a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-14788A?logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
-<a href="https://rust-lang.org/"><img src="https://img.shields.io/badge/Rust-B5411A?logo=rust&amp;logoColor=white" alt="Rust"></a>
-<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&amp;logoColor=white" alt="TypeScript"></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-426c5a" alt="MIT 许可证"></a>
+  <a href="docs/user-guide.md#安装"><img src="https://img.shields.io/badge/macOS-14%2B-343940?logo=apple&amp;logoColor=white" alt="macOS 14+"></a>
+  <a href="docs/user-guide.md#安装"><img src="https://img.shields.io/badge/Windows-x64-2B579A" alt="Windows x64"></a>
+  <a href="docs/user-guide.md#安装"><img src="https://img.shields.io/badge/Linux-x86__64-83561B?logo=linux&amp;logoColor=white" alt="Linux x86_64"></a>
+  <a href="https://github.com/lin037/jotiva/actions/workflows/ci.yml"><img src="https://github.com/lin037/jotiva/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-14788A?logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
+  <a href="https://rust-lang.org/"><img src="https://img.shields.io/badge/Rust-B5411A?logo=rust&amp;logoColor=white" alt="Rust"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-426c5a" alt="MIT 许可证"></a>
 </p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jot-dark.webp">
-    <img src="docs/assets/jot-light.webp" alt="Jotiva 的 Markdown 工作区，左侧是文件和窗口便签，中间显示可编辑的会议记录与表格，右侧是文档大纲" width="900">
+    <img src="docs/assets/jot-light.webp" alt="Jotiva 正在编辑 HelloJotiva，左边是本地工作区，正文有待办和表格，右边是章节大纲" width="960">
   </picture>
 </p>
 
-## 在 Jotiva 里写作
+- **写完就存回原文件。** 从你的文件夹打开 Markdown 或 UTF-8 文本。用即时预览勾待办、改表格，也可以随时切回 Markdown 源码。
+- **让便签跟着工作窗口。** 查资料时把文档挂到浏览器旁。切走时继续工作，回到原窗口就能接着记。支持 macOS、Windows 和兼容的 Linux X11 会话。
+- **把一叠资料展开来写。** 用工作区浏览现有文件夹，在标签、大纲和搜索之间切换，也能把两份文档各开一扇窗口对照。写累了，换成深色或导入自己的 CSS。
 
-- **直接编辑 Markdown。** 从 Finder 打开文件，即时预览里可以勾待办、改表格，也可以按 `⌘/` 切到源码。改动保存回原文件。
-- **把便签挂在工作窗口旁。** 开会或查资料时，按 `⌃⇧空格` 记一笔，按 `⌘↩` 把键盘交还原窗口。切回时，便签会跟着回来。窗口关联需要 macOS 辅助功能权限。
-- **把常用资料放在手边。** 将本地文件夹加入侧栏，在标签、大纲和搜索之间切换。需要对照两篇文档时，可以打开独立窗口并排看。
+## 看看怎么用
 
-## 开始使用
+<details>
+<summary>勾待办、给表格加一行，再切换到 Markdown 源码</summary>
+<img src="docs/assets/edit-markdown.gif" alt="在 HelloJotiva 勾掉待办、插入表格行，再查看 Markdown 源码" width="840">
+</details>
 
-Jotiva 支持 macOS 14 及更新版本。打开 Jotiva 后，按 `⌘O` 选一份 `.md` 文件。想试试表格和大纲，可以打开 [梧桐街开放日示例](showcase/README.md)。
+<details>
+<summary>搜索本地便签和文档</summary>
+<img src="docs/assets/search-notes.gif" alt="打开全局搜索，输入关键词并打开匹配的 Markdown 文档" width="840">
+</details>
 
-在设置中可以切换深浅色、导入 CSS 和重新录入快捷键。常用操作和文件保存位置见 [使用手册](docs/user-guide.md)。想参与开发，读 [开发者指南](docs/developer-guide.md)。
+想自己试一遍？打开 [HelloJotiva.md](docs/HelloJotiva.md)，点右上角下载，再用 Jotiva 打开。安装、文件存放位置和各平台的快捷键都能从 [使用手册](docs/user-guide.md) 找到。
 
-源码提供 Windows 和 Linux 桌面适配。Windows 支持原地编辑 Markdown 和 UTF-8 文本文件，并可将文档拖到其他应用窗口挂载，Linux 支持文档工作区和独立便签，兼容 EWMH 的 X11 会话还支持外部窗口关联。各平台构建环境与功能差异见 [开发者指南](docs/developer-guide.md) 和 [平台能力表](docs/architecture.md#桌面平台边界)。 [Windows 反馈](https://github.com/lin037/jotiva/issues/new?template=windows.yml) · [参与贡献](CONTRIBUTING.md)
+觉得 Jotiva 适合你的写作方式，欢迎点个 **Star**。有想改进的细节，也欢迎来 [讨论区](https://github.com/lin037/jotiva/discussions) 分享你的用法，或从 [贡献指南](CONTRIBUTING.md) 开始。
