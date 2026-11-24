@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { desktopPlatform } from "../../desktop/platform";
 import type { NoteId } from "../../desktop/ipc";
 import type { TabSession } from "../../editor/note-editor";
 import { button, element, report } from "../../ui/dom";
@@ -32,6 +33,8 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (id: No
     if (existing) return existing;
     const row = element("div", "document-tab");
     const title = button("", () => open(id), "document-tab-name");
+    title.draggable = desktopPlatform.hostWindows;
+    title.dataset.note = String(id);
     title.setAttribute("role", "tab");
     title.setAttribute("aria-controls", "workspace-editor-panel");
     const dismiss = button("×", () => close(id), "document-tab-close", "关闭标签");

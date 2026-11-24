@@ -1,3 +1,4 @@
+import { primaryPressed } from "../desktop/platform";
 import type { MarkdownEditor, MarkdownEditorOptions } from "@jot-md/editor";
 import { normalizeInsertedText } from "@jot-md/editor/adapter";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -263,7 +264,7 @@ export class NoteEditor {
         if (!cycle) {
           // The source editor also assigns Command-/ to commenting out text.
           // Releasing Jotiva's shortcut must not expose that destructive fallback.
-          if (event.code !== "Slash" || !event.metaKey || event.ctrlKey || event.altKey || event.shiftKey
+          if (event.code !== "Slash" || !primaryPressed(event) || event.altKey || event.shiftKey
             || !(event.target instanceof Node) || !root.contains(event.target)
             || commands.some(command => matchesShortcut(event, command.id))) return;
         }

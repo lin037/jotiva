@@ -1,3 +1,4 @@
+import { primaryPressed, desktopPlatform } from "../desktop/platform";
 import { notes, type Card, type NoteId, type Scope, type SearchPage } from "../desktop/ipc";
 import { button, element, report } from "./dom";
 import "./note-list.css";
@@ -89,7 +90,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       const location = card.attached ? card.source : card.file ?? card.archivePath;
       if (location) row.append(element("small", "muted", location));
       if (card.excerpt && (tiled || input.value)) row.append(element("span", "muted", card.excerpt));
-      if (tiled && index < 9) row.append(element("kbd", "note-key", `⌘${index + 1}`));
+      if (tiled && index < 9) row.append(element("kbd", "note-key", `${desktopPlatform.primaryLabel}${index + 1}`));
     }
     parent.append(row);
     rows.push(row);
@@ -233,8 +234,8 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       onDismiss?.();
       return;
     }
-    showKeys(event.metaKey);
-    if (tiled && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    showKeys(primaryPressed(event));
+    if (tiled && primaryPressed(event) && !event.altKey && !event.shiftKey) {
       const digit = /^Digit([1-9])$/u.exec(event.code);
       if (digit) {
         event.preventDefault();
@@ -259,7 +260,7 @@ export function noteList(onChoose: (id: NoteId, card: Card) => unknown, {
       });
     }
   });
-  panel.addEventListener("keyup", event => showKeys(event.metaKey));
+  panel.addEventListener("keyup", event => showKeys(primaryPressed(event)));
   panel.addEventListener("focusout", event => {
     if (!panel.contains(event.relatedTarget as Node | null)) {
       showKeys(false);

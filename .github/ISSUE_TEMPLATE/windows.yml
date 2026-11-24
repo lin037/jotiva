@@ -1,5 +1,5 @@
 name: Windows 使用反馈 / Windows feedback
-description: 分享使用需求，或反馈 Windows 预览版的问题
+description: 分享 Windows 上的使用场景或报告桌面集成问题
 body:
   - type: input
     id: system
@@ -11,11 +11,11 @@ body:
   - type: input
     id: build
     attributes:
-      label: 预览版版本（如已安装）/ Preview build, if installed
+      label: Jotiva 版本与安装来源 / App version and installer source
   - type: textarea
     id: workflow
     attributes:
       label: 你想完成的操作或遇到的问题 / Workflow or problem
-      description: 如果你试用了预览版，请附安装来源、操作步骤和实际结果。
+      description: 请附操作步骤和实际结果。涉及窗口挂载时，请写明宿主应用。
     validations:
       required: true

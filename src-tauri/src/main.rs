@@ -1,8 +1,12 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+use crate::platform::{HostBackend, Native};
+
 mod desktop;
 mod events;
 mod host;
 mod library;
 mod menus;
+mod platform;
 mod settings;
 mod storage;
 mod windows;
@@ -46,8 +50,8 @@ fn initial_note(app: AppHandle) -> Option<NoteId> {
 }
 
 #[tauri::command]
-fn show_main(app: AppHandle, id: Option<NoteId>) -> Result<(), String> {
-    desktop::open_main(&app, id)
+async fn show_main(app: AppHandle, id: Option<NoteId>) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::open_main(&app, id)).await
 }
 
 #[tauri::command]
@@ -55,21 +59,10 @@ async fn open_document_window(app: AppHandle, id: Option<NoteId>) -> Result<(), 
     if desktop::quitting(&app) {
         return Ok(());
     }
-    let id = match id {
-        Some(id) => id,
-        None => {
-            let (sender, receiver) = tokio::sync::oneshot::channel();
-            app.run_on_main_thread(move || {
-                let _ = sender.send(folders::new_document_name());
-            })
-            .map_err(|e| e.to_string())?;
-            let Some(name) = receiver.await.map_err(|e| e.to_string())?? else {
-                return Ok(());
-            };
-            library::file_actions::create_archive_note(app.clone(), None, name).await?
-        }
-    };
-    show_document(&app, id)
+    match id {
+        Some(id) => show_document(&app, id),
+        None => platform::dialogs::new_document_window(app).await,
+    }
 }
 
 fn show_document(app: &AppHandle, id: NoteId) -> Result<(), String> {
@@ -92,14 +85,18 @@ fn return_to_host(window: WebviewWindow, id: Option<NoteId>) -> Result<(), Strin
     {
         let owner = window.state::<RwLock<Notes>>().read().unwrap().host(id);
         if let Some(owner) = owner {
-            host::raise(owner).ok_or("宿主窗口已关闭")?;
+            Native::raise(owner).ok_or("宿主窗口已关闭")?;
         }
     }
     Ok(())
 }
 
 #[tauri::command]
-fn tile_document(window: WebviewWindow, id: NoteId) -> Result<(), String> {
+async fn tile_document(window: WebviewWindow, id: NoteId) -> Result<(), String> {
+    windows::on_main_thread(move || tile_from(&window, id)).await
+}
+
+fn tile_from(window: &WebviewWindow, id: NoteId) -> Result<(), String> {
     let app = window.app_handle();
     if window.label() != windows::MAIN && windows::document_id(window.label()) != Some(id) {
         return Err("请从文档窗口并排编辑".into());
@@ -126,25 +123,32 @@ fn tile_document(window: WebviewWindow, id: NoteId) -> Result<(), String> {
     let document = app
         .get_webview_window(&format!("document-{id}"))
         .ok_or("文档窗口已关闭")?;
-    windows::tile(&window, &main, &document).map_err(|e| e.to_string())
+    windows::tile(window, &main, &document).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn show_settings(app: AppHandle, section: Option<windows::SettingsSection>) -> Result<(), String> {
-    if desktop::quitting(&app) {
+async fn show_settings(
+    app: AppHandle,
+    section: Option<windows::SettingsSection>,
+) -> Result<(), String> {
+    open_settings(&app, section)
+}
+
+fn open_settings(app: &AppHandle, section: Option<windows::SettingsSection>) -> Result<(), String> {
+    if desktop::quitting(app) {
         return Ok(());
     }
-    windows::settings(&app, section).map_err(|error| error.to_string())
+    windows::settings(app, section).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn shortcut(app: AppHandle, action: Action) -> Result<(), String> {
-    desktop::perform(&app, action)
+async fn shortcut(app: AppHandle, action: Action) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::perform(&app, action)).await
 }
 
 #[tauri::command]
-fn show_find(window: WebviewWindow, tiled: bool) -> Result<(), String> {
-    desktop::find_from(&window, tiled)
+async fn show_find(window: WebviewWindow, tiled: bool) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::find_from(&window, tiled)).await
 }
 
 #[tauri::command]
@@ -175,8 +179,8 @@ fn drag_window(window: WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn locate(window: WebviewWindow, id: NoteId) -> Result<(), String> {
-    desktop::locate_from(&window, id)
+async fn locate(window: WebviewWindow, id: NoteId) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::locate_from(&window, id)).await
 }
 
 #[tauri::command]
@@ -229,22 +233,22 @@ async fn list_sources(app: AppHandle) -> Result<Vec<SourceGroup>, String> {
 
 #[tauri::command]
 async fn source_choices(window: WebviewWindow) -> Result<Option<Vec<host::SourceChoice>>, String> {
-    host::sources(window.label()).await
+    Native::sources(window.label()).await
 }
 
 #[tauri::command]
 fn clear_source_choices(window: WebviewWindow) {
-    host::clear_sources(window.label());
+    Native::clear_sources(window.label());
 }
 
 #[tauri::command]
 fn register_source(app: AppHandle, choice: u64) -> Result<String, String> {
-    let target = host::register_source(choice)?;
+    let target = Native::register_source(choice)?;
     let state = app.state::<RwLock<Notes>>();
     let mut notes = state.write().unwrap();
     let result = notes.register_source(target.id, target.source());
     if result.is_err() && notes.latest(target.id).is_none() {
-        host::unwatch(target.id);
+        Native::unwatch(target.id);
     }
     drop(notes);
     if result.is_ok() {
@@ -254,33 +258,37 @@ fn register_source(app: AppHandle, choice: u64) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn attach_note(
+async fn attach_note(
     window: WebviewWindow,
     id: NoteId,
     choice: Option<u64>,
     source: Option<String>,
 ) -> Result<String, String> {
-    desktop::attach_note(&window, id, choice, source.as_deref())
+    windows::on_main_thread(move || desktop::attach_note(&window, id, choice, source.as_deref()))
+        .await
 }
 
 #[tauri::command]
-fn create_from_text(
+async fn create_from_text(
     app: AppHandle,
     text: String,
     choice: Option<u64>,
     source: Option<String>,
 ) -> Result<NoteId, String> {
-    desktop::create_from_text(&app, text, choice, source.as_deref())
+    windows::on_main_thread(move || {
+        desktop::create_from_text(&app, text, choice, source.as_deref())
+    })
+    .await
 }
 
 #[tauri::command]
-fn float_note(app: AppHandle, id: NoteId, standalone: bool) -> Result<(), String> {
-    desktop::float_note(&app, id, standalone)
+async fn float_note(app: AppHandle, id: NoteId, standalone: bool) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::float_note(&app, id, standalone)).await
 }
 
 #[tauri::command]
-fn recall_note(app: AppHandle, id: NoteId) -> Result<(), String> {
-    desktop::recall_note(&app, id)
+async fn recall_note(app: AppHandle, id: NoteId) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::recall_note(&app, id)).await
 }
 
 #[tauri::command]
@@ -308,8 +316,8 @@ fn close_source(app: AppHandle, key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn locate_source(app: AppHandle, key: String) -> Result<(), String> {
-    desktop::locate_source(&app, &key)
+async fn locate_source(app: AppHandle, key: String) -> Result<(), String> {
+    windows::on_main_thread(move || desktop::locate_source(&app, &key)).await
 }
 
 #[tauri::command]
@@ -330,7 +338,7 @@ fn source_at_drop(window: WebviewWindow) -> Result<host::DropTarget, String> {
     if window.label() != windows::MAIN && !windows::is_quick(window.label()) {
         return Err("请从文件树或便签浮窗拖出文档".into());
     }
-    host::source_at_drop()
+    Native::source_at_drop()
 }
 
 #[tauri::command]
@@ -347,8 +355,8 @@ fn list_folders(app: AppHandle) -> Vec<Folder> {
 }
 
 #[tauri::command]
-fn choose_folder() -> Result<Option<String>, String> {
-    folders::choose()
+async fn choose_folder() -> Result<Option<String>, String> {
+    folders::choose().await
 }
 
 #[tauri::command]
@@ -654,7 +662,7 @@ fn read_settings(app: AppHandle) -> SettingsView {
     SettingsView {
         preferences: settings.preferences.clone(),
         defaults: Preferences::default(),
-        trusted: host::permission(false),
+        trusted: Native::permission(false),
         shortcut_error: settings.shortcut_error.clone(),
         windows: desktop::counts(&app),
     }
@@ -702,7 +710,7 @@ fn record_shortcut(window: WebviewWindow, active: bool) -> Result<(), String> {
 
 #[tauri::command]
 fn accessibility_trusted() -> bool {
-    host::permission(false)
+    Native::permission(false)
 }
 
 #[tauri::command]
@@ -718,7 +726,7 @@ fn running_app_path() -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 fn request_accessibility(window: WebviewWindow) -> Result<bool, String> {
     desktop::hold_for_accessibility(&window, true);
-    let result = host::request_accessibility();
+    let result = Native::request_accessibility();
     if !matches!(result, Ok(false)) {
         desktop::hold_for_accessibility(&window, false);
     }
@@ -757,7 +765,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "search" => desktop::report(desktop::perform(app, Action::Search)),
             "overview" => desktop::report(desktop::show_find(app, true)),
             "dock" => desktop::report(desktop::perform(app, Action::Dock)),
-            "open-settings" => desktop::report(show_settings(app.clone(), None)),
+            "open-settings" => desktop::report(open_settings(app, None)),
             "quit" => desktop::report(desktop::request_quit(app)),
             _ => {}
         })
@@ -766,9 +774,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn main() {
-    let mut startup_files = Vec::new();
-    tauri::Builder::default()
-        .plugin(tauri_nspanel::init())
+    let mut startup_files = platform::startup_files();
+    platform::builder()
         .menu(menus::build)
         .on_menu_event(menus::handle)
         .setup(|app| {
@@ -811,6 +818,12 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+                && window.label() != windows::SETTINGS
+                && !platform::MACOS
+            {
+                workspace::open_drop(window.app_handle(), paths.clone());
+            }
             if window.label() == windows::SETTINGS
                 && matches!(event, WindowEvent::Focused(false) | WindowEvent::Destroyed)
             {
@@ -820,7 +833,7 @@ fn main() {
             if matches!(event, WindowEvent::Destroyed) {
                 desktop::window_destroyed(window.app_handle(), window.label());
                 let _ = menus::window_destroyed(window.app_handle(), window.label());
-                host::clear_sources(window.label());
+                Native::clear_sources(window.label());
             }
             if matches!(event, WindowEvent::Focused(true))
                 && !windows::is_quick(window.label())
@@ -844,8 +857,10 @@ fn main() {
             dismiss_quick,
             close_quick,
             drag_window,
-            menus::context_menu,
-            menus::copy_text,
+            #[cfg(target_os = "macos")]
+            platform::menu::context_menu,
+            #[cfg(target_os = "macos")]
+            platform::menu::copy_text,
             locate,
             quick_inactive,
             list_notes,
@@ -877,7 +892,8 @@ fn main() {
             workspace::workspace_children,
             workspace::open_library_file,
             workspace::choose_markdown_file,
-            workspace::open_dropped_markdown,
+            #[cfg(target_os = "macos")]
+            platform::file_drop::open_dropped_markdown,
             workspace::take_dropped_tabs,
             workspace::read_tab_titles,
             inbox_directory,
@@ -904,6 +920,7 @@ fn main() {
             refresh_editor_note,
             close_editor_window,
             document_menu,
+            menus::application_menu,
             menus::workspace_tab_menu,
             quit,
             cancel_quit,
@@ -928,6 +945,7 @@ fn main() {
             RunEvent::ExitRequested {
                 code: None, api, ..
             } => api.prevent_exit(),
+            #[cfg(target_os = "macos")]
             RunEvent::Opened { urls } => {
                 let paths = urls
                     .into_iter()
@@ -940,6 +958,7 @@ fn main() {
                     workspace::open_paths(app, paths);
                 }
             }
+            #[cfg(target_os = "macos")]
             RunEvent::Reopen {
                 has_visible_windows: false,
                 ..

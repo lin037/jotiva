@@ -1,5 +1,5 @@
 // No windows or Accessibility permission required: exercise the snapshot held around AX enumeration.
-#import "../../src-tauri/src/host/macos.m"
+#import "../../src-tauri/src/platform/macos/objc/host.m"
 
 static uint64_t publish(NSString *owner, uint64_t generation, NSDictionary *window) {
     NSMutableArray *rows = [@[@{@"app": @"会议", @"title": @"会议室"}] mutableCopy];

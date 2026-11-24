@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    ffi::{CStr, CString, c_char, c_void},
     fs, io,
     path::PathBuf,
     sync::{Mutex, RwLock},
@@ -20,17 +19,6 @@ use crate::{
     storage::{check_markdown, write_json},
     windows,
 };
-
-unsafe extern "C" {
-    fn jot_filing_credential(service: *const c_char, endpoint: *const c_char, action: i32) -> i32;
-    fn jot_filing_post(
-        service: *const c_char,
-        endpoint: *const c_char,
-        payload: *const c_char,
-        reply: *mut *mut c_char,
-    ) -> i64;
-    fn free(pointer: *mut c_void);
-}
 
 const DEFAULT_MODEL: &str = "jev-latest";
 
@@ -102,7 +90,7 @@ fn model_name(value: &str) -> Result<String, String> {
     Ok(name.into())
 }
 
-fn endpoint(value: &str) -> Result<tauri::Url, String> {
+pub(crate) fn endpoint(value: &str) -> Result<tauri::Url, String> {
     let value = value.trim();
     let (_, rest) = value.split_once("://").ok_or("请填写完整的服务地址")?;
     if value.contains('\\') || value.chars().any(char::is_whitespace) {
@@ -324,17 +312,8 @@ pub async fn filing_key(
     tauri::async_runtime::spawn_blocking(move || {
         let _edit = (action != KeyAction::Check).then(|| KEY_EDITS.lock().unwrap());
         let app = window.app_handle();
-        let service = CString::new(app.config().identifier.as_str()).unwrap();
-        let address = CString::new(url.as_str()).unwrap();
-        let has_key = match unsafe {
-            jot_filing_credential(service.as_ptr(), address.as_ptr(), action as i32)
-        } {
-            0 => false,
-            1 => true,
-            -2 => return Err("已取消配置密钥".into()),
-            -3 => return Err("密钥须由可打印的 ASCII 字符组成，不能包含空格和换行".into()),
-            _ => return Err("无法访问 macOS 钥匙串，请检查 Jotiva 的访问权限".into()),
-        };
+        let has_key =
+            crate::platform::filing::credential(&app.config().identifier, url.as_str(), action)?;
         if action != KeyAction::Check {
             let state = app.state::<Mutex<Filing>>();
             let mut filing = state.lock().unwrap();
@@ -436,22 +415,6 @@ fn send_request(
     }
 }
 
-// The C client allocates a NUL-terminated response only on success.
-fn native_response(
-    payload: &Value,
-    post: impl FnOnce(&CStr, *mut *mut c_char) -> i64,
-) -> (i64, Vec<u8>) {
-    let json = CString::new(payload.to_string()).unwrap();
-    let mut reply = std::ptr::null_mut();
-    let code = post(&json, &mut reply);
-    if reply.is_null() {
-        return (code, Vec::new());
-    }
-    let bytes = unsafe { CStr::from_ptr(reply) }.to_bytes().to_vec();
-    unsafe { free(reply.cast()) };
-    (code, bytes)
-}
-
 fn query_model(
     payload: &Value,
     folders: &[Folder],
@@ -496,8 +459,7 @@ fn classify(
         request(text, &folders, &config.model)?
     };
     let state = app.state::<Mutex<Filing>>();
-    let service = CString::new(app.config().identifier.as_str()).unwrap();
-    let url = CString::new(config.service_url()?).unwrap();
+    let url = config.service_url()?;
     query_model(&payload, &folders, |payload| {
         if state.lock().unwrap().pending_for_edit(id, version) != Some(ticket)
             || catalog.lock().unwrap().filing_candidates() != folders
@@ -505,9 +467,11 @@ fn classify(
             return Err("便签或归档设置已更改，请重新归档".into());
         }
         verify_saved_note(&notes.read().unwrap(), id, version)?;
-        Ok(native_response(payload, |json, reply| unsafe {
-            jot_filing_post(service.as_ptr(), url.as_ptr(), json.as_ptr(), reply)
-        }))
+        Ok(crate::platform::filing::post(
+            &app.config().identifier,
+            &url,
+            payload,
+        ))
     })
 }
 

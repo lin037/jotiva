@@ -1,5 +1,3 @@
-use std::ffi::{CString, c_char};
-
 use global_hotkey::hotkey::{Code, HotKey as Shortcut, Modifiers};
 use serde::Deserialize;
 
@@ -20,6 +18,8 @@ pub struct Command {
     pub id: String,
     pub label: String,
     pub key: Option<String>,
+    #[serde(rename = "desktopKey")]
+    desktop_key: Option<String>,
     pub menu: Option<String>,
 }
 
@@ -33,6 +33,15 @@ pub fn commands() -> &'static [Command] {
         .into_iter()
         .flat_map(|json| {
             serde_json::from_str::<Vec<Command>>(json).expect("invalid shortcut catalog")
+        })
+        .map(|mut command| {
+            if !crate::platform::MACOS && command.desktop_key.is_some() {
+                command.key = command.desktop_key.take()
+            }
+            command.key = command
+                .key
+                .map(|key| key.replace("Primary", primary_name()));
+            command
         })
         .collect()
     })
@@ -104,7 +113,7 @@ pub fn validate_local(preferences: &Preferences) -> Result<(), String> {
             // an editor block. In other windows the original editor key still works.
             if other_id == "returnHost"
                 && command.id == "editor.exit-block"
-                && key.mods == Modifiers::SUPER
+                && key.mods == primary_modifier()
                 && key.key == Code::Enter
             {
                 continue;
@@ -115,8 +124,34 @@ pub fn validate_local(preferences: &Preferences) -> Result<(), String> {
     Ok(())
 }
 
+fn primary_name() -> &'static str {
+    if crate::platform::MACOS {
+        "Super"
+    } else {
+        "Control"
+    }
+}
+fn primary_modifier() -> Modifiers {
+    if crate::platform::MACOS {
+        Modifiers::SUPER
+    } else {
+        Modifiers::CONTROL
+    }
+}
 fn reserved(key: Shortcut) -> bool {
     let mods = key.mods;
+    if !crate::platform::MACOS {
+        return (mods == (Modifiers::CONTROL | Modifiers::SHIFT) && key.key == Code::KeyZ)
+            || (mods == Modifiers::CONTROL && key.key == Code::Space)
+            || (mods == Modifiers::CONTROL
+                && matches!(
+                    key.key,
+                    Code::KeyC | Code::KeyV | Code::KeyX | Code::KeyA | Code::KeyZ | Code::KeyY
+                ))
+            || (mods == Modifiers::ALT && matches!(key.key, Code::Tab | Code::F4))
+            || mods.contains(Modifiers::SUPER)
+            || (mods.is_empty() && matches!(key.key, Code::F2 | Code::F6 | Code::Delete));
+    }
     (key.key == Code::Space && (mods == Modifiers::CONTROL || mods == Modifiers::SUPER))
         || (mods.contains(Modifiers::CONTROL | Modifiers::ALT) && !mods.contains(Modifiers::SUPER))
         || (key.key == Code::Tab && mods == Modifiers::SUPER)
@@ -132,64 +167,8 @@ fn reserved(key: Shortcut) -> bool {
         || (key.key == Code::Backspace && mods == Modifiers::SUPER)
 }
 
-const EVENT_HOTKEY_EXISTS: i32 = -9878;
-
-unsafe extern "C" {
-    fn jot_record_shortcut(window: *mut std::ffi::c_void, callback: extern "C" fn(*const c_char));
-    fn jot_hotkeys_start(callback: extern "C" fn(u32)) -> i32;
-    fn jot_hotkey_register(id: u32, key: *const c_char, modifiers: u32) -> i32;
-    fn jot_hotkey_unregister(id: u32) -> i32;
-}
-
-pub fn record(window: Option<&tauri::WebviewWindow>) -> Result<(), String> {
-    let window = window
-        .map(|w| w.ns_window())
-        .transpose()
-        .map_err(|e| e.to_string())?
-        .unwrap_or(std::ptr::null_mut());
-    unsafe { jot_record_shortcut(window, crate::desktop::recorded_shortcut) };
-    Ok(())
-}
-
-pub fn watch(callback: extern "C" fn(u32)) -> Result<(), String> {
-    let status = unsafe { jot_hotkeys_start(callback) };
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(format!("无法监听系统快捷键（macOS {status}）"))
-    }
-}
-
-fn register(key: Shortcut) -> Result<(), String> {
-    let code = CString::new(key.key.to_string()).expect("physical key names have no NUL");
-    let mut modifiers = 0;
-    for (mask, flag) in [
-        (1, Modifiers::CONTROL),
-        (2, Modifiers::SHIFT),
-        (4, Modifiers::ALT),
-        (8, Modifiers::SUPER),
-    ] {
-        if key.mods.contains(flag) {
-            modifiers |= mask;
-        }
-    }
-    let status = unsafe { jot_hotkey_register(key.id(), code.as_ptr(), modifiers) };
-    match status {
-        0 => Ok(()),
-        EVENT_HOTKEY_EXISTS => Err(format!("{key} 已被其他应用独占登记")),
-        _ => Err(format!("{key} 注册失败（macOS {status}）")),
-    }
-}
-
-fn unregister(keys: impl IntoIterator<Item = Shortcut>) -> Result<(), String> {
-    for key in keys {
-        let status = unsafe { jot_hotkey_unregister(key.id()) };
-        if status != 0 {
-            return Err(format!("{key} 注销失败（macOS {status}）"));
-        }
-    }
-    Ok(())
-}
+pub use crate::platform::shortcuts::{record, watch};
+use crate::platform::shortcuts::{register, unregister};
 
 impl Bindings {
     pub fn parse(preferences: &Preferences) -> Result<Self, String> {
@@ -207,14 +186,18 @@ impl Bindings {
                 .mods
                 .intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER)
             {
-                return Err("全局快捷键至少需要 Control、Option 或 Command 中的一项".into());
+                return Err("全局快捷键至少需要 Ctrl、Alt 或系统主修饰键中的一项".into());
             }
-            if (key.key == Code::Space
-                && (key.mods == Modifiers::CONTROL || key.mods == Modifiers::SUPER))
-                || (key.mods.contains(Modifiers::CONTROL | Modifiers::ALT)
-                    && !key.mods.contains(Modifiers::SUPER))
-            {
-                return Err("请保留 macOS 的输入法、Spotlight 和 VoiceOver 按键".into());
+            let reserved_space =
+                key.key == Code::Space && matches!(key.mods, Modifiers::CONTROL | Modifiers::SUPER);
+            let reserved_system = if crate::platform::MACOS {
+                key.mods.contains(Modifiers::CONTROL | Modifiers::ALT)
+                    && !key.mods.contains(Modifiers::SUPER)
+            } else {
+                key.key == Code::F4 && key.mods == Modifiers::ALT
+            };
+            if reserved_space || reserved_system {
+                return Err("请保留系统导航和输入法快捷键".into());
             }
             if bindings.iter().any(|(_, other)| other == &key) {
                 return Err("全局快捷键需要使用不同的组合".into());
@@ -286,14 +269,21 @@ mod tests {
             .iter()
             .find(|command| command.menu.as_deref() == Some("jot-open-file"))
             .unwrap();
-        assert_eq!(open.key(&preferences), Some("Super+KeyO"));
-        preferences
-            .local
-            .insert(open.id.clone(), Some("Super+Shift+KeyG".into()));
+        assert_eq!(
+            open.key(&preferences),
+            Some(format!("{}+KeyO", primary_name()).as_str())
+        );
+        preferences.local.insert(
+            open.id.clone(),
+            Some(format!("{}+Shift+F12", primary_name())),
+        );
         validate_local(&preferences).unwrap();
         let saved: Preferences =
             serde_json::from_slice(&serde_json::to_vec(&preferences).unwrap()).unwrap();
-        assert_eq!(open.key(&saved), Some("Super+Shift+KeyG"));
+        assert_eq!(
+            open.key(&saved),
+            Some(format!("{}+Shift+F12", primary_name()).as_str())
+        );
         preferences.local.insert(open.id.clone(), None);
         assert_eq!(open.key(&preferences), None);
         assert!(validate_local(&preferences).is_ok());
@@ -355,7 +345,12 @@ mod tests {
             ..Preferences::default()
         };
         assert!(Bindings::parse(&preferences).is_err());
-        for key in ["Ctrl+Space", "Super+Space", "Ctrl+Alt+J", "Shift+J", "J"] {
+        let reserved = if crate::platform::MACOS {
+            "Ctrl+Alt+J"
+        } else {
+            "Alt+F4"
+        };
+        for key in ["Ctrl+Space", "Super+Space", reserved, "Shift+J", "J"] {
             preferences.search = Some(key.into());
             assert!(Bindings::parse(&preferences).is_err(), "accepted {key}");
         }

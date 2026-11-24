@@ -1,8 +1,10 @@
+import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { report } from "../ui/dom";
 
 export function bindFileDrop() {
-  const markdown = /\.(md|markdown)$/iu;
+  if (!desktopPlatform.nativePasteboard) return;
+  const markdown = /\.(md|markdown|txt)$/iu;
   document.addEventListener("dragover", event => {
     if (event.dataTransfer?.types.includes("Files") && !document.querySelector("dialog[open]")) event.preventDefault();
   }, true);

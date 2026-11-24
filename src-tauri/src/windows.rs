@@ -2,8 +2,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, TitleBarStyle, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
 };
 
 use crate::{
@@ -13,47 +13,37 @@ use crate::{
     settings::appearance::Appearance,
 };
 
-use tauri_nspanel::{ManagerExt, WebviewWindowExt};
+pub type Builder<'a> = WebviewWindowBuilder<'a, tauri::Wry, AppHandle>;
 
-mod panel {
-    tauri_nspanel::tauri_panel!(JotNotePanel {
-        config: {
-            is_floating_panel: true,
-            can_become_key_window: true,
-            can_become_main_window: true,
-            becomes_key_only_if_needed: false,
-            hides_on_deactivate: false
-        }
+fn builder(app: &AppHandle, label: impl AsRef<str>) -> Builder<'_> {
+    let label = label.as_ref();
+    let platform = serde_json::json!({
+        "os": std::env::consts::OS,
+        "hostWindows": crate::platform::host_windows(),
     });
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
+        .on_navigation(|url| url.scheme() != "file")
+        .initialization_script(format!("window.__jotPlatform = {platform}"));
+    crate::platform::window::builder(builder, label)
+}
+
+/// Release the WebView IPC callback before creating another WebView2 controller.
+/// AppKit operations in the same command must still run on the UI thread.
+pub async fn on_main_thread<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let (send, receive) = tokio::sync::oneshot::channel();
+    crate::desktop::app()
+        .run_on_main_thread(move || {
+            let _ = send.send(task());
+        })
+        .map_err(|e| e.to_string())?;
+    receive.await.map_err(|e| e.to_string())?
 }
 
 pub const MAIN: &str = "main";
 pub const SETTINGS: &str = "settings";
 pub const QUICK: &str = "quick";
-
-unsafe extern "C" {
-    fn jot_tile_documents(
-        caller: *mut std::ffi::c_void,
-        left: *mut std::ffi::c_void,
-        right: *mut std::ffi::c_void,
-    );
-    fn jot_activating_note() -> bool;
-    fn jot_note_spaces(window: *mut std::ffi::c_void, follows_spaces: bool);
-    fn jot_focus_note(window: *mut std::ffi::c_void, move_to_host_space: bool);
-    fn jot_place_note(
-        window: *mut std::ffi::c_void,
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-        follows_spaces: bool,
-    );
-    fn jot_configure_quick_titlebar(
-        window: *mut std::ffi::c_void,
-        id: NoteId,
-        resized: extern "C" fn(NoteId, f64, f64, f64, f64),
-    );
-}
 
 #[derive(Clone, Copy)]
 pub enum QuickSize {
@@ -64,40 +54,19 @@ pub enum QuickSize {
     Overview,
 }
 
-pub fn note_spaces(window: &WebviewWindow, follows_spaces: bool) -> tauri::Result<()> {
-    unsafe { jot_note_spaces(window.ns_window()?, follows_spaces) };
-    Ok(())
-}
-
-pub fn activating_note() -> bool {
-    unsafe { jot_activating_note() }
-}
-
-pub fn tile(
-    caller: &WebviewWindow,
-    left: &WebviewWindow,
-    right: &WebviewWindow,
-) -> tauri::Result<()> {
-    unsafe {
-        jot_tile_documents(caller.ns_window()?, left.ns_window()?, right.ns_window()?);
-    }
-    Ok(())
-}
+pub use crate::platform::window::{activating_note, destroy_note, note_spaces, tile};
 
 pub fn main(app: &AppHandle) -> tauri::Result<()> {
     let window = match app.get_webview_window(MAIN) {
         Some(window) => window,
-        None => WebviewWindowBuilder::new(app, MAIN, WebviewUrl::default())
-            .disable_drag_drop_handler()
+        None => builder(app, MAIN)
             .title("Jotiva")
-            .title_bar_style(TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(LogicalPosition::new(15.0, 19.0))
             .inner_size(940.0, 640.0)
             .min_inner_size(580.0, 400.0)
             .visible(false)
             .build()?,
     };
+    crate::platform::prepare_caption(&window)?;
     window.show()?;
     window.set_focus()
 }
@@ -110,8 +79,7 @@ pub fn document(app: &AppHandle, id: NoteId, title: &str) -> tauri::Result<()> {
     let label = format!("document-{id}");
     let window = match app.get_webview_window(&label) {
         Some(window) => window,
-        None => WebviewWindowBuilder::new(app, label, WebviewUrl::default())
-            .disable_drag_drop_handler()
+        None => builder(app, label)
             .title(title)
             .inner_size(700.0, 560.0)
             .min_inner_size(380.0, 280.0)
@@ -119,6 +87,7 @@ pub fn document(app: &AppHandle, id: NoteId, title: &str) -> tauri::Result<()> {
             .build()?,
     };
     window.unminimize()?;
+    crate::platform::prepare_caption(&window)?;
     window.show()?;
     window.set_focus()
 }
@@ -141,7 +110,7 @@ pub fn settings(app: &AppHandle, section: Option<SettingsSection>) -> tauri::Res
             }
             window
         }
-        None => WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::default())
+        None => builder(app, SETTINGS)
             .title("Jotiva 设置")
             .inner_size(680.0, 510.0)
             .min_inner_size(475.0, 395.0)
@@ -153,7 +122,10 @@ pub fn settings(app: &AppHandle, section: Option<SettingsSection>) -> tauri::Res
             .visible(false)
             .build()?,
     };
+
+    crate::platform::prepare_caption(&window)?;
     window.show()?;
+
     window.set_focus()
 }
 
@@ -177,13 +149,9 @@ pub fn quick_window(app: &AppHandle, label: &str, id: NoteId) -> tauri::Result<W
     match app.get_webview_window(label) {
         Some(window) => Ok(window),
         None => {
-            let window = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
-                .disable_drag_drop_handler()
+            let window = builder(app, label)
                 .title("Jotiva 便签")
                 .inner_size(384.0, 352.0)
-                .title_bar_style(TitleBarStyle::Overlay)
-                .hidden_title(true)
-                .traffic_light_position(LogicalPosition::new(15.0, 19.0))
                 .resizable(true)
                 .minimizable(false)
                 .always_on_top(true)
@@ -191,27 +159,10 @@ pub fn quick_window(app: &AppHandle, label: &str, id: NoteId) -> tauri::Result<W
                 .focused(false)
                 .visible(false)
                 .build()?;
-            let panel = window.to_panel::<panel::JotNotePanel>()?;
-            panel.set_released_when_closed(false);
-            panel
-                .add_style_mask(tauri_nspanel::objc2_app_kit::NSWindowStyleMask::NonactivatingPanel)
-                .map_err(std::io::Error::other)?;
-            unsafe {
-                jot_configure_quick_titlebar(window.ns_window()?, id, crate::desktop::quick_resized)
-            };
+            crate::platform::window::configure(&window, id)?;
             Ok(window)
         }
     }
-}
-
-pub fn destroy_note(window: &WebviewWindow) -> tauri::Result<()> {
-    if let Ok(panel) = window.app_handle().get_webview_panel(window.label()) {
-        // Release a nonactivating panel's native keyboard ownership while it
-        // is still an NSPanel. to_window restores the original NSWindow class.
-        panel.hide();
-        panel.to_window();
-    }
-    window.destroy()
 }
 
 pub fn present(
@@ -263,24 +214,7 @@ pub fn present(
         centered,
         if docked { None } else { saved_origin },
     );
-    unsafe {
-        jot_place_note(
-            window.ns_window()?,
-            origin.x,
-            origin.y,
-            width,
-            height,
-            window.is_always_on_top()?,
-        )
-    };
-    if focus {
-        // Select this window before activating Jotiva across displays or Spaces.
-        unsafe { jot_focus_note(window.ns_window()?, target.is_some_and(|t| t.fullscreen)) };
-        tauri::Webview::set_focus(window.as_ref())?;
-    } else {
-        host::show_passive(window)?;
-    }
-    Ok(())
+    crate::platform::window::place(window, origin, width, height, target, focus)
 }
 
 pub fn default_note_position(screen: Rect, scale: f64) -> LogicalPosition<f64> {

@@ -1,3 +1,4 @@
+import { bindNewDocumentDialog } from "./desktop/window-actions";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { bindAppearance } from "./appearance/preferences";
 import { bindFileDrop } from "./desktop/file-drop";
@@ -16,6 +17,7 @@ const views = {
 const label = getCurrentWindow().label;
 const quick = label === "quick" || /^quick-[1-9]\d*$/.test(label);
 const id = /^document-([1-9]\d*)$/.exec(label)?.[1];
+void bindNewDocumentDialog().catch(report);
 bindTooltips();
 bindFocusRegions();
 if (label === "main" || quick || id) bindFileDrop();

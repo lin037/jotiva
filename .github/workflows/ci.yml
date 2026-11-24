@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'verify/**']
   pull_request:
   workflow_dispatch:
   workflow_call:
@@ -23,18 +23,49 @@ jobs:
       - run: pnpm build
       - run: pnpm test:unit
 
-  macos:
-    name: macOS Rust
-    runs-on: macos-15
-    timeout-minutes: 25
+  desktop:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Install Linux desktop libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev xvfb xauth dbus-x11 openbox xdotool zenity weston thunar fonts-noto-cjk
       - run: rustup show
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml -- --ignored --skip classifies_synthetic_notes
+
+      - uses: ./.github/actions/setup-web
+        if: runner.os != 'Windows'
+      - name: Exercise native AppKit editing and shortcuts
+        if: runner.os == 'macOS'
+        run: |
+          pnpm test:macos:storage
+          pnpm test:macos:shortcuts
+      - run: pnpm build
+        if: runner.os == 'Linux'
+      - name: Exercise the native Linux desktop
+        if: runner.os == 'Linux'
+        env:
+          GDK_BACKEND: x11
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          xvfb-run -a dbus-run-session -- python3 qa/linux-smoke.py
+          xvfb-run -a dbus-run-session -- python3 qa/linux-smoke.py --wayland
+          pnpm tauri build --debug --bundles deb
+          xvfb-run -a dbus-run-session -- python3 qa/linux-package.py src-tauri/target/debug/bundle/deb/*.deb
 
   webkit:
     name: WebKit and local integrations

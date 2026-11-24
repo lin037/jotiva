@@ -1,3 +1,5 @@
+import { secondaryTitlebar } from "../../ui/titlebar";
+import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { accentPreset, accentPresets } from "../../appearance/accent";
@@ -163,7 +165,7 @@ function mountFilingSettings(page: HTMLElement) {
   const keyActions = element("div", "settings-field-controls settings-css-actions");
   keyActions.append(configure, remove);
   keys.append(element("h2", undefined, "API 密钥"),
-    element("p", "settings-detail", "密钥保存在 macOS 钥匙串中，仅用于上方填写的服务地址。"),
+    element("p", "settings-detail", `密钥保存在${desktopPlatform.keyStore}中，仅用于上方填写的服务地址。`),
     keyStatus, keyActions, keyNotice);
   page.append(filing, keys);
 
@@ -271,6 +273,7 @@ function mountFilingSettings(page: HTMLElement) {
 }
 
 export async function mount() {
+  secondaryTitlebar("Jotiva 设置");
   root.className = "settings-view jot-settings";
   const current = await invoke<SettingsView>("read_settings");
   const content = element("main", "settings-content");
@@ -517,7 +520,7 @@ export async function mount() {
     event.stopPropagation();
     const value = recordedShortcut(event, recording.startsWith("global:"));
     if (value) acceptNative(value);
-    else status.textContent = "请按下包含 ⌘、⌃ 或 ⌥ 的组合键，或为应用内操作选择功能键。";
+    else status.textContent = desktopPlatform.recordingHint;
   }, true);
   window.addEventListener("blur", () => { if (recording) void record().catch(report); });
   await getCurrentWindow().listen<string>(events.shortcutRecorded, event => acceptNative(event.payload));
@@ -534,7 +537,8 @@ export async function mount() {
     element("p", "settings-detail", "授权后，Jotiva 可以关联指定窗口，在切回该窗口时显示对应便签。"),
     permission, requestAccess, help,
   );
-  panels.get("windows")!.append(authorization);
+  if (desktopPlatform.usesAccessibilityPermission) panels.get("windows")!.append(authorization);
+  else panels.get("windows")!.append(element("p","settings-detail",desktopPlatform.hostWindows ? "可以在窗口列表中选择要关联的应用窗口。" : "当前桌面支持独立速记。"));
 
   let stopCheckingPermission: (() => void) | undefined;
   function showPermission(trusted: boolean) {
@@ -556,7 +560,7 @@ export async function mount() {
     if (id === "filing") void loadFiling();
     stopCheckingPermission?.();
     stopCheckingPermission = undefined;
-    if (id === "windows") {
+    if (id === "windows" && desktopPlatform.usesAccessibilityPermission) {
       stopCheckingPermission = watchAccessibility(showPermission, error => { permission.textContent = String(error); });
     }
   }

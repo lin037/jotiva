@@ -1,42 +1,37 @@
-# Jotiva Developer Guide
+# Jotiva developer guide
 
-[Project home](../../README.md) · [User guide](user-guide.md) · [简体中文](../developer-guide.md)
+[Project home](../../README.en.md) · [User guide](user-guide.md) · [中文](../developer-guide.md)
 
-Jotiva is a standalone Tauri 2 application. TypeScript implements the window views and editor session, Rust coordinates documents and windows, and Objective-C handles macOS integration. The Markdown editor comes from a pinned [component release](https://github.com/lin037/jot-md-engine/releases/tag/v0.3.1).
+Jotiva is a Tauri 2 app. The TypeScript side runs the interface and editing sessions. Rust handles disk writes, revisions, and window behavior. The Markdown editor comes from a pinned release of Jot Markdown Engine. [Jot Markdown Engine](https://github.com/lin037/jot-md-engine)
 
-## Run from source
+## Get a local build running
 
-Install the Xcode Command Line Tools, Rustup, Node.js 24, and pnpm 11.11.0. The repository pins Rust 1.100.0. Run these commands from the directory containing Jotiva’s `package.json`.
+Install Rust through rustup, Node.js 24, and pnpm 11.11.0. Rustup picks up Rust 1.100.0 from the repository's toolchain file. On macOS, install the Xcode Command Line Tools. On Windows, install the MSVC desktop C++ tools and WebView2. On Linux, install the development packages for GTK, WebKitGTK 4.1, AppIndicator, OpenSSL, and libxdo. [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+
+Run these from the checkout.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-Vite serves the development UI at `127.0.0.1:1420`. Use the Tauri command to test native windows and file operations. Keep both lockfiles in version control.
+Vite serves the interface at `127.0.0.1:1420`. Use `pnpm tauri dev` when you need file dialogs, native menus, or window attachment. If you work in both Windows and WSL, install the frontend dependencies separately in each environment.
 
-## Where to make a change
+## Where to start reading
 
-| Directory | Responsibility |
+| If you're changing… | Start here |
 | --- | --- |
-| `src/views/` | Main, quick note, settings, and independent document views. Keep window-specific components near the view they serve. |
-| `src/editor/` | Editor sessions, revision sync, saving, worker integration, and editor layout. |
-| `src/desktop/`, `src/ui/`, `src/appearance/`, `src/styles/` | Frontend IPC and window actions, reusable controls, and appearance. |
-| `src-tauri/src/main.rs`, `events.rs` | Commands, shared state, and event contracts. |
-| `src-tauri/src/desktop.rs`, `windows.rs`, `host/` | Window lifecycle, host observation, positioning, and focus. |
-| `src-tauri/src/library/`, `storage.rs`, `settings/` | Notes and file operations, persistence, and preferences. |
-| `qa/` | WebKit and native macOS regression scripts. |
+| The workspace, settings, or editor | `src/views/` for each window's UI. `src/editor/` holds the session, worker, and save queue. |
+| Calls between the frontend and Rust | `src/desktop/` for frontend calls and types. `src-tauri/src/main.rs` for Tauri commands and setup. |
+| When a quick note appears or hides | `src-tauri/src/desktop.rs` for the decisions. `windows.rs` for presentation and focus. |
+| What happens to a file on save | Follow the save queue in `src/editor/note-editor.ts` through the Rust `save_note` command to `Notes::save`. File operations live in `src-tauri/src/library/` and `storage.rs`. |
+| A feature that depends on the operating system | `src-tauri/src/platform/` for host windows, file managers, storage operations, and credentials. |
+| Tests | `qa/` for WebKit checks, native desktop scenarios, and package checks. |
 
-Use strict TypeScript and format Rust with rustfmt. For IPC changes, check the frontend caller, the Rust handler, and which windows receive the event. Use existing file operations when changing storage and verify what happens on failure and restart. The [architecture notes](../architecture.md) describe the save path and window lifecycle.
+The host-window and file-manager interfaces live in `platform/contract.rs`. Look for a shared Tauri API first. When a feature needs a native call, put it in the matching platform module. Keep the behavior that all three platforms share in the existing window or document code. [Architecture notes (中文)](../architecture.md)
 
-## Verify and contribute
+## Test your changes
 
-Run `pnpm build`, `pnpm test:unit`, and `pnpm test:rust`. The [testing guide](../verification.md) covers WebKit setup and native or visual tests. Native tests need a logged-in macOS desktop for keyboard, focus, and drag operations.
+Run `pnpm build`, `pnpm test:unit`, and `pnpm test:rust`. If you touch file handling, check what happens after a normal save, an interrupted save, and a conflict. If you change Jev filing, run `pnpm test:filing` against the local mock service. The test guide covers WebKit and the native checks for macOS, Windows, X11, and Wayland. [Test guide (中文)](../verification.md)
 
-When filing an issue, include the Jotiva version, macOS version, the smallest sample document, and expected and actual behavior. For a floating note, include the host app and display setup. Fork the repository and open a pull request for a change that can be verified on its own. Describe the checks you ran and update the user guide when a workflow changes.
-
-For filing changes, run `pnpm test:filing` against the local mock service. Use `pnpm test:macos:storage` to exercise saving and recovery on disk. [Jev request and response format](../architecture.md#jev-归档)
-
-## License
-
-Jotiva's source is available under the MIT License. Dependencies and fonts keep their respective licenses. After updating dependencies, run `python3 scripts/third-party-notices.py` (Python 3.10+) and include the updated notices in your change. [MIT License](../../LICENSE) · [Third-party notices](../../src-tauri/notices/THIRD-PARTY-NOTICES.txt)
+Use strict TypeScript and run rustfmt on Rust changes. Include both lockfiles when they change. In a bug report, give the Jotiva version, operating system, architecture, and the smallest sample that reproduces the issue. For window attachment, include the other app and your display setup. On Linux, say whether you're using X11 or Wayland. [Contributing](../../CONTRIBUTING.md)

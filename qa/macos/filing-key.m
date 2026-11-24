@@ -47,7 +47,7 @@ static OSStatus fixtureErase(CFDictionaryRef query) {
 #define SecItemAdd fixtureAdd
 #define SecItemUpdate fixtureUpdate
 #define SecItemDelete fixtureErase
-#import "../../src-tauri/src/settings/filing.m"
+#import "../../src-tauri/src/platform/macos/objc/filing.m"
 
 int main(void) {
     @autoreleasepool {

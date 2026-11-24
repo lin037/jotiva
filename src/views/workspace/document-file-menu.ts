@@ -1,3 +1,5 @@
+import { fileName } from "../../ui/file-name";
+import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
 import { notes, type Card, type NoteId } from "../../desktop/ipc";
 import type { NoteEditor } from "../../editor/note-editor";
@@ -19,8 +21,8 @@ export function noteActions(resolveId: () => NoteId | Promise<NoteId>, name: str
       await save(id);
       await openCopy(await invoke<NoteId>("note_action", { id, action: { kind: "duplicate" } }));
     } },
-    trash: { label: "移到废纸篓…", run: async () => {
-      if (await fileDialog("将“" + name + "”移到废纸篓？", "移到废纸篓") === undefined) return;
+    trash: { label: `移到${desktopPlatform.trash}…`, run: async () => {
+      if (await fileDialog(`将“${name}”移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`) === undefined) return;
       const id = await resolveId();
       await save(id);
       await invoke("note_action", { id, action: { kind: "trash" } });
@@ -45,8 +47,8 @@ export function documentPath(manage?: {
     const path = active?.file ?? active?.archivePath;
     if (!active || !path) return;
     const location = [
-      { label: "在 Finder 中显示", run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(path) },
+      { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
+      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
     ];
     if (!manage) {
       void popupMenu(event, location);
@@ -54,7 +56,7 @@ export function documentPath(manage?: {
     }
     const editor = manage.current();
     if (editor?.id !== active.id) return;
-    const name = active.file ? path.slice(path.lastIndexOf("/") + 1) : active.title;
+    const name = active.file ? fileName(path) : active.title;
     const actions = noteActions(() => editor.id, name, manage.openCopy, () => editor.save());
     void popupMenu(event, [
       ...location,
@@ -71,7 +73,7 @@ export function documentPath(manage?: {
     control,
     update(value?: Card) {
       card = value;
-      const path = value?.file ?? value?.archivePath ?? "";
+      const path = displayPath(value?.file ?? value?.archivePath ?? "");
       control.hidden = !path;
       if (control.dataset.fileMenuPath === path) return;
       label.textContent = control.dataset.fileMenuPath = control.title = path;

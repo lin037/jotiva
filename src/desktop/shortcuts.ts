@@ -1,3 +1,4 @@
+import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import commandRows from "./shortcut-commands.json";
@@ -5,9 +6,15 @@ import editorRows from "./shortcut-editor.json";
 import referenceRows from "./shortcut-reference.json";
 import { report } from "../ui/dom";
 
-export interface ShortcutCommand { id: string; label: string; group: string; key: string | null; menu?: string; editor?: string }
-export const commands: ShortcutCommand[] = [...commandRows, ...editorRows];
-export const fixedShortcuts = referenceRows as {group: string; label: string; key: string}[];
+export interface ShortcutCommand { id: string; label: string; group: string; key: string | null; desktopKey?: string | null; menu?: string; editor?: string }
+export const commands: ShortcutCommand[] = [...commandRows, ...editorRows].map((row: ShortcutCommand) => {
+  const key = desktopPlatform.shortcutSymbols ? row.key : row.desktopKey ?? row.key;
+  return {...row, key: key?.replace("Primary", desktopPlatform.primary) ?? null};
+});
+export const fixedShortcuts = referenceRows.flatMap(row => {
+  const key = desktopPlatform.shortcutSymbols ? row.key : "desktopKey" in row ? row.desktopKey : row.key.replace(/⌘/g, "Ctrl+").replace(/⇧/g, "Shift+").replace(/⌥/g, "Alt+").replace(/⌃/g, "Ctrl+").replace(/↩/g,"Enter");
+  return key ? [{...row, key}] : [];
+});
 export const globalActions = [["quick", "速记"], ["search", "查找便签和文档"], ["dock", "靠右收拢 / 还原"]] as const;
 export type GlobalAction = typeof globalActions[number][0];
 export type LocalBindings = Record<string, string | null>;
@@ -33,7 +40,9 @@ function normalized(chord: string): string {
 }
 export function shortcutLabel(chord: string | null | undefined) {
   if (!chord) return "未设置";
-  return normalized(chord).split("+").map(part => symbols[part] ?? part.replace(/^(Key|Digit)/, "")).join("");
+  const keys = normalized(chord).split("+");
+  if (desktopPlatform.shortcutSymbols) return keys.map(part => symbols[part] ?? part.replace(/^(Key|Digit)/, "")).join("");
+  return keys.map(part => ({Control:"Ctrl",Super:"Super"}[part] ?? (modifiers.includes(part) ? part : symbols[part] ?? part.replace(/^(Key|Digit)/,"")))).join("+");
 }
 export function effectiveShortcut(id: string, overrides: LocalBindings = local) {
   return Object.prototype.hasOwnProperty.call(overrides, id) ? overrides[id] : byId.get(id)?.key ?? null;

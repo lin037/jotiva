@@ -1,0 +1,20 @@
+{
+  "bundle": {
+    "category": "Productivity",
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "installer/Jotiva.desktop.hbs",
+        "recommends": [
+          "libsecret-tools",
+          "zenity",
+          "gnome-keyring",
+          "fonts-noto-cjk"
+        ]
+      }
+    }
+  }
+}

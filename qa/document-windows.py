@@ -11,7 +11,7 @@ import threading
 from playwright.sync_api import expect, sync_playwright
 
 PROJECT = Path(__file__).resolve().parents[1]
-IPC = r"""
+IPC = (PROJECT / "qa/macos/browser-env.js").read_text() + r"""
 const label = new URL(location.href).searchParams.get("window");
 // Hold one real engine request so local typing can happen while it is in flight.
 window.workerMetrics = {live: 0, created: 0, peak: 0};
@@ -300,7 +300,13 @@ def check_tabs_and_edges(page):
         assert max(abs(delta) for delta in offsets) <= 1, (end, offsets)
     scroll = page.locator(".cm-scroller")
     scroll.hover()
-    page.mouse.wheel(0, 300000)
+    # WebKitGTK caps the distance delivered by one wheel event. Use real wheel
+    # input until the same bottom-edge assertion holds on either WebKit port.
+    for _ in range(80):
+        if scroll.evaluate("e => e.scrollTop > 0 && e.scrollHeight - e.clientHeight - e.scrollTop <= 1"):
+            break
+        page.mouse.wheel(0, 300000)
+        page.wait_for_timeout(100)
     page.wait_for_function("() => { const e=document.querySelector('.cm-scroller'); return e.scrollTop > 0 && e.scrollHeight - e.clientHeight - e.scrollTop <= 1; }")
     page.mouse.wheel(0, -600)
     page.wait_for_function("() => { const e=document.querySelector('.cm-scroller'); return e.scrollHeight - e.clientHeight - e.scrollTop > 100; }")

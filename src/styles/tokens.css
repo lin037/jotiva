@@ -119,3 +119,8 @@
     --jot-shadow-popup: 0 0.3rem 1.5rem #04070b88;
   }
 }
+
+:root:is([data-platform="windows"], [data-platform="linux"]) {
+  --jot-titlebar-leading-inset: var(--jot-space-3);
+  --jot-quick-leading-inset: var(--jot-space-3);
+}

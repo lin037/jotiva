@@ -9,7 +9,7 @@ from threading import Thread
 from playwright.sync_api import expect, sync_playwright
 
 PROJECT = Path(__file__).resolve().parents[1]
-IPC = r"""
+IPC = (PROJECT / "qa/macos/browser-env.js").read_text() + r"""
 const note = { id:1, source:'Jotiva', version:1, markdown:'# 项目记录\n\n正文\n\n## 会议纪要\n\n计划\n\n# 下一章\n\n尾段' };
 const card = {...note, title:'项目记录', excerpt:'正文', folder:null, attached:false};
 const appearance = { baseSize:null, systemSize:13, mode:'system', accent:null,

@@ -1,0 +1,38 @@
+@layer jot-ui {
+  .secondary-titlebar, :root[data-platform]:not([data-platform="macos"]) .workspace-titlebar {
+    display: grid;
+    align-items: center;
+    flex: none;
+    height: max(42px, var(--jot-titlebar-height));
+    background: var(--jot-color-chrome);
+    border-block-end: var(--jot-line-width) solid var(--jot-color-line);
+    user-select: none;
+  }
+  :root[data-platform]:not([data-platform="macos"]) .workspace-titlebar {
+    grid-template-columns: auto minmax(6rem, 1fr) auto auto;
+  }
+  :root[data-platform]:not([data-platform="macos"]) .workspace-search {
+    width: 100%;
+    max-width: var(--jot-search-width);
+    justify-self: center;
+  }
+  .secondary-titlebar { grid-template-columns: 1fr minmax(0, auto) 1fr; padding-inline-start: 10px; }
+  .secondary-titlebar > button { justify-self: start; }
+  .caption-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  body:has(> .secondary-titlebar) { display: flex; flex-direction: column; height: 100dvh; }
+  body:has(> .secondary-titlebar) > #app { flex: 1; min-height: 0; height: auto; }
+  .caption-controls {
+    display: flex; align-items: stretch; align-self: stretch; justify-self: end;
+    order: 10; margin-inline-start: auto; color: var(--jot-color-muted);
+  }
+  .caption-controls .caption-button {
+    display: grid; place-items: center; width: 42px; min-width: 30px; height: 100%;
+    padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit;
+  }
+  .caption-controls .caption-button:hover { background: var(--jot-color-surface); color: var(--jot-color-text); }
+  .caption-controls .caption-button[data-caption="close"]:hover { background: #bd2536; color: white; }
+  .caption-controls .caption-button:focus-visible { outline-offset: -4px; }
+  .caption-controls .jot-icon { width: 14px; height: 14px; }
+  .quick-view .caption-button { width: 28px; }
+  @media (forced-colors: active) { .caption-controls .caption-button:hover { outline: 1px solid Highlight; } }
+}

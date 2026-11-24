@@ -1,3 +1,4 @@
+import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { copyText, popupMenu } from "../../ui/context-menu";
@@ -61,7 +62,8 @@ export async function librarySidebar(
       if (next) focusRow(next);
     }
   });
-  sidebar.append(bar, tree, source.panel);
+  sidebar.append(bar, tree);
+  if (desktopPlatform.hostWindows) sidebar.append(source.panel);
   const [initialFolders, inbox] = await Promise.all([folders.list(), folders.inbox()]);
   let items = initialFolders;
   let inWorkspace = true;
@@ -148,24 +150,24 @@ export async function librarySidebar(
       void popupMenu(event, [
         { label: "新建文档", run: () => createInArchive(row) },
         ...(group ? [{ label: "归档目录设置…", run: () => editFolder(group) }] : []),
-        { label: "在 Finder 中显示", run: () => invoke("reveal_file", { path: directory }) },
-        { label: "复制绝对路径", run: () => copyText(directory) },
+        { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
+        { label: "复制绝对路径", run: () => copyText(displayPath(directory)) },
       ]);
       return;
     }
     const path = row.dataset.file;
-    const name = path.slice(path.lastIndexOf("/") + 1);
+    const name = fileName(path);
     const resolveId = () => row.dataset.note ? Number(row.dataset.note) : openLibraryFile(path);
     const actions = noteActions(resolveId, name, open, saveOpenNote);
     void popupMenu(event, [
       { label: "打开", run: async () => open(await resolveId()) },
       { label: "在新窗口打开", run: async () => invoke("open_document_window", { id: await resolveId() }) },
-      { label: "挂载到窗口…", run: async () => attachOnSwitch(await resolveId()) }, null,
+      ...(desktopPlatform.hostWindows ? [{ label: "挂载到窗口…", run: async () => attachOnSwitch(await resolveId()) }] : []), null,
       { label: "重命名…", run: () => renameFile(row) },
       ...(row.dataset.archivePath ? [{ label: "移到归档目录…", run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
       actions.duplicate, null,
-      { label: "在 Finder 中显示", run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(path) },
+      { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
+      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
       { label: "复制相对路径", run: () => copyText(name) }, null, actions.trash,
     ]);
   });

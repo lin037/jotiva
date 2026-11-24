@@ -1,5 +1,4 @@
 use std::{
-    ffi::{CStr, c_char, c_void},
     fs, io,
     path::{Path, PathBuf},
 };
@@ -35,42 +34,7 @@ pub struct Folders {
     temporary_roots: Vec<PathBuf>,
 }
 
-unsafe extern "C" {
-    fn jot_choose_markdown() -> *mut c_char;
-    fn jot_new_document_name() -> *mut c_char;
-    fn jot_file_error(message: *const c_char);
-    fn jot_choose_folder() -> *mut c_char;
-    fn free(pointer: *mut c_void);
-}
-
-pub fn choose() -> Result<Option<String>, String> {
-    chosen_text(unsafe { jot_choose_folder() })
-}
-
-pub fn choose_markdown() -> Result<Option<String>, String> {
-    chosen_text(unsafe { jot_choose_markdown() })
-}
-
-pub fn new_document_name() -> Result<Option<String>, String> {
-    chosen_text(unsafe { jot_new_document_name() })
-}
-
-pub fn show_error(message: &str) {
-    let message = std::ffi::CString::new(message).expect("file error contains no NUL");
-    unsafe { jot_file_error(message.as_ptr()) }
-}
-
-fn chosen_text(path: *mut c_char) -> Result<Option<String>, String> {
-    if path.is_null() {
-        return Ok(None);
-    }
-    let result = unsafe { CStr::from_ptr(path) }
-        .to_str()
-        .map(str::to_owned)
-        .map_err(|_| "名称或路径不是有效的 UTF-8 文本".into());
-    unsafe { free(path.cast()) };
-    result.map(Some)
-}
+pub use crate::platform::dialogs::{choose, choose_markdown, show_error};
 
 impl Folders {
     pub fn load(file: PathBuf) -> io::Result<Self> {
@@ -207,7 +171,7 @@ fn markdown_paths(directory: &std::path::Path) -> Result<Vec<PathBuf>, String> {
     for child in fs::read_dir(directory).map_err(|e| e.to_string())? {
         let child = child.map_err(|e| e.to_string())?;
         if !child.file_name().to_string_lossy().starts_with('.')
-            && super::workspace::is_markdown(&child.path())
+            && super::workspace::is_document(&child.path())
             && child.file_type().map_err(|e| e.to_string())?.is_file()
         {
             paths.push(child.path());
@@ -274,7 +238,7 @@ mod tests {
         let note = old.join("already-here.md");
         fs::write(&note, "keep my note").unwrap();
         let alias = base.join("alias");
-        std::os::unix::fs::symlink(&old, &alias).unwrap();
+        crate::platform::test_links::directory(&old, &alias).unwrap();
         let config = base.join("folders.json");
         write_json(
             &config,
@@ -330,7 +294,7 @@ mod tests {
         ] {
             fs::write(imported.join(file), "# Existing file").unwrap();
         }
-        std::os::unix::fs::symlink(imported.join("a.md"), imported.join("link.md")).unwrap();
+        crate::platform::test_links::file(imported.join("a.md"), imported.join("link.md")).unwrap();
         let config = data.join("folders.json");
         write_json(
             &config,
@@ -348,7 +312,11 @@ mod tests {
         let added = folders.save(input(None, &imported, false), false).unwrap();
         assert_eq!(
             markdown_paths(&added.path).unwrap(),
-            [imported.join("a.md"), imported.join("B.MARKDOWN")]
+            [
+                imported.join("a.md"),
+                imported.join("B.MARKDOWN"),
+                imported.join("x.txt")
+            ]
         );
         assert_eq!(
             fs::read_to_string(imported.join("a.md")).unwrap(),

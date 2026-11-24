@@ -18,7 +18,7 @@ static AXError read_attributes(AXUIElementRef item, CFArrayRef attributes, AXCop
     return AXUIElementCopyMultipleAttributeValues(item, attributes, options, result);
 }
 #define AXUIElementCopyMultipleAttributeValues read_attributes
-#import "../../src-tauri/src/host/macos.m"
+#import "../../src-tauri/src/platform/macos/objc/host.m"
 #undef AXUIElementCopyMultipleAttributeValues
 
 @interface JotKeyboardPanel : NSPanel

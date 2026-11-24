@@ -224,7 +224,7 @@ char *jot_new_document_name(void) {
 
 char *jot_choose_markdown(void) {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedContentTypes = @[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"]];
+    panel.allowedContentTypes = @[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]];
     panel.canChooseDirectories = NO;
     if ([panel runModal] != NSModalResponseOK) return NULL;
     return strdup(panel.URL.fileSystemRepresentation);
@@ -232,7 +232,7 @@ char *jot_choose_markdown(void) {
 
 void jot_file_error(const char *message) {
     NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"无法打开 Markdown";
+    alert.messageText = @"无法打开文档";
     alert.informativeText = [NSString stringWithUTF8String:message];
     [alert runModal];
 }

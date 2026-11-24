@@ -4,8 +4,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Jotiva 版本和 macOS 版本 / Versions
-      placeholder: 0.1.0，macOS 15，Apple 芯片
+      label: Jotiva 版本、系统与架构 / Versions
+      placeholder: 0.1.1，Ubuntu 24.04，x64，Wayland
     validations:
       required: true
   - type: textarea
@@ -19,6 +19,6 @@ body:
     id: outcome
     attributes:
       label: 预期和实际结果 / Expected and actual behavior
-      description: 涉及窗口关联时，补充宿主应用、有无外接显示器和全屏状态。
+      description: 涉及窗口关联时，补充宿主应用、有无外接显示器、全屏状态。Linux 请注明 X11 或 Wayland。
     validations:
       required: true

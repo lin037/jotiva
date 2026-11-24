@@ -1,3 +1,4 @@
+use crate::platform::{HostBackend, Native};
 mod note_windows;
 use std::{
     collections::{HashMap, HashSet},
@@ -183,13 +184,18 @@ pub struct WindowCounts {
     pub quick: bool,
 }
 
+pub(crate) fn app() -> &'static AppHandle {
+    APP.get().expect("desktop initialized")
+}
+
 pub fn start(app: &AppHandle) -> Result<(), String> {
     assert!(APP.set(app.clone()).is_ok());
-    host::watch(host_event);
+    Native::watch(host_event);
     sync_recovery(app);
     shortcuts::watch(shortcut_pressed)
 }
 
+#[cfg(target_os = "macos")]
 pub extern "C" fn recorded_shortcut(chord: *const std::ffi::c_char) {
     if let Some(app) = APP.get() {
         // The native monitor calls synchronously with a NUL-terminated UTF-8 chord.
@@ -238,15 +244,11 @@ fn sync_recovery(app: &AppHandle) {
         .read()
         .unwrap()
         .pending_bindings();
-    host::recover(&pending, restored);
+    Native::recover(&pending, restored);
 }
 
-extern "C" fn restored(origin: NoteId, host: HostId, raw: *const std::ffi::c_char) -> bool {
+fn restored(origin: NoteId, host: HostId, identity: host::WindowIdentity) -> bool {
     let app = APP.get().expect("native observers started");
-    let Ok(identity) = serde_json::from_slice(unsafe { std::ffi::CStr::from_ptr(raw) }.to_bytes())
-    else {
-        return false;
-    };
     let state = app.state::<RwLock<Notes>>();
     let mut notes = state.write().unwrap();
     if !notes.restore(origin, host, &identity) {
@@ -263,25 +265,21 @@ extern "C" fn restored(origin: NoteId, host: HostId, raw: *const std::ffi::c_cha
 pub fn remember_host(app: &AppHandle, host: HostId) {
     let state = app.state::<RwLock<Notes>>();
     let missing = state.read().unwrap().needs_identity(host);
-    if missing && let Some(identity) = host::identity(host) {
+    if missing && let Some(identity) = Native::identity(host) {
         report(state.write().unwrap().remember(host, identity));
         sync_recovery(app);
     }
 }
 
-extern "C" fn captured(host: HostId, raw: *const std::ffi::c_char) {
+fn captured(host: HostId, identity: host::WindowIdentity) {
     let app = APP.get().expect("native observers started");
-    if let Ok(identity) =
-        serde_json::from_slice(unsafe { std::ffi::CStr::from_ptr(raw) }.to_bytes())
-    {
-        report(
-            app.state::<RwLock<Notes>>()
-                .write()
-                .unwrap()
-                .remember(host, identity),
-        );
-        sync_recovery(app);
-    }
+    report(
+        app.state::<RwLock<Notes>>()
+            .write()
+            .unwrap()
+            .remember(host, identity),
+    );
+    sync_recovery(app);
 }
 
 pub fn report(result: Result<(), String>) {
@@ -588,7 +586,7 @@ pub fn recent_document(app: &AppHandle) -> Option<NoteId> {
 }
 
 pub fn own_window_focused(app: &AppHandle, label: &str) {
-    if windows::activating_note() || !host::focused(false).own_app {
+    if windows::activating_note() || !Native::focused(false).own_app {
         return;
     }
     let state = app.state::<Mutex<Desktop>>();
@@ -655,14 +653,14 @@ fn on_host_change(app: &AppHandle, closed: u64, space_changed: bool) -> Result<(
     let state = app.state::<Mutex<Desktop>>();
     let pending = state.lock().unwrap().pending_locate;
     if let Some(pending) = pending {
-        let target = host::focused(false);
+        let target = Native::focused(false);
         let mut desktop = state.lock().unwrap();
         let on_target = target.pid == pending.pid;
         let cancelled = closed == pending.host
             || pending.requested.elapsed() > Duration::from_secs(2)
             || (!on_target && !target.own_app && target.pid != pending.from_pid);
         if !cancelled {
-            if !on_target || !host::resigned() || !target.has_window {
+            if !on_target || !Native::resigned() || !target.has_window {
                 return Ok(());
             }
             let owner = app
@@ -683,7 +681,7 @@ fn on_host_change(app: &AppHandle, closed: u64, space_changed: bool) -> Result<(
     }
     let waiting = state.lock().unwrap().attach_next.is_some();
     if waiting {
-        match host::focused_choice() {
+        match Native::focused_choice() {
             Ok(None) => {}
             result => {
                 let pending = state.lock().unwrap().attach_next.take();
@@ -703,7 +701,7 @@ fn on_host_change(app: &AppHandle, closed: u64, space_changed: bool) -> Result<(
             }
         }
     }
-    let target = host::focused(false);
+    let target = Native::focused(false);
     let mut moved_screen = false;
     if target.id != 0 {
         let mut desktop = state.lock().unwrap();
@@ -835,7 +833,7 @@ pub fn find_from(window: &WebviewWindow, tiled: bool) -> Result<(), String> {
 }
 
 pub fn show_find(app: &AppHandle, tiled: bool) -> Result<(), String> {
-    let target = host::focused(false);
+    let target = Native::focused(false);
     let state = app.state::<Mutex<Desktop>>();
     let mut desktop = state.lock().unwrap();
     if desktop.mode == Mode::Search(tiled) {
@@ -866,7 +864,7 @@ pub fn start_quick(app: &AppHandle, create: bool) -> Result<(), String> {
     if quitting(app) {
         return Ok(());
     }
-    let target = host::focused(true);
+    let target = Native::focused(true);
     let (target, selected, epoch) = {
         let state = app.state::<Mutex<Desktop>>();
         let mut desktop = state.lock().unwrap();
@@ -1103,9 +1101,9 @@ pub fn close_quick(window: &WebviewWindow, epoch: u64) -> Result<(), String> {
 }
 
 fn restore_host(target: Option<Target>, origin: i32) {
-    let raised = target.and_then(|target| host::raise(target.id)).is_some();
+    let raised = target.and_then(|target| Native::raise(target.id)).is_some();
     if !raised && origin != 0 {
-        host::activate(origin);
+        Native::activate(origin);
     }
 }
 
@@ -1139,6 +1137,7 @@ pub fn drag_quick(window: &WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())
 }
 
+#[cfg(any(windows, target_os = "macos"))]
 pub extern "C" fn quick_resized(id: NoteId, x: f64, y: f64, width: f64, height: f64) {
     let app = APP.get().expect("native observers started");
     let state = app.state::<Mutex<Desktop>>();
@@ -1208,7 +1207,7 @@ pub fn observe_document_drag(window: &WebviewWindow, started: bool) {
             .unwrap()
             .dragging_note = started;
     }
-    host::watch_drag(started);
+    Native::watch_drag(started);
 }
 
 pub fn end_quick_drag(window: &WebviewWindow) {
@@ -1300,7 +1299,7 @@ pub fn locate(app: &AppHandle, id: NoteId) -> Result<(), String> {
     let Some(owner) = owner else {
         return open_main(app, Some(id));
     };
-    let current = host::focused(false);
+    let current = Native::focused(false);
     let state = app.state::<Mutex<Desktop>>();
     let mut desktop = state.lock().unwrap();
     // Searching inside a note on this host already has the right window behind it.
@@ -1313,7 +1312,7 @@ pub fn locate(app: &AppHandle, id: NoteId) -> Result<(), String> {
         desktop.target = Some(current);
     } else if !searching_here {
         drop(desktop);
-        let target = host::raise(owner).ok_or("无法激活挂载窗口，请重试")?;
+        let target = Native::raise(owner).ok_or("无法激活挂载窗口，请重试")?;
         desktop = state.lock().unwrap();
         // AXRaise acknowledges a request before Workspace transfers keyboard ownership.
         // Resume when the selected document is frontmost and Jotiva has resigned activation.
@@ -1333,7 +1332,7 @@ pub fn locate(app: &AppHandle, id: NoteId) -> Result<(), String> {
 
 pub fn attach_on_activation(window: &WebviewWindow, id: NoteId) -> Result<(), String> {
     let app = window.app_handle();
-    if !host::permission(false) {
+    if !Native::permission(false) {
         return Err("辅助功能权限已关闭，请重新开始挂载。".into());
     }
     if !app
@@ -1375,7 +1374,7 @@ pub fn locate_source(app: &AppHandle, key: &str) -> Result<(), String> {
         .read()
         .unwrap()
         .live_source(key)?;
-    if host::raise(host).is_some() {
+    if Native::raise(host).is_some() {
         Ok(())
     } else {
         Err("窗口已关闭或无法激活".into())
@@ -1389,7 +1388,7 @@ pub fn close_source(app: &AppHandle, key: &str) -> Result<(), String> {
         .unwrap()
         .close_source(key)?;
     if let Some(host) = host {
-        host::unwatch(host);
+        Native::unwatch(host);
         app.state::<Mutex<Desktop>>()
             .lock()
             .unwrap()
@@ -1428,7 +1427,7 @@ pub fn notes_removed(app: &AppHandle, ids: &[NoteId]) {
             item.selected = notes.latest(*host_id);
         }
         if item.selected.is_none() && !notes.is_registered(*host_id) {
-            host::unwatch(*host_id);
+            Native::unwatch(*host_id);
             false
         } else {
             true
@@ -1470,7 +1469,7 @@ pub fn attach_note(
             let unused = notes.latest(host).is_none() && !notes.is_registered(host);
             drop(notes);
             if unused {
-                host::unwatch(host);
+                Native::unwatch(host);
             }
             return Err(error);
         }
@@ -1509,7 +1508,7 @@ pub fn attach_note(
     }
     drop(desktop);
     if let Some((host, None, false)) = previous {
-        host::unwatch(host);
+        Native::unwatch(host);
     }
     if let Some(mode) = mode {
         report(transition(app, mode, false, false));
@@ -1536,7 +1535,7 @@ fn resolve_target(
 ) -> Result<Option<(HostId, String)>, String> {
     match (choice, source) {
         (Some(choice), None) => {
-            let host = host::register_source(choice)?;
+            let host = Native::register_source(choice)?;
             Ok(Some((host.id, host.source())))
         }
         (None, Some(source)) => {
@@ -1577,7 +1576,7 @@ pub fn create_from_text(
             && notes.latest(host).is_none()
             && !notes.is_registered(host)
         {
-            host::unwatch(host);
+            Native::unwatch(host);
         }
         return Err(error);
     }
@@ -1645,7 +1644,7 @@ pub fn detach(app: &AppHandle, id: NoteId) -> Result<(), String> {
         if latest.is_none() && !registered {
             desktop.attachments.remove(&host);
             drop(desktop);
-            host::unwatch(host);
+            Native::unwatch(host);
         }
     }
     sync_recovery(app);
@@ -1723,7 +1722,7 @@ pub fn release_note(app: &AppHandle, id: NoteId, from_quick: bool) {
     drop(notes);
     let empty_host = owner.filter(|_| next.is_none() && !explicitly_registered);
     if let Some(owner) = empty_host {
-        host::unwatch(owner);
+        Native::unwatch(owner);
     }
     let mut desktop = state.lock().unwrap();
     if let Some(owner) = empty_host {
@@ -1757,7 +1756,7 @@ pub fn note_saved(app: &AppHandle, id: NoteId) {
         notes.host(id).filter(|host| notes.needs_identity(*host))
     };
     if let Some(host) = host {
-        host::capture_identity(host, captured);
+        Native::capture_identity(host, captured);
     }
     let state = app.state::<Mutex<Desktop>>();
     let desktop = state.lock().unwrap();
@@ -1844,7 +1843,7 @@ pub fn window_destroyed(app: &AppHandle, label: &str) {
             desktop.attach_next = None;
         }
         if label == windows::MAIN || windows::is_quick(label) && desktop.dragging_note {
-            host::watch_drag(false);
+            Native::watch_drag(false);
         }
         if label == windows::QUICK {
             desktop.painted = None;
@@ -1876,7 +1875,7 @@ pub fn window_destroyed(app: &AppHandle, label: &str) {
         let state = app.state::<RwLock<Notes>>();
         let missing = state.read().unwrap().hosts_needing_identity();
         for host in missing {
-            if let Some(identity) = host::identity(host) {
+            if let Some(identity) = Native::identity(host) {
                 report(state.write().unwrap().remember(host, identity));
             }
         }
