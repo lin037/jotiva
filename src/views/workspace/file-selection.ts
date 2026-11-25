@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { deleteSelectionPressed } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
@@ -62,8 +63,8 @@ export function fileSelection(panel: HTMLElement, rename: (row: HTMLElement) => 
   }, true);
   async function mutate(files: string[], directory?: string) {
     if (!directory) {
-      const sample = files.slice(0, 3).map(fileName).join("、") + (files.length > 3 ? " 等" : "");
-      if (await fileDialog(`将选中的 ${files.length} 个文件移到${desktopPlatform.trash}？`, `移到${desktopPlatform.trash}`, undefined, sample) === undefined) return;
+      const sample = files.slice(0, 3).map(fileName).join("、") + (files.length > 3 ? t(" 等") : "");
+      if (await fileDialog(t("将选中的 {count} 个文件移到{trash}？", { count: files.length, trash: desktopPlatform.trash }), t("移到{trash}", { trash: desktopPlatform.trash }), { detail: sample }) === undefined) return;
     }
     await flush(files);
     await invoke("file_selection_action", { paths: files, action: directory ? { kind: "move", directory } : { kind: "trash" } });
@@ -80,9 +81,9 @@ export function fileSelection(panel: HTMLElement, rename: (row: HTMLElement) => 
     }
     event.stopImmediatePropagation();
     void popupMenu(event, [
-      { label: "复制绝对路径", run: () => copyText(files.map(displayPath).join("\n")) },
-      { label: "复制相对路径", run: () => copyText(files.map(relative).join("\n")) }, null,
-      { label: `移到${desktopPlatform.trash}…`, run: () => mutate(files) },
+      { label: t("复制绝对路径"), run: () => copyText(files.map(displayPath).join("\n")) },
+      { label: t("复制相对路径"), run: () => copyText(files.map(relative).join("\n")) }, null,
+      { label: t("移到{trash}…", { trash: desktopPlatform.trash }), run: () => mutate(files) },
     ]);
   }, true);
   panel.addEventListener("keydown", event => {

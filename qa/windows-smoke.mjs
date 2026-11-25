@@ -14,6 +14,17 @@ const buildTarget = path.join(target, "desktop-qa-build");
 const work = mkdtempSync(path.join(target, "windows-smoke-"));
 const dist = path.join(work, "dist");
 const data = path.join(work, "profile");
+// The installed copy can legitimately own the default global shortcut.
+mkdirSync(data, {recursive: true});
+writeFileSync(path.join(data, "settings.json"), JSON.stringify({quick:"Control+Shift+F9", search:null, dock:null}));
+writeFileSync(path.join(data, "appearance.json"), JSON.stringify({language:"en"}));
+const library = path.join(work, "library");
+mkdirSync(library);
+const nested = path.join(library, "posts");
+mkdirSync(nested);
+writeFileSync(path.join(nested, "a ' $ file.md"), "jotiva-drop-proof\n");
+for (let i = 1; i <= 31; i++) writeFileSync(path.join(library, "QA-find-" + String(i).padStart(2, "0") + ".md"), "Original " + i);
+writeFileSync(path.join(data, "workspace.json"), JSON.stringify([path.toNamespacedPath(library)]));
 const hostTitle = "Jotiva QA " + process.pid;
 const doc = path.join(work, "跨平台验收.txt");
 const lines = Array.from({length: 350}, (_, i) => "第 " + (i + 1) + " 行 · Plain text");
@@ -24,6 +35,7 @@ writeFileSync(hostPage, "<!doctype html><title>" + hostTitle + "</title><p>" + h
 cpSync(path.join(project, "dist"), dist, {recursive: true});
 cpSync(new URL("./windows/probe.js", import.meta.url), path.join(dist, "windows-probe.js"));
 cpSync(new URL("./desktop-probe.js", import.meta.url), path.join(dist, "probe.js"));
+cpSync(new URL("./terminal-probe.js", import.meta.url), path.join(dist, "terminal-probe.js"));
 const page = path.join(dist, "index.html");
 writeFileSync(page, readFileSync(page, "utf8").replace("</body>", '<script type="module" src="/probe.js?desktop-input=1&host=' + encodeURIComponent(hostTitle) + '"></script></body>'));
 const config = {identifier: "io.github.lin037.jot.desktop.qa" + process.pid,
@@ -56,9 +68,10 @@ try {
     for (const request of results.filter(s => s.startsWith("# QA input "))) {
       if (completed.has(request)) continue;
       const action = JSON.parse(request.slice("# QA input ".length));
+      const script = action.systemCommand ? "./windows/menu.ps1" : "./windows/input.ps1";
       const input = spawnSync("powershell.exe", ["-NoProfile", "-STA", "-NonInteractive", "-File",
-        fileURLToPath(new URL("./windows/input.ps1", import.meta.url))], {
-        env: {...process.env, JOT_QA_INPUT: JSON.stringify(action), JOT_QA_PID: String(app.pid),
+        fileURLToPath(new URL(script, import.meta.url))], {
+        env: {...process.env, JOT_QA_INPUT: JSON.stringify(action), JOT_QA_SYSTEM_COMMAND: String(action.systemCommand ?? 0), JOT_QA_PID: String(app.pid),
           JOT_QA_EDGE: String(host.pid), JOT_QA_HOST: hostTitle}, timeout: 12000, stdio: "inherit"
       });
       if (input.status !== 0) throw Error("Desktop input failed: " + action.name);
@@ -79,9 +92,19 @@ try {
     if (attempt >= 480) throw Error("Timed out waiting for WebView checks " + JSON.stringify(results.filter(s => s.startsWith("# QA "))));
     await delay(250);
   }
+  for (let attempt = 0; app.exitCode === null && attempt < 100; attempt++) await delay(100);
+  if (app.exitCode !== 0) throw Error("Confirmed quit did not exit cleanly");
   const selected = spawnSync("powershell.exe", ["-NoProfile", "-STA", "-NonInteractive", "-File",
     fileURLToPath(new URL("./windows/explorer.ps1", import.meta.url))], {env: {...process.env, JOT_QA_DOCUMENT: doc}, stdio: "inherit"});
   if (selected.status !== 0) throw Error("Explorer did not select the test document");
+  if (readFileSync(path.join(library, "QA-find-01.md"), "utf8") !== "Original 1" ||
+      !existsSync(path.join(library, "QA-find-01 (2).md"))) throw Error("Inline naming overwrote or lost a file");
+  const shellPid = Number(readFileSync(path.join(nested, "terminal-pid.txt"), "utf8"));
+  if (!Number.isSafeInteger(shellPid) || shellPid <= 0) throw Error("Invalid test shell PID");
+  try { process.kill(shellPid, 0); throw Error("Closed terminal shell is still running"); }
+  catch (error) { if (error.code !== "ESRCH") throw error; }
+  const context = readFileSync(path.join(work, "terminal-context.txt"), "utf8").trimEnd().split(/\r?\n/);
+  if (JSON.stringify(context) !== JSON.stringify([work, path.join(data, "notes", "其他")])) throw Error("Wrong terminal context: " + context);
   const saved = readFileSync(doc, "utf8");
   const edits = ["Desktop edit", "quick-sync", "main-sync"];
   if (!edits.every(edit => saved.includes(edit)) || edits.reduce((body, edit) => body.replace(edit, ""), saved) !== original) {

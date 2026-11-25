@@ -20,6 +20,7 @@ fn builder(app: &AppHandle, label: impl AsRef<str>) -> Builder<'_> {
     let platform = serde_json::json!({
         "os": std::env::consts::OS,
         "hostWindows": crate::platform::host_windows(),
+        "language": crate::i18n::language(),
     });
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .on_navigation(|url| url.scheme() != "file")
@@ -75,11 +76,12 @@ pub fn document_id(label: &str) -> Option<NoteId> {
     label.strip_prefix("document-")?.parse().ok()
 }
 
-pub fn document(app: &AppHandle, id: NoteId, title: &str) -> tauri::Result<()> {
+pub fn document(app: &AppHandle, id: NoteId, title: &str, name_on_open: bool) -> tauri::Result<()> {
     let label = format!("document-{id}");
     let window = match app.get_webview_window(&label) {
         Some(window) => window,
         None => builder(app, label)
+            .initialization_script(format!("window.__jotPlatform.nameOnOpen = {name_on_open}"))
             .title(title)
             .inner_size(700.0, 560.0)
             .min_inner_size(380.0, 280.0)
@@ -111,7 +113,7 @@ pub fn settings(app: &AppHandle, section: Option<SettingsSection>) -> tauri::Res
             window
         }
         None => builder(app, SETTINGS)
-            .title("Jotiva 设置")
+            .title(crate::i18n::t("Jotiva 设置"))
             .inner_size(680.0, 510.0)
             .min_inner_size(475.0, 395.0)
             .initialization_script(format!(
@@ -150,7 +152,7 @@ pub fn quick_window(app: &AppHandle, label: &str, id: NoteId) -> tauri::Result<W
         Some(window) => Ok(window),
         None => {
             let window = builder(app, label)
-                .title("Jotiva 便签")
+                .title(crate::i18n::t("Jotiva 便签"))
                 .inner_size(384.0, 352.0)
                 .resizable(true)
                 .minimizable(false)

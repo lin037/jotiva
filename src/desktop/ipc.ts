@@ -44,10 +44,10 @@ export interface NotePage {
   more: boolean;
 }
 
-export interface SearchPage {
-  current: Card[];
-  attached: Card[];
-  documents: Card[];
+export interface SearchPage<Item = Card> {
+  current: Item[];
+  attached: Item[];
+  documents: Item[];
   more: boolean;
 }
 
@@ -106,6 +106,7 @@ export const sources = {
 
 export const notes = {
   search: (query: string, host: number | null, page: number) => invoke<SearchPage>("search_notes", { query, host, page }),
+  searchFiles: (query: string) => invoke<string[]>("search_document_files", { query }),
   list: (query: string, offset: number, scope: Scope | null = null) => invoke<NotePage>("list_notes", { query, offset, scope }),
   read: (id: NoteId) => invoke<Note>("read_note", { id }),
   card: (id: NoteId) => invoke<Card>("read_card", { id }),

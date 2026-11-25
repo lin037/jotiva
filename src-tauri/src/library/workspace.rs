@@ -75,7 +75,7 @@ impl Workspace {
         Ok(())
     }
 
-    pub(super) fn resolve(&self, path: &Path) -> Result<PathBuf, String> {
+    pub(crate) fn resolve(&self, path: &Path) -> Result<PathBuf, String> {
         let path = fs::canonicalize(path).map_err(|error| error.to_string())?;
         if !self.roots.iter().any(|root| path.starts_with(root)) {
             return Err("文件已移出工作区".into());
@@ -84,23 +84,29 @@ impl Workspace {
     }
 }
 
+fn document_entry(child: fs::DirEntry) -> io::Result<Option<FileEntry>> {
+    let name = child.file_name().to_string_lossy().into_owned();
+    if name.starts_with('.') {
+        return Ok(None);
+    }
+    let kind = child.file_type()?;
+    let path = child.path();
+    // Directory links can leave a selected root or introduce cycles, including Windows junctions.
+    let directory = kind.is_dir() && !is_directory_link(&child);
+    Ok(
+        (directory || (kind.is_file() && is_document(&path))).then_some(FileEntry {
+            name,
+            path,
+            directory,
+        }),
+    )
+}
+
 fn entries(directory: &Path) -> io::Result<Vec<FileEntry>> {
     let mut children = Vec::new();
     for child in fs::read_dir(directory)? {
-        let child = child?;
-        let name = child.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
-        let kind = child.file_type()?;
-        let path = child.path();
-        // Traversing links can leave a chosen root or introduce directory cycles.
-        if kind.is_dir() || (kind.is_file() && is_document(&path)) {
-            children.push(FileEntry {
-                name,
-                path,
-                directory: kind.is_dir(),
-            });
+        if let Some(entry) = document_entry(child?)? {
+            children.push(entry);
         }
     }
     children.sort_by_cached_key(|child| (!child.directory, child.name.to_lowercase()));
@@ -148,6 +154,72 @@ pub async fn workspace_children(app: AppHandle, path: PathBuf) -> Result<Vec<Fil
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+/// Search filenames without opening documents or making them recently used.
+fn document_paths(roots: Vec<PathBuf>, archives: Vec<PathBuf>, query: &str) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut visited = HashSet::new();
+    let mut dirs: Vec<_> = roots.into_iter().map(|path| (path, true)).collect();
+    dirs.extend(archives.into_iter().map(|path| (path, false)));
+    let query = query.trim().to_lowercase();
+    while let Some((directory, recursive)) = dirs.pop() {
+        if !visited.insert((directory.clone(), recursive)) {
+            continue;
+        }
+        let Ok(children) = fs::read_dir(directory) else {
+            continue;
+        };
+        for entry in children
+            .flatten()
+            .filter_map(|child| document_entry(child).ok().flatten())
+        {
+            if recursive && entry.directory {
+                dirs.push((entry.path, true));
+            } else if !entry.directory && entry.name.to_lowercase().contains(&query) {
+                files.push(entry.path);
+            }
+        }
+    }
+    files.sort_unstable();
+    files.dedup();
+    files
+}
+
+#[cfg(windows)]
+fn is_directory_link(entry: &fs::DirEntry) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+    entry.metadata().map_or(true, |meta| {
+        meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    })
+}
+#[cfg(not(windows))]
+fn is_directory_link(_: &fs::DirEntry) -> bool {
+    false
+}
+
+#[tauri::command]
+pub async fn search_document_files(app: AppHandle, query: String) -> Result<Vec<PathBuf>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let roots = workspace_roots(app.clone());
+        let mut archives: Vec<_> = app
+            .state::<Mutex<folders::Folders>>()
+            .lock()
+            .unwrap()
+            .items
+            .iter()
+            .map(|f| f.path.clone())
+            .collect();
+        let notes = app.state::<RwLock<Notes>>();
+        archives.push(notes.read().unwrap().inbox_directory());
+        let mut files = document_paths(roots, archives, &query);
+        let notes = notes.read().unwrap();
+        files.retain(|path| notes.card_at_path(path).is_none());
+        files
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -323,6 +395,27 @@ pub async fn menu_add(app: &AppHandle) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::platform::test_links::directory as symlink;
+
+    #[test]
+    fn discovers_unopened_files_across_overlapping_roots_and_shallow_archives() {
+        let base = std::env::temp_dir().join(format!("jot-search-files-{}", std::process::id()));
+        let root = base.join("project");
+        let nested = root.join("sub");
+        let archive = base.join("archive");
+        fs::create_dir_all(&nested).unwrap();
+        fs::create_dir_all(archive.join("private")).unwrap();
+        for i in 0..28 {
+            fs::write(nested.join(format!("Match-{i}.txt")), "").unwrap();
+        }
+        fs::write(archive.join("match.md"), "").unwrap();
+        fs::write(archive.join("private/match.md"), "").unwrap();
+        fs::write(root.join(".match.md"), "").unwrap();
+        fs::write(root.join("match.bin"), "").unwrap();
+        let files = document_paths(vec![root, nested], vec![archive], " mAtCh ");
+        assert_eq!(files.len(), 29);
+        assert!(files.windows(2).all(|pair| pair[0] < pair[1]));
+        fs::remove_dir_all(base).unwrap();
+    }
 
     #[test]
     #[ignore = "capacity fixture with thousands of files"]

@@ -19,7 +19,8 @@ public static class MenuProbe {
     [DllImport("user32")] static extern bool SetCursorPos(int x, int y);
     [DllImport("user32")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
     [DllImport("user32")] static extern void mouse_event(uint flag, uint x, uint y, uint data, UIntPtr extra);
-    static void Select(uint process, string label, bool click) {
+    [DllImport("user32")] static extern uint GetMenuItemID(IntPtr menu, int pos);
+    static void Select(uint process, string label, bool click, uint command = 0) {
         for (int attempt = 0; attempt < 35; ++attempt) {
             IntPtr popup = IntPtr.Zero;
             while ((popup = FindWindowEx(IntPtr.Zero,popup,"#32768",null)) != IntPtr.Zero) {
@@ -30,7 +31,7 @@ public static class MenuProbe {
                 for (uint i = 0; i < GetMenuItemCount(menu); ++i) {
                     var text = new StringBuilder(128);
                     GetMenuString(menu,i,text,text.Capacity,0x400); // MF_BYPOSITION
-                    if (!text.ToString().Replace("&","").StartsWith(label)) continue;
+                    if (command != 0 ? GetMenuItemID(menu,(int)i) != command : !text.ToString().Replace("&","").StartsWith(label)) continue;
                     Rect rect;
                     if (!GetMenuItemRect(IntPtr.Zero,menu,i,out rect)) continue;
                     var at = new Point {X=(rect.Left+rect.Right)/2,Y=(rect.Top+rect.Bottom)/2};
@@ -48,15 +49,16 @@ public static class MenuProbe {
         }
         throw new InvalidOperationException("Native menu item unavailable: "+label);
     }
-    public static void OpenSettings(uint process) {
+    public static void OpenSettings(uint process, uint systemCommand) {
         SetThreadDpiAwarenessContext((IntPtr)(-4));
         Point previous;
         GetCursorPos(out previous);
         try {
-            Select(process,"\u5de5\u5177",false);
-            Select(process,"\u8bbe\u7f6e",true);
+            if (systemCommand != 0) { Select(process,"system menu",true,systemCommand); return; }
+            Select(process,"Tools",false);
+            Select(process,"Settings",true);
         } finally { SetCursorPos(previous.X,previous.Y); }
     }
 }
 "@
-[MenuProbe]::OpenSettings([uint32]$env:JOT_QA_PID)
+[MenuProbe]::OpenSettings([uint32]$env:JOT_QA_PID, [uint32]$env:JOT_QA_SYSTEM_COMMAND)

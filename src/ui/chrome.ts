@@ -1,7 +1,10 @@
+import { t, bindLabel, type Label } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { button, report } from "./dom";
 
 const glyphs = {
+  trash: "M3 4.5h10M6 4.5v-2h4v2M4.5 5l.6 8h5.8l.6-8M7 7v4m2-4v4",
+  terminal: "m2.5 4 4 4-4 4m6 0h5",
   menu: "M2.5 4h11m-11 4h11m-11 4h11",
   minimize: "M3 8.5h10",
   maximize: "M3.5 3.5h9v9h-9z",
@@ -40,13 +43,13 @@ export function icon(icon: keyof typeof glyphs) {
   return glyph;
 }
 
-export function iconButton(name: keyof typeof glyphs, label: string, action: () => unknown, key?: string, tip?: string) {
+export function iconButton(name: keyof typeof glyphs, label: Label, action: () => unknown, key?: string, tip?: Label) {
   const control = button("", action, "icon-button", tip);
-  control.setAttribute("aria-label", label);
+  bindLabel(control, "aria-label", label);
   if (key) {
     const shortcut = key.replace("⇧", "Shift+").replace("⌘", "Meta+").replace("Esc", "Escape");
     control.setAttribute("aria-keyshortcuts", shortcut);
-    control.setAttribute("aria-description", "快捷键 " + key);
+    bindLabel(control, "aria-description", () => t("快捷键 ") + key);
   }
   control.append(icon(name));
   return control;

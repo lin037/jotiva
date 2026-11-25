@@ -22,6 +22,46 @@ function insert(value) {
 
 export async function workspace(ctx) {
   const {id, run, waitFor, title} = ctx;
+  if (document.documentElement.lang !== "en") throw Error("Expected the saved English interface");
+  const search = document.querySelector(".workspace-search input");
+  const maximized = await run("plugin:window|is_maximized");
+  await input(ctx, "title bar system menu", {systemCommand: maximized ? 0xf120 : 0xf030});
+  document.querySelector(".titlebar-logo").dispatchEvent(new MouseEvent("contextmenu", {bubbles:true, cancelable:true}));
+  await waitFor(async () => await run("plugin:window|is_maximized") !== maximized, "native system menu window action");
+  document.querySelector('[data-caption="maximize"]').click();
+  await waitFor(async () => await run("plugin:window|is_maximized") === maximized, "restore window geometry");
+  const folder = document.querySelector("[data-directory]").dataset.directory;
+  for (const suffix of ["01", "02", "03"]) {
+    await run("open_library_file", {path: folder + "\\QA-find-" + suffix + ".md"});
+  }
+  editor().focus();
+  await input(ctx, "workspace search", {keys:["ControlKey","K"]});
+  await waitFor(() => search === document.activeElement, "Ctrl+K opens workspace search");
+  search.value = "QA-find-";
+  search.dispatchEvent(new Event("input", {bubbles:true}));
+  const results = document.querySelector("#jot-search-results");
+  // Ctrl+K also loads the unfiltered list. Wait for the typed query's own first batch.
+  await waitFor(() => {
+    const titles = [...results.querySelectorAll("[role=option] strong")];
+    return titles.length === 12 && titles.every(title => title.textContent.startsWith("QA-find-"));
+  }, "first mixed search batch");
+  for (const count of [24, 31]) {
+    results.scrollTop = results.scrollHeight;
+    await waitFor(() => results.querySelectorAll("[role=option]").length >= count, "search batch " + count);
+  }
+  search.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true}));
+  const dir = document.querySelector("[data-directory]");
+  dir.focus();
+  dir.dispatchEvent(new KeyboardEvent("keydown", {ctrlKey:true, key:"n", code:"KeyN", bubbles:true, cancelable:true}));
+  const name = await waitFor(() => document.querySelector('.tree-name-field input') === document.activeElement && document.activeElement, "inline name");
+  if (name.tagName !== "INPUT" || document.querySelector("dialog[open]")) throw Error("Expected inline naming");
+  name.value = "QA-find-01.md";
+  dir.focus();
+  await waitFor(() => document.querySelector('[data-file$="QA-find-01 (2).md"]'), "renamed workspace file");
+  await run("show_main", {id});
+  await waitFor(() => editor()?.textContent.includes("Desktop edit"), "original document restored");
+  const settings = await run("read_settings");
+  if (settings.shortcutError) throw Error(settings.shortcutError);
   const other = await run("new_note");
   await run("save_note", {id: other, version: 0, markdown: "Second tab"});
   await run("show_main", {id: other});
@@ -38,6 +78,11 @@ export async function workspace(ctx) {
     const card = await run("read_card", {id});
     return card.attached && card.source.includes(title);
   }, "tab dropped onto Edge");
+  await waitFor(async () => {
+    const error = document.querySelector(".error:not([hidden])");
+    if (error) throw Error(error.textContent);
+    return (await run("quick_view")).kind === "edit";
+  }, "mounted note presentation", 90);
   await waitFor(() => flag("quick-edited"), "mounted window editing", 800);
   await run("show_main", {id});
   await waitFor(() => editor()?.textContent.includes("quick-sync"), "mounted edit in workspace");
@@ -96,10 +141,10 @@ export async function mounted(ctx) {
   await waitFor(async () => (await run("read_note", {id})).markdown.includes("quick-sync"), "saved text");
   mark("quick-edited");
   await waitFor(() => flag("main-edited") && editor()?.textContent.includes("main-sync"), "pinned editor receives workspace edit");
-  const collapse = await waitFor(() => document.querySelector('.quick-edit-pane button[aria-label="折叠便签"]'), "fold action");
+  const collapse = await waitFor(() => document.querySelector('.quick-edit-pane button[aria-label="Collapse note"]'), "fold action");
   collapse.click();
   await waitFor(() => visible(document.querySelector(".quick-folded-bar [data-caption=close]")), "folded window controls");
-  await input(ctx, "global quick capture from Edge", {external: true, keys: ["ControlKey", "ShiftKey", "Space"]});
+  await input(ctx, "global quick capture from Edge", {external: true, keys: ["ControlKey", "ShiftKey", "F9"]});
   await waitFor(async () => document.querySelector(".quick-view[data-mode=edit]") && visible(editor()) &&
     editor().textContent.includes("main-sync") && await run("plugin:window|is_focused"), "global shortcut reopened mounted note");
   mark("quick-received");

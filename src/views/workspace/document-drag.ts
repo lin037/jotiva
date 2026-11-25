@@ -1,3 +1,4 @@
+import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,11 +22,11 @@ function payload(data: DataTransfer): Payload | undefined {
 }
 
 export async function attachOnSwitch(id: NoteId) {
-  if (!await allowWindowAccess("切换应用挂载")) return;
+  if (!await allowWindowAccess(t("切换应用挂载"))) return;
   const dialog = element("dialog", "sheet jot-dialog");
-  dialog.setAttribute("aria-label", "切换应用挂载");
-  const title = element("h2", undefined, "切换到要挂载的窗口");
-  const message = element("p", "form-message", `按 ${desktopPlatform.switchWindow} 或点选目标窗口。`);
+  bindLabel(dialog, "aria-label", localized("切换应用挂载"));
+  const title = element("h2", undefined, localized("切换到要挂载的窗口"));
+  const message = element("p", "form-message", () => t("按 {shortcut} 或点选目标窗口。", { shortcut: desktopPlatform.switchWindow }));
   message.setAttribute("role", "status");
   const actions = element("div", "sheet-actions");
   let waiting = true;
@@ -38,12 +39,12 @@ export async function attachOnSwitch(id: NoteId) {
     if (waiting) await invoke("cancel_attachment");
     waiting = false;
   }
-  actions.append(button("从列表选择…", async () => {
+  actions.append(button(localized("从列表选择…"), async () => {
     await cancel();
     dialog.close();
     const { windowPicker } = await import("./source-dialog");
-    windowPicker()("选择挂载窗口", "挂载", async choice => { await invoke("attach_note", { id, choice }); });
-  }), button("取消", () => dialog.close()));
+    windowPicker()(t("选择挂载窗口"), t("挂载"), async choice => { await invoke("attach_note", { id, choice }); });
+  }), button(localized("取消"), () => dialog.close()));
   dialog.addEventListener("close", () => {
     unlisten();
     void cancel().catch(report);
@@ -62,7 +63,6 @@ export function documentDrag(
   pick: (apply: (choice: number) => Promise<void>) => void,
   reveal: (source: string) => Promise<void>,
 ) {
-  if (!desktopPlatform.hostWindows) return;
   let outgoing: Payload | undefined;
   let highlighted: Element | undefined;
 
@@ -101,7 +101,11 @@ export function documentDrag(
       const selected = document.getSelection()?.toString();
       if (selected?.trim()) outgoing = { kind: "text", text: selected };
     }
-    if (outgoing) void invoke("observe_document_drag", { started: true }).catch(report);
+    if (desktopPlatform.hostWindows && outgoing) void invoke("observe_document_drag", { started: true }).catch(report);
+  });
+  if (!desktopPlatform.hostWindows) return;
+  document.addEventListener("drop", event => {
+    if (event.defaultPrevented) outgoing = undefined;
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") { outgoing = undefined; clearHighlight(); }

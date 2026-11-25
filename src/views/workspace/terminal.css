@@ -1,0 +1,64 @@
+@layer jot-ui {
+  .terminal-panel {
+    position: relative; display: flex; flex-direction: column; flex: none;
+    height: clamp(96px, 30vh, 240px); max-height: 75%; min-width: 0;
+    border-top: var(--jot-line-width) solid var(--jot-color-line);
+    color: var(--jot-color-text); background: var(--jot-color-bg);
+  }
+  .terminal-divider { position: absolute; z-index: 2; top: -3px; width: 100%; height: 6px; cursor: ns-resize; touch-action: none; }
+  .terminal-divider:focus-visible { outline: 2px solid var(--jot-color-accent); }
+  .terminal-heading {
+    display: flex; align-items: center; flex: none; gap: var(--jot-space-3);
+    min-height: 32px; padding: 0 var(--jot-space-2) 0 var(--jot-space-4);
+    background: var(--jot-color-chrome); border-bottom: 1px solid var(--jot-color-line);
+    font-size: var(--jot-type-small);
+  }
+  .terminal-heading > strong { font-weight: var(--jot-weight-semibold); color: var(--jot-color-text); }
+  .terminal-actions { display: flex; flex: none; align-items: center; margin-inline-start: auto; }
+  .terminal-panel .icon-button { width: 25px; height: 25px; min-width: 0; padding: 4px; }
+  .terminal-deck { flex: 1; min-height: 0; display: flex; container-type: inline-size; }
+  .terminal-body { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+  .terminal-screen { box-sizing: border-box; height: 100%; min-width: 0; overflow: hidden; padding: 5px 8px; }
+  .terminal-sessions { min-width: 0; }
+  .terminal-deck > .terminal-sessions {
+    width: clamp(9rem, 25%, 16rem); padding: 6px; overflow-y: auto;
+    background: var(--jot-color-sidebar);
+  }
+  .terminal-heading > .terminal-sessions { margin-inline-start: auto; max-width: 50%; }
+  .terminal-heading > .terminal-sessions + .terminal-actions { margin-inline-start: 0; }
+  .terminal-session { position: relative; display: flex; align-items: center; border-radius: var(--jot-radius); color: var(--jot-color-muted); }
+  .terminal-session:hover { background: var(--jot-color-hover); }
+  .terminal-deck .terminal-session:has([aria-selected="true"]) {
+    color: var(--jot-color-text);
+    background: color-mix(in srgb, var(--jot-color-text) 12%, var(--jot-color-sidebar));
+  }
+  .terminal-tab.jot-button {
+    display: flex; align-items: center; flex: 1; min-width: 0; gap: var(--jot-space-2);
+    min-height: 29px; padding: 2px 6px 2px 8px; border: 0; background: transparent; color: inherit;
+    font: inherit; font-size: var(--jot-type-body); text-align: start;
+  }
+  .terminal-tab .jot-icon { width: 15px; height: 15px; flex: none; }
+  .terminal-name, .terminal-folder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .terminal-name { min-width: 0; flex: 0 1 auto; }
+  .terminal-tab[aria-selected="true"] .terminal-name { font-weight: var(--jot-weight-semibold); }
+  .terminal-id { flex: none; color: var(--jot-color-muted); font-variant-numeric: tabular-nums; }
+  .terminal-folder { flex: 0 2 auto; color: var(--jot-color-muted); }
+  .terminal-session + .terminal-session { margin-block-start: 2px; }
+  @media (forced-colors: active) {
+    .terminal-tab[aria-selected="true"] { background: Highlight; color: HighlightText; }
+  }
+  .terminal-session.ended .terminal-name { text-decoration: line-through; }
+  .terminal-remove { position: absolute; inset-inline-end: 1px; opacity: 0; pointer-events: none; }
+  .terminal-session:is(:hover, :focus-within) .terminal-remove { opacity: 1; pointer-events: auto; }
+  .terminal-session:is(:hover, :focus-within) .terminal-tab { padding-inline-end: 27px; }
+  .terminal-tab:focus-visible, .terminal-remove:focus-visible { outline-offset: -2px; }
+  @container (max-width: 600px) {
+    .terminal-deck > .terminal-sessions { width: min(36%, 11.5rem); }
+    .terminal-deck .terminal-folder { display: none; }
+    .terminal-deck .terminal-name { flex-shrink: 1; }
+  }
+  .document-pane:has(> .terminal-maximized:not([hidden])) > :is(.editor-root, .document-empty, .workspace-footer) { display: none; }
+  .terminal-panel.terminal-maximized { flex: 1; max-height: none; }
+  .terminal-maximized .terminal-divider { display: none; }
+  .terminal-screen .xterm { height: 100%; }
+}

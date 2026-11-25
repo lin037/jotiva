@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { MarkdownEditor } from "@jot-md/editor";
 import { range, singleTextEdit } from "@jot-md/editor/adapter";
 
@@ -37,9 +38,9 @@ export async function applyIncoming(editor: MarkdownEditor, base: string, incomi
     try {
       await editor.transact(({ source, revision }) => {
         if (revision !== currentRevision || view.state.doc !== before) throw inputMoved;
-        if (source !== current) throw new Error("编辑器尚未确认本地输入，请保留编辑并重新加载");
+        if (source !== current) throw new Error(t("编辑器尚未确认本地输入，请保留编辑并重新加载"));
         const patch = incomingChange(base, source, incoming);
-        if (!patch) throw new Error("两个窗口修改了同一处内容，可将本窗口的编辑另存为副本");
+        if (!patch) throw new Error(t("两个窗口修改了同一处内容，可将本窗口的编辑另存为副本"));
         expected = source.slice(0, patch.range.from) + patch.insert + source.slice(patch.range.to);
         return {
           origin: "system",
@@ -55,6 +56,6 @@ export async function applyIncoming(editor: MarkdownEditor, base: string, incomi
     if (editor.value === expected) return true;
     // The source host keeps an optimistic keystroke that arrived during the worker request.
     // Wait for that input to commit and rebase the remote change against its confirmed source.
-    if (view.state.doc === before) throw new Error("编辑器没有应用新版本，请保留编辑并重新加载");
+    if (view.state.doc === before) throw new Error(t("编辑器没有应用新版本，请保留编辑并重新加载"));
   }
 }

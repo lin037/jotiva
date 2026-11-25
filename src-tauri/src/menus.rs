@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use std::{collections::HashMap, sync::Mutex};
 
 use tauri::{
@@ -85,12 +86,12 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
                     | "jot-outline"
                     | "jot-previous"
             );
-        MenuItem::with_id(app, id, label, enabled, key(id))
+        MenuItem::with_id(app, id, t(label), enabled, key(id))
     };
 
     let file = Submenu::with_items(
         app,
-        "文件",
+        t("文件"),
         true,
         &[
             &item("jot-new", "新建")?,
@@ -104,11 +105,11 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
         ],
     )?;
     file.append_items(&[&Native::separator(app)?, &item("jot-close", "关闭")?])?;
-    let edit = Submenu::with_items(app, "编辑", true, &[])?;
+    let edit = Submenu::with_items(app, t("编辑"), true, &[])?;
     if crate::platform::MACOS {
         edit.append_items(&[
-            &Native::undo(app, Some("撤销"))?,
-            &Native::redo(app, Some("重做"))?,
+            &Native::undo(app, Some(t("撤销")))?,
+            &Native::redo(app, Some(t("重做")))?,
         ])?;
     } else {
         edit.append_items(&[
@@ -118,16 +119,16 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     }
     edit.append_items(&[
         &Native::separator(app)?,
-        &Native::cut(app, Some("剪切"))?,
-        &Native::copy(app, Some("复制"))?,
-        &Native::paste(app, Some("粘贴"))?,
-        &Native::select_all(app, Some("全选"))?,
+        &Native::cut(app, Some(t("剪切")))?,
+        &Native::copy(app, Some(t("复制")))?,
+        &Native::paste(app, Some(t("粘贴")))?,
+        &Native::select_all(app, Some(t("全选")))?,
         &Native::separator(app)?,
         &item("document:search.open", "查找当前文档…")?,
     ])?;
     let paragraph = Submenu::with_items(
         app,
-        "段落",
+        t("段落"),
         true,
         &[
             &item("format:format.paragraph", "正文")?,
@@ -146,7 +147,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     )?;
     let format = Submenu::with_items(
         app,
-        "格式",
+        t("格式"),
         true,
         &[
             &item("format:format.bold", "粗体")?,
@@ -158,7 +159,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     let view = Submenu::with_id_and_items(
         app,
         "jot-view",
-        "显示",
+        t("显示"),
         true,
         &[
             &item("jot-sidebar", "显示或隐藏侧栏")?,
@@ -169,7 +170,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             &CheckMenuItem::with_id(
                 app,
                 "document:mode.live-preview",
-                "即时预览",
+                t("即时预览"),
                 false,
                 false,
                 key("document:mode.live-preview"),
@@ -177,7 +178,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             &CheckMenuItem::with_id(
                 app,
                 "document:mode.source",
-                "源码模式",
+                t("源码模式"),
                 false,
                 false,
                 key("document:mode.source"),
@@ -188,12 +189,19 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     let theme = Submenu::with_id_and_items(
         app,
         "jot-theme",
-        "主题",
+        t("主题"),
         true,
         &[
-            &CheckMenuItem::with_id(app, "jot-system", "跟随系统", true, true, key("jot-system"))?,
-            &CheckMenuItem::with_id(app, "jot-light", "浅色", true, false, key("jot-light"))?,
-            &CheckMenuItem::with_id(app, "jot-dark", "深色", true, false, key("jot-dark"))?,
+            &CheckMenuItem::with_id(
+                app,
+                "jot-system",
+                t("跟随系统"),
+                true,
+                true,
+                key("jot-system"),
+            )?,
+            &CheckMenuItem::with_id(app, "jot-light", t("浅色"), true, false, key("jot-light"))?,
+            &CheckMenuItem::with_id(app, "jot-dark", t("深色"), true, false, key("jot-dark"))?,
             &Native::separator(app)?,
             &item("jot-appearance", "外观设置…")?,
             &item("jot-remove-css", "关闭自定义 CSS")?,
@@ -202,11 +210,11 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     let window = Submenu::with_id_and_items(
         app,
         WINDOW_SUBMENU_ID,
-        "窗口",
+        t("窗口"),
         true,
         &[
-            &Native::minimize(app, Some("最小化"))?,
-            &Native::maximize(app, Some("缩放"))?,
+            &Native::minimize(app, Some(t("最小化")))?,
+            &Native::maximize(app, Some(t("缩放")))?,
             &Native::separator(app)?,
             &item("jot-main", "返回主窗口")?,
             &item("jot-return-host", "返回宿主")?,
@@ -223,7 +231,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
     let help = Submenu::with_id_and_items(
         app,
         HELP_SUBMENU_ID,
-        "帮助",
+        t("帮助"),
         true,
         &[&item("jot-shortcuts", "快捷键速查")?],
     )?;
@@ -233,12 +241,12 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             "Jotiva",
             true,
             &[
-                &Native::about(app, Some("关于 Jotiva"), None)?,
+                &Native::about(app, Some(t("关于 Jotiva")), None)?,
                 &item("jot-settings", "设置…")?,
                 &Native::separator(app)?,
-                &Native::hide(app, Some("隐藏 Jotiva"))?,
-                &Native::hide_others(app, Some("隐藏其他应用"))?,
-                &Native::show_all(app, Some("全部显示"))?,
+                &Native::hide(app, Some(t("隐藏 Jotiva")))?,
+                &Native::hide_others(app, Some(t("隐藏其他应用")))?,
+                &Native::show_all(app, Some(t("全部显示")))?,
                 &Native::separator(app)?,
                 &item("jot-quit", "退出 Jotiva")?,
             ],
@@ -251,8 +259,8 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
         )
     } else {
         file.append(&item("jot-quit", "退出 Jotiva")?)?;
-        let tools = Submenu::with_items(app, "工具", true, &[&item("jot-settings", "设置…")?])?;
-        help.append(&Native::about(app, Some("关于 Jotiva"), None)?)?;
+        let tools = Submenu::with_items(app, t("工具"), true, &[&item("jot-settings", "设置…")?])?;
+        help.append(&Native::about(app, Some(t("关于 Jotiva")), None)?)?;
         Menu::with_items(
             app,
             &[
@@ -352,8 +360,14 @@ pub fn workspace_tab_menu(window: tauri::WebviewWindow, multiple: bool) -> Resul
 }
 
 fn close_active(app: &AppHandle) -> Result<(), String> {
-    let multiple = app.state::<Mutex<Context>>().lock().unwrap().multiple_tabs;
-    crate::platform::window::close_active(app, multiple)
+    let state = app.state::<Mutex<Context>>();
+    let context = state.lock().unwrap();
+    let document = context.windows.contains_key(windows::MAIN);
+    let multiple = context.multiple_tabs;
+    drop(context);
+    let close_tab = multiple
+        || document && (cfg!(windows) || app.state::<crate::terminal::Terminal>().has_sessions());
+    crate::platform::window::close_active(app, close_tab)
 }
 
 pub fn sync(app: &AppHandle, label: Option<&str>) -> tauri::Result<()> {

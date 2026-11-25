@@ -1,3 +1,4 @@
+import { t, bindLabel, localized } from "../../i18n";
 import { titlebar as configureTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -16,6 +17,8 @@ import { documentDrag } from "./document-drag";
 import { documentPath } from "./document-file-menu";
 import { folderEditor, moveDocument } from "./folder-dialog";
 import { librarySidebar } from "./library-sidebar";
+import type { TerminalLocation } from "./terminal";
+import { fileDialog } from "../../ui/file-dialog";
 import { workspaceDividers } from "./pane-divider";
 import { windowPicker } from "./source-dialog";
 import "./workspace.css";
@@ -25,22 +28,22 @@ export async function mount() {
   const titlebar = element("header", "workspace-titlebar jot-titlebar");
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
-  const tabs = documentTabs(open, closeTab);
+  const tabs = documentTabs(open, closeTabs, saveOpenNote, openTerminal);
   const editorRoot = element("div", "editor-root");
   editorRoot.id = "workspace-editor-panel";
   const outline = element("aside", "workspace-outline jot-document-outline");
   outline.id = "document-outline";
   outline.hidden = true;
-  const outlineHeading = element("h2", "outline-heading", "文档大纲");
+  const outlineHeading = element("h2", "outline-heading", localized("文档大纲"));
   outlineHeading.id = "document-outline-heading";
   outline.setAttribute("aria-labelledby", outlineHeading.id);
   outline.append(outlineHeading);
   const empty = element("div", "document-empty");
   const startActions = element("div", "workspace-start-actions");
-  startActions.append(button("打开文档…", async () => {
+  startActions.append(button(localized("打开文档…"), async () => {
     const id = await invoke<NoteId | null>("choose_markdown_file");
     if (id !== null) await open(id);
-  }), button("新建文档", create));
+  }), button(localized("新建文档"), create));
   empty.append(startActions);
   const { footer, metadata, counter, status } = documentStatus();
   const windowMenu = element("div", "jot-window-menu");
@@ -48,7 +51,7 @@ export async function mount() {
   windowMenu.popover = "auto";
   windowMenu.dataset.noDrag = "";
   windowMenu.setAttribute("role", "group");
-  windowMenu.setAttribute("aria-label", "当前文档的窗口操作");
+  bindLabel(windowMenu, "aria-label", localized("当前文档的窗口操作"));
   const hostLabel = element("div", "workspace-host-label");
   editorRoot.hidden = footer.hidden = true;
   documentPane.append(tabs.bar, editorRoot, empty, footer);
@@ -67,7 +70,7 @@ export async function mount() {
     }).catch(report);
   });
   const pickWindow = windowPicker();
-  const addSource = () => pickWindow("添加来源窗口", "添加", async choice => {
+  const addSource = () => pickWindow(t("添加来源窗口"), t("添加"), async choice => {
     const key = await sources.add(choice);
     void library.showSource(key).catch(report);
   });
@@ -77,9 +80,9 @@ export async function mount() {
   const library = await librarySidebar(open, folder => {
     resumeMove = false;
     editFolder(folder);
-  }, addSource, (id, folder) => move(id, folder), saveOpenNote);
+  }, addSource, (id, folder) => move(id, folder), saveOpenNote, openTerminal);
   const move = moveDocument((result, folder) => {
-    status.textContent = result.warning ?? "已移动";
+    bindLabel(status, "text", () => result.warning ?? t("已移动"));
     void Promise.all([library.showFolder(folder), refreshCard()]).catch(report);
   }, () => {
     resumeMove = true;
@@ -121,9 +124,9 @@ export async function mount() {
     editor.setMenuContext(true, card.attached, card.file ? "file" : card.folder === null ? "draft" : "archive");
     library.setActive(id, card.file ?? card.archivePath);
     filePath.update(card);
-    const action = card.attached ? "更换宿主窗口" : "挂载到窗口";
-    sourceButton.textContent = action + "…";
-    sourceButton.setAttribute("aria-label", action);
+    const action = () => incoming.attached ? t("更换宿主窗口") : t("挂载到窗口");
+    bindLabel(sourceButton, "text", () => action() + "…");
+    bindLabel(sourceButton, "aria-label", action);
     hostLabel.hidden = !card.attached;
     hostLabel.textContent = card.attached ? card.source : "";
     hostLabel.title = hostLabel.textContent;
@@ -145,8 +148,8 @@ export async function mount() {
     if (!current) return;
     await current.save();
     if (current !== editor) return;
-    if (current.savedVersion === 0) throw new Error("请先输入并保存正文");
-    pickWindow(card?.attached ? "更换便签的宿主窗口" : "选择便签的宿主窗口", "挂载", async choice => {
+    if (current.savedVersion === 0) throw new Error(t("请先输入并保存正文"));
+    pickWindow(card?.attached ? t("更换便签的宿主窗口") : t("选择便签的宿主窗口"), t("挂载"), async choice => {
       const key = await notes.attach(current.id, choice);
       void Promise.all([library.showSource(key), refreshCard()]).catch(report);
     });
@@ -179,13 +182,16 @@ export async function mount() {
   }
 
   function closeActive() {
-    if (tabs.multiple && editor) return closeTab(editor.id);
+    if (editor) return closeTabs([editor.id]);
   }
 
-  function closeTab(id: NoteId) {
+  function closeTabs(ids: NoteId[]) {
     return enqueue(async () => {
-      if (editor?.id === id) await present(tabs.previous(), true);
-      else tabs.remove(id);
+      if (editor && ids.includes(editor.id)) {
+        const remaining = tabs.previous(id => !ids.includes(id));
+        await present(remaining, true);
+      }
+      for (const id of ids) tabs.remove(id);
     });
   }
 
@@ -207,7 +213,7 @@ export async function mount() {
     windowButton.disabled = outlineButton.disabled = true;
     windowMenu.hidePopover();
     editorRoot.replaceChildren();
-    status.textContent = "正在打开…";
+    bindLabel(status, "text", localized("正在打开…"));
     editorRoot.hidden = footer.hidden = id === undefined;
     empty.hidden = id !== undefined;
     if (id === undefined) {
@@ -232,11 +238,11 @@ export async function mount() {
     await refreshCard();
   }
 
-  const sidebar = shortcutHint(iconButton("sidebar", "显示或隐藏侧栏", toggleSidebar), "sidebar");
+  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), toggleSidebar), "sidebar");
   sidebar.setAttribute("aria-pressed", "true");
-  const add = shortcutHint(iconButton("compose", "新建文档", create), "newDocument");
-  add.dataset.tip = "新建文档";
-  const outlineButton = shortcutHint(iconButton("outline", "文档大纲", toggleOutline), "outline");
+  const add = shortcutHint(iconButton("compose", localized("新建文档"), create), "newDocument");
+  bindLabel(add, "data-tip", localized("新建文档"));
+  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), toggleOutline), "outline");
   outlineButton.disabled = true;
   outlineButton.setAttribute("aria-controls", outline.id);
   outlineButton.setAttribute("aria-expanded", "false");
@@ -247,39 +253,75 @@ export async function mount() {
   }, { onDismiss: () => editor?.focus() });
   finder.panel.classList.add("workspace-search", "jot-search");
   finder.panel.setAttribute("role", "search");
-  finder.panel.setAttribute("aria-label", "搜索便签和文档");
+  bindLabel(finder.panel, "aria-label", localized("搜索便签和文档"));
   const searchField = element("label", "workspace-search-field");
   searchField.append(icon("search"), finder.input, shortcutHint(element("kbd", "workspace-search-key"), "search"));
   finder.panel.prepend(searchField);
   finder.panel.dataset.noDrag = "";
   const showOverview = () => invoke("show_find", { tiled: true });
+  let terminal: Promise<ReturnType<typeof import("./terminal").terminalPanel>> | undefined;
+  let mountedTerminal: Awaited<NonNullable<typeof terminal>> | undefined;
+  function currentLocation(): TerminalLocation {
+    const row = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (row && library.sidebar.contains(row)) {
+      if (row.dataset.directory || row.dataset.file && row.closest(".workspace-files"))
+        return {kind:"workspace", path:(row.dataset.directory ?? row.dataset.file)!};
+      const group = row.closest<HTMLElement>("[data-archive-group]");
+      if (group) return {kind:"archive", folder:Number(group.dataset.archiveGroup) || null};
+    }
+    return { kind: "document", id: Number(row?.closest<HTMLElement>('[role=tab][data-note]')?.dataset.note) || editor?.id || null };
+  }
+  function panel() {
+    return terminal ??= import("./terminal").then(({terminalPanel}) => mountedTerminal = terminalPanel(documentPane, terminalButton, currentLocation, () => editor?.focus()));
+  }
+  async function openTerminal(location = currentLocation(), mode: "new" | "reveal" = "new") {
+    if (location.kind === "document" && location.id) await saveOpenNote(location.id);
+    await (await panel()).start(location, mode);
+  }
+  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), async () => (await panel()).toggle());
+  terminalButton.setAttribute("aria-expanded", "false");
+  terminalButton.setAttribute("aria-controls", "workspace-terminal");
+  bindLabel(terminalButton, "data-tip", localized("显示或隐藏终端"));
   const showSettings = () => invoke("show_settings");
-  const settingsButton = shortcutHint(iconButton("settings", "设置", showSettings), "settings");
   const windowButton = element("button", "icon-button");
   windowButton.type = "button";
-  windowButton.setAttribute("aria-label", "文档窗口操作");
-  windowButton.dataset.tip = "窗口操作";
+  bindLabel(windowButton, "aria-label", localized("文档窗口操作"));
+  bindLabel(windowButton, "data-tip", localized("窗口操作"));
   bindWindowMenu(windowButton, windowMenu);
   windowButton.disabled = true;
   windowButton.append(icon("window"));
-  const sourceButton = button("挂载到窗口…", () => { windowMenu.hidePopover(); return attach(); }, "jot-window-menu-item");
+  const sourceButton = button(localized("挂载到窗口…"), () => { windowMenu.hidePopover(); return attach(); }, "jot-window-menu-item");
   const filePath = documentPath({ current: () => editor, openCopy: open, move });
-  const floatButton = button("作为独立便签打开", async () => {
+  const floatButton = button(localized("作为独立便签打开"), async () => {
     windowMenu.hidePopover();
     const current = editor;
     if (!current) return;
     await current.save();
     if (current !== editor) return;
-    if (!current.savedVersion) throw new Error("请先输入速记的正文");
+    if (!current.savedVersion) throw new Error(t("请先输入速记的正文"));
     await invoke("float_note", { id: current.id, standalone: true });
-  }, "jot-window-menu-item", "独立便签");
+  }, "jot-window-menu-item", localized("独立便签"));
   sourceButton.hidden = !desktopPlatform.hostWindows;
   windowMenu.append(hostLabel, sourceButton, floatButton);
   metadata.append(filePath.control);
   const leading = element("div", "workspace-actions workspace-leading");
   const trailing = element("div", "workspace-actions workspace-trailing");
-  leading.append(sidebar, add);
-  trailing.append(outlineButton, windowButton, settingsButton);
+  leading.append(sidebar);
+  trailing.append(terminalButton);
+  if (desktopPlatform.windowsChrome) {
+    const documentTools = element("div", "document-tools");
+    add.replaceChildren(icon("add"));
+    documentTools.append(tabs.bar, add, outlineButton, windowButton);
+    documentPane.prepend(documentTools);
+    windowMenu.addEventListener("beforetoggle", () => {
+      const rect = windowButton.getBoundingClientRect();
+      windowMenu.style.top = (rect.bottom + 4) + "px";
+      windowMenu.style.right = Math.max(0, innerWidth - rect.right) + "px";
+    });
+  } else {
+    leading.append(add);
+    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings"));
+  }
   titlebar.append(leading, finder.panel, trailing, windowMenu);
   configureTitlebar(titlebar);
   workspace.append(library.sidebar, documentPane, outline);
@@ -287,7 +329,7 @@ export async function mount() {
   workspaceDividers(workspace, library.sidebar, outline, () => { void editor?.remeasure().catch(report); });
 
   documentDrag(library.sidebar, saveOpenNote,
-    apply => pickWindow("挂载到窗口", "挂载", apply), library.showSource);
+    apply => pickWindow(t("挂载到窗口"), t("挂载"), apply), library.showSource);
 
   async function focusFiles(workspace: boolean) {
     if (library.sidebar.hidden) toggleSidebar();
@@ -297,8 +339,9 @@ export async function mount() {
     editor: () => editor?.focus(), workspace: () => focusFiles(true), archive: () => focusFiles(false),
     tile: () => editor?.command("tile"),
     previousDocument,
-    get closeActive() { return tabs.multiple ? closeActive : undefined; },
+    get closeActive() { return editor && (tabs.multiple || desktopPlatform.windowsChrome || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
     newDocument: newDocument,
+    terminal: () => openTerminal(currentLocation(), "reveal"),
     save: () => editor?.save(),
     search: finder.focus,
     overview: showOverview,
@@ -370,6 +413,10 @@ export async function mount() {
     library.refreshFiles();
   });
   await saveBeforeClose(async () => {
+    if (terminal) await (await terminal).ready();
+    if (await invoke<number>("live_terminals") > 0 && await fileDialog(t("结束终端并关闭窗口？"), t("结束并关闭"), {
+      detail: t("关闭主窗口会结束所有终端会话及其前台任务。")
+    }) === undefined) { await invoke("cancel_quit"); return; }
     await tail.catch(() => {});
     await editor?.close();
     editor = undefined;

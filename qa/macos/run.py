@@ -356,6 +356,9 @@ def build_test_app(work, identifier, samples, probe="probe.js", query=None, obse
     catalog.mkdir(parents=True)
     for source in (PROJECT / "src/desktop").glob("shortcut-*.json"):
         shutil.copyfile(source, catalog / source.name)
+    translations = work / "src/i18n"
+    translations.mkdir()
+    shutil.copyfile(PROJECT / "src/i18n/en.json", translations / "en.json")
     if native_probe:
         shutil.copyfile(native_probe, native / "src/qa_probe.m")
         build = native / "build.rs"

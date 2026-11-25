@@ -1,3 +1,4 @@
+import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -7,10 +8,11 @@ import { attachOnSwitch } from "./document-drag";
 import { folders, notes, openLibraryFile, type Folder, type NoteId } from "../../desktop/ipc";
 import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
-import { editFileName, fileName } from "../../ui/file-name";
+import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
+import type { OpenTerminal } from "./terminal";
 import { workspaceFiles } from "./workspace-files";
 
 export async function librarySidebar(
@@ -19,28 +21,29 @@ export async function librarySidebar(
   addSource: () => void,
   moveArchive: (id: NoteId, folder: number | null) => unknown,
   saveOpenNote: (id: NoteId) => Promise<void>,
+  newTerminal: OpenTerminal,
 ) {
   const sidebar = element("aside", "library-sidebar jot-sidebar");
   sidebar.id = "workspace-library";
-  sidebar.setAttribute("aria-label", "文档与窗口");
+  bindLabel(sidebar, "aria-label", localized("文档与窗口"));
   let current: NoteId | undefined;
   let currentPath: string | undefined;
   async function flush(paths: string[]) {
     if (current !== undefined && currentPath && paths.includes(currentPath)) await saveOpenNote(current);
   }
-  const files = workspaceFiles(open, flush);
+  const files = workspaceFiles(open, flush, newTerminal);
   const archive = element("div", "archive-tree");
   const tree = element("div", "library-tree");
   tree.setAttribute("role", "region");
-  tree.setAttribute("aria-label", "文件树");
+  bindLabel(tree, "aria-label", localized("文件树"));
   const source = sourceTree(open, addSource);
   const bar = element("div", "library-bar");
   const tabs = element("div", "library-tabs");
   tabs.setAttribute("role", "group");
-  tabs.setAttribute("aria-label", "文档视图");
-  const workspaceTab = button("工作区", () => switchTo(true));
-  const archiveTab = button("归档", () => switchTo(false));
-  const add = iconButton("folderAdd", "添加工作区文件夹", () => inWorkspace ? files.add() : editFolder());
+  bindLabel(tabs, "aria-label", localized("文档视图"));
+  const workspaceTab = button(localized("工作区"), () => switchTo(true));
+  const archiveTab = button(localized("归档"), () => switchTo(false));
+  const add = iconButton("folderAdd", localized("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
   tabs.append(workspaceTab, archiveTab);
   bar.append(tabs, add);
   tree.append(files.panel, archive);
@@ -77,7 +80,8 @@ export async function librarySidebar(
       archive.replaceChildren();
       return;
     }
-    const groups = [{ id: null, name: "其他", description: "", path: inbox }, ...items];
+    if (afterNaming(archive, drawFolders)) return;
+    const groups = [{ id: null, name: t("其他"), description: "", path: inbox }, ...items];
     const ids = new Set(groups.map(folder => folder.id));
     for (const id of expandedFolders) if (!ids.has(id)) expandedFolders.delete(id);
     for (const id of lists.keys()) {
@@ -88,7 +92,7 @@ export async function librarySidebar(
       const branch = element("section");
       branch.dataset.archiveGroup = String(folder.id ?? "");
       const line = element("div", "library-line");
-      const row = treeRow(folder.name, expanded, () => {
+      const row = treeRow(folder.id === null ? localized("其他") : folder.name, expanded, () => {
         if (expanded) expandedFolders.delete(folder.id);
         else expandedFolders.add(folder.id);
         drawFolders();
@@ -113,22 +117,23 @@ export async function librarySidebar(
     archive.replaceChildren(...branches);
   }
 
-  function createInArchive(row: HTMLElement) {
+  async function createInArchive(row: HTMLElement) {
     const folder = row.dataset.archiveFolder ? Number(row.dataset.archiveFolder) : null;
     if (!expandedFolders.has(folder)) {
       expandedFolders.add(folder);
       drawFolders();
       row = archive.querySelector<HTMLElement>(`[data-archive-folder="${folder ?? ""}"]`)!;
     }
-    editFileName(row.closest<HTMLElement>(".library-line")!, "未命名.md", true, async name => {
-      const id = await invoke<NoteId>("create_archive_note", { folder, name });
-      try { await lists.get(folder)?.refresh(); await open(id); }
-      catch (error) { report(error); }
-    });
+    const id = await invoke<NoteId>("create_archive_note", { folder, name: t("未命名") });
+    await open(id);
+    const list = lists.get(folder);
+    await list?.refresh();
+    const created = list?.panel.querySelector<HTMLElement>(`[data-note="${id}"]`);
+    if (created) nameCreatedDocument(created, id);
   }
   function renameFile(row: HTMLElement) {
     const path = row.dataset.file!;
-    editFileName(row, fileName(path), false, async name => {
+    editFileName(row, fileName(path), async name => {
       await flush([path]);
       const id = row.dataset.note ? Number(row.dataset.note) : await openLibraryFile(path);
       await notes.rename(id, name);
@@ -146,12 +151,14 @@ export async function librarySidebar(
     const key = row.closest<HTMLElement>("[data-archive-group]")!.dataset.archiveGroup;
     const group = key ? items.find(item => item.id === Number(key)) : undefined;
     const directory = group?.path ?? inbox;
+    const terminal = {label:t("在此处新建终端"), run: () => newTerminal({kind:"archive", folder:group?.id ?? null})};
     if (!row.dataset.file) {
       void popupMenu(event, [
-        { label: "新建文档", run: () => createInArchive(row) },
-        ...(group ? [{ label: "归档目录设置…", run: () => editFolder(group) }] : []),
+        { label: t("新建文档"), run: () => createInline(() => createInArchive(row)) },
+        terminal,
+        ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
-        { label: "复制绝对路径", run: () => copyText(displayPath(directory)) },
+        { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },
       ]);
       return;
     }
@@ -160,15 +167,15 @@ export async function librarySidebar(
     const resolveId = () => row.dataset.note ? Number(row.dataset.note) : openLibraryFile(path);
     const actions = noteActions(resolveId, name, open, saveOpenNote);
     void popupMenu(event, [
-      { label: "打开", run: async () => open(await resolveId()) },
-      { label: "在新窗口打开", run: async () => invoke("open_document_window", { id: await resolveId() }) },
-      ...(desktopPlatform.hostWindows ? [{ label: "挂载到窗口…", run: async () => attachOnSwitch(await resolveId()) }] : []), null,
-      { label: "重命名…", run: () => renameFile(row) },
-      ...(row.dataset.archivePath ? [{ label: "移到归档目录…", run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
-      actions.duplicate, null,
+      { label: t("打开"), run: async () => open(await resolveId()) },
+      { label: t("在新窗口打开"), run: async () => invoke("open_document_window", { id: await resolveId() }) },
+      ...(desktopPlatform.hostWindows ? [{ label: t("挂载到窗口…"), run: async () => attachOnSwitch(await resolveId()) }] : []), null,
+      { label: t("重命名…"), run: () => renameFile(row) },
+      ...(row.dataset.archivePath ? [{ label: t("移到归档目录…"), run: async () => moveArchive(await resolveId(), group?.id ?? null) }] : []),
+      actions.duplicate, terminal, null,
       { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path }) },
-      { label: "复制绝对路径", run: () => copyText(displayPath(path)) },
-      { label: "复制相对路径", run: () => copyText(name) }, null, actions.trash,
+      { label: t("复制绝对路径"), run: () => copyText(displayPath(path)) },
+      { label: t("复制相对路径"), run: () => copyText(name) }, null, actions.trash,
     ]);
   });
 
@@ -180,10 +187,10 @@ export async function librarySidebar(
     archive.hidden = workspace;
     workspaceTab.setAttribute("aria-pressed", String(workspace));
     archiveTab.setAttribute("aria-pressed", String(!workspace));
-    const label = workspace ? "添加工作区文件夹" : "导入归档目录";
-    add.title = label;
-    add.setAttribute("aria-label", label);
-    add.dataset.tip = workspace ? "添加目录" : "导入目录";
+    const label = () => workspace ? t("添加工作区文件夹") : t("导入归档目录");
+    bindLabel(add, "title", label);
+    bindLabel(add, "aria-label", label);
+    bindLabel(add, "data-tip", () => workspace ? t("添加目录") : t("导入目录"));
     drawFolders();
     if (workspace) await files.refresh();
   }
@@ -202,20 +209,18 @@ export async function librarySidebar(
       for (const list of lists.values()) list.setActive(id, path);
       source.setActive(id);
     },
-    async createInInbox() {
+    createInInbox: () => createInline(async () => {
       expandedFolders.add(null);
-      await switchTo(false);
-      const row = archive.querySelector<HTMLElement>('[data-archive-folder=""]')!;
-      row.scrollIntoView({ block: "nearest" });
-      createInArchive(row);
-    },
+      if (inWorkspace || !lists.has(null)) await switchTo(false);
+      await createInArchive(archive.querySelector<HTMLElement>('[data-archive-folder=""]')!);
+    }),
     async createAtFocus() {
       const row = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       if (!row || !sidebar.contains(row)) return false;
       const directory = row.dataset.file
         ? row.closest("section")?.querySelector<HTMLElement>(":scope > .library-line > button") : row;
       if (directory?.dataset.directory) files.createFile(directory);
-      else if (directory?.dataset.archiveFolder !== undefined) createInArchive(directory);
+      else if (directory?.dataset.archiveFolder !== undefined) await createInline(() => createInArchive(directory));
       else return false;
       return true;
     },

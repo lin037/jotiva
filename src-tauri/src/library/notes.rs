@@ -169,7 +169,16 @@ impl Entry {
             archive_path: note.location.as_ref().map(|location| location.path.clone()),
             folder: note.location.as_ref().and_then(|location| location.folder),
         };
-        let searchable = format!("{} {} {}", card.title, note.source, note.markdown).to_lowercase();
+        let filename = note
+            .disk_path()
+            .and_then(Path::file_name)
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        let searchable = format!(
+            "{} {} {} {}",
+            card.title, filename, note.source, note.markdown
+        )
+        .to_lowercase();
         let source_key = note.origin.map_or_else(
             || format!("label/{}", note.source),
             |id| format!("window/{id}"),
@@ -847,39 +856,51 @@ impl Notes {
     }
 
     pub fn search(&self, query: &str, host: Option<HostId>, page: usize) -> SearchPage {
-        const PER_GROUP: usize = 4;
+        const LIMIT: usize = 12;
         let query = query.trim().to_lowercase();
         let mut result = SearchPage::default();
-        let mut skip = [page.saturating_mul(PER_GROUP); 3];
+        let mut skip = page.saturating_mul(LIMIT);
+        let mut taken = 0;
         let current = host
             .and_then(|id| self.by_host.get(&id))
             .map_or(0, BTreeSet::len);
         let attached: usize = self.by_host.values().map(BTreeSet::len).sum();
-        let mut remaining = [current, attached - current, self.recent.len() - attached];
-        for (_, id) in self.recent.iter().rev() {
-            if remaining == [0; 3] {
-                break;
-            }
-            let entry = &self.records[id];
-            let (index, items) = match entry.host {
-                Some(id) if Some(id) == host => (0, &mut result.current),
-                Some(_) => (1, &mut result.attached),
-                None => (2, &mut result.documents),
-            };
-            if remaining[index] == 0 {
+        // One stable order across batches lets a keyboard user walk every group exactly once.
+        for (group, count) in [current, attached - current, self.recent.len() - attached]
+            .into_iter()
+            .enumerate()
+        {
+            if count == 0 {
                 continue;
             }
-            remaining[index] -= 1;
-            if entry.note.version == 0 || !entry.searchable.contains(&query) {
-                continue;
-            }
-            if skip[index] > 0 {
-                skip[index] -= 1;
-            } else if items.len() < PER_GROUP {
-                items.push(entry.card.clone());
-            } else {
-                remaining[index] = 0;
-                result.more = true;
+            for (_, id) in self.recent.iter().rev() {
+                let entry = &self.records[id];
+                let destination = match entry.host {
+                    Some(id) if Some(id) == host => 0,
+                    Some(_) => 1,
+                    None => 2,
+                };
+                if destination != group
+                    || entry.note.version == 0
+                    || !entry.searchable.contains(&query)
+                {
+                    continue;
+                }
+                if skip > 0 {
+                    skip -= 1;
+                    continue;
+                }
+                if taken == LIMIT {
+                    result.more = true;
+                    return result;
+                }
+                match group {
+                    0 => &mut result.current,
+                    1 => &mut result.attached,
+                    _ => &mut result.documents,
+                }
+                .push(entry.card.clone());
+                taken += 1;
             }
         }
         result
@@ -1384,6 +1405,14 @@ mod tests {
         }
         let first = notes.search(" weekly ", Some(11), 0);
         let second = notes.search("weekly", Some(11), 1);
+        assert_eq!(
+            (
+                first.current.len(),
+                first.attached.len(),
+                first.documents.len()
+            ),
+            (7, 5, 0)
+        );
         assert!(first.more);
         assert!(!second.more);
         let mut ids = BTreeSet::new();
@@ -1392,7 +1421,7 @@ mod tests {
             (Some(12), first.attached, second.attached),
             (None, first.documents, second.documents),
         ] {
-            assert_eq!((first.len(), second.len()), (4, 3));
+            assert_eq!(first.len() + second.len(), 7);
             for card in first.into_iter().chain(second) {
                 assert_eq!(notes.host(card.id), expected);
                 assert!(ids.insert(card.id));

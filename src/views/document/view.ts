@@ -1,3 +1,6 @@
+import { t, bindLabel, localized } from "../../i18n";
+import { environment } from "../../desktop/environment";
+import { createInline, nameCreatedDocument } from "../../ui/file-name";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -24,7 +27,7 @@ export async function mount(id: NoteId) {
     openCopy: copy => invoke("open_document_window", { id: copy }),
     move: async (note, folder) => {
       move ??= moveDocument(result => {
-        status.textContent = result.warning ?? "已移动";
+        bindLabel(status, "text", () => result.warning ?? t("已移动"));
         void refresh().catch(report);
       }, () => {
         editFolder ??= folderEditor(newFolder => {
@@ -36,16 +39,16 @@ export async function mount(id: NoteId) {
     },
   });
   let editFolder: ReturnType<typeof folderEditor> | undefined;
-  const pin = iconButton("pin", "置顶文档窗口", async () => {
+  const pin = iconButton("pin", localized("置顶文档窗口"), async () => {
     const pinned = pin.getAttribute("aria-pressed") !== "true";
     pin.disabled = true;
     try {
       await getCurrentWindow().setAlwaysOnTop(pinned);
       pin.setAttribute("aria-pressed", String(pinned));
-      pin.dataset.tip = pinned ? "取消置顶" : "置顶";
+      bindLabel(pin, "data-tip", () => pinned ? t("取消置顶") : t("置顶"));
     } finally { pin.disabled = false; }
   });
-  pin.dataset.tip = "置顶";
+  bindLabel(pin, "data-tip", localized("置顶"));
   pin.setAttribute("aria-pressed", "false");
   metadata.append(pin, filePath.control);
   root.append(paper, footer);
@@ -64,7 +67,7 @@ export async function mount(id: NoteId) {
     }
     if (card.version > editor.savedVersion) await editor.synchronize(card.version);
   }
-  const create = () => invoke("open_document_window", { id: null });
+  const create = () => createInline(() => invoke("open_document_window", { id: null }));
   const find = (tiled: boolean) => invoke("show_find", { tiled });
   const start = NoteEditor.open(paper, id, status, { counter }).then(opened => {
     editor = opened;
@@ -103,4 +106,7 @@ export async function mount(id: NoteId) {
   });
   await start;
   await refresh();
+  if (environment.nameOnOpen && filePath.control.dataset.fileMenuPath) {
+    nameCreatedDocument(filePath.control, id, filePath.control.dataset.fileMenuPath);
+  }
 }

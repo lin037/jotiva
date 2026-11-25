@@ -132,6 +132,15 @@ pub fn create_named_markdown(
 pub fn named_markdown_path(
     folder: &Path,
     title: &str,
+    create: impl FnMut(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
+    numbered_path(folder, title, "md", create)
+}
+
+pub(crate) fn numbered_path(
+    folder: &Path,
+    title: &str,
+    extension: &str,
     mut create: impl FnMut(&Path) -> io::Result<()>,
 ) -> io::Result<PathBuf> {
     if Path::new(title).file_name() != Some(title.as_ref()) {
@@ -142,9 +151,9 @@ pub fn named_markdown_path(
     }
     for suffix in 1u64.. {
         let name = if suffix == 1 {
-            format!("{title}.md")
+            format!("{title}.{extension}")
         } else {
-            format!("{title} ({suffix}).md")
+            format!("{title} ({suffix}).{extension}")
         };
         let path = folder.join(name);
         match create(&path) {

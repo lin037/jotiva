@@ -38,9 +38,24 @@ In Live Preview, you can edit the formatted document directly. Use **Cmd+/** or 
 
 Add folders you use often to the workspace sidebar. Keep related files open in tabs, or open two files in separate windows to compare them. For a long document, click a heading in the outline to jump straight to it.
 
+Creating a document saves an empty file immediately and selects its name in the file tree. Type a name and click elsewhere or press Enter. If that name exists, Jotiva adds a number before the extension.
+
+Right-click a tab to copy its text, duplicate the document, open it in a new window, or close tabs to its left, right, or on both sides.
+
+## Use the integrated terminal
+
+While editing, press **Ctrl + Shift + Backquote** to return to the most recently used live terminal opened for that document. If it has none, a new shell starts in its directory. Choose **New Terminal Here** from the context menu on a workspace entry, archive entry, or document tab to pick the starting location. With no saved document, a new shell starts in the default archive directory.
+
+The title bar terminal button hides the panel or brings back your last session. Use **+** to start another shell, the session list on the right to switch between shells, and the panel’s top edge to resize it. Switching or closing a document keeps its shell and running commands alive.
+
+Drag a file or a document tab into the terminal to insert its quoted path at the cursor. Press Enter when the command is ready. Scripts can read `JOTIVA_INBOX_DIR` to place generated or synced documents in the default archive. Use `$env:JOTIVA_INBOX_DIR` in PowerShell or `"$JOTIVA_INBOX_DIR"` in Bash or Zsh. **Terminate terminal** closes the selected session. If shells are running when you close the main window or quit the app, Jotiva asks for confirmation.
+
 ## Find your notes
 
-New quick notes appear under **Archive → Other** (「归档 → 其他」). If another app changes the same file, choose 「另存编辑并重载」 to save your edits separately in Other and reload the original.
+Scroll or press **Down** to load more search results. Press **Up** to revisit earlier results.
+
+
+New quick notes appear under **Archive → Inbox** (「归档 → 其他」). If another app changes the same file, choose 「另存编辑并重载」 to save your edits separately in Other and reload the original.
 
 | Platform | Where quick notes are saved |
 | --- | --- |
@@ -52,4 +67,4 @@ Jev filing is off by default. If you turn it on and ask for a suggestion, Jotiva
 
 ## Change the theme or shortcuts
 
-Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
+Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)

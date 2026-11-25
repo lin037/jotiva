@@ -182,46 +182,6 @@ char *jot_choose_folder(void) {
 
 // AppKit's field editor normally handles Escape by restoring the old text.
 // Use the dialog's cancel/create actions for these two text commands.
-@interface JotDocumentNameField : NSTextField <NSTextFieldDelegate>
-@property (weak) NSAlert *prompt;
-@end
-
-@implementation JotDocumentNameField
-- (BOOL)control:(NSControl *)control textView:(NSTextView *)editor doCommandBySelector:(SEL)command {
-    if (editor.hasMarkedText) return NO;
-    if (command == @selector(cancelOperation:)) {
-        [self.prompt.buttons.lastObject performClick:nil];
-        return YES;
-    }
-    if (command == @selector(insertNewline:)) {
-        [self.prompt.buttons.firstObject performClick:nil];
-        return YES;
-    }
-    return NO;
-}
-@end
-
-char *jot_new_document_name(void) {
-    NSAlert *alert = [NSAlert new];
-    alert.messageText = @"新建文档";
-    alert.informativeText = @"保存到「其他」";
-    [alert addButtonWithTitle:@"创建"].keyEquivalent = @"\r";
-    [alert addButtonWithTitle:@"取消"].keyEquivalent = @"\e";
-    JotDocumentNameField *name = [JotDocumentNameField textFieldWithString:@"未命名.md"];
-    name.prompt = alert;
-    name.delegate = name;
-    name.frame = NSMakeRect(0, 0, 260, name.fittingSize.height);
-    name.accessibilityLabel = @"新文档名称";
-    alert.accessoryView = name;
-    alert.window.initialFirstResponder = name;
-    CFRunLoopPerformBlock(CFRunLoopGetCurrent(), (__bridge CFStringRef)NSModalPanelRunLoopMode, ^{
-        [alert.window makeFirstResponder:name];
-        [name.currentEditor setSelectedRange:[name.stringValue rangeOfString:@"未命名"]];
-    });
-    if ([alert runModal] != NSAlertFirstButtonReturn) return NULL;
-    return strdup((name.currentEditor.string ?: name.stringValue).UTF8String);
-}
-
 char *jot_choose_markdown(void) {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     panel.allowedContentTypes = @[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]];

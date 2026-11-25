@@ -1312,7 +1312,17 @@ pub fn locate(app: &AppHandle, id: NoteId) -> Result<(), String> {
         desktop.target = Some(current);
     } else if !searching_here {
         drop(desktop);
-        let target = Native::raise(owner).ok_or("无法激活挂载窗口，请重试")?;
+        let Some(target) = Native::raise(owner) else {
+            let target = Native::editor_target_after_denied_raise(owner)
+                .ok_or("无法激活挂载窗口，请重试")?;
+            {
+                let mut desktop = state.lock().unwrap();
+                desktop.pending_locate = None;
+                desktop.origin = target.pid;
+                desktop.target = Some(target);
+            }
+            return edit(app, id);
+        };
         desktop = state.lock().unwrap();
         // AXRaise acknowledges a request before Workspace transfers keyboard ownership.
         // Resume when the selected document is frontmost and Jotiva has resigned activation.
@@ -1794,6 +1804,19 @@ pub fn request_quit(app: &AppHandle) -> Result<(), String> {
     if windows.is_empty() {
         app.exit(0);
     }
+    // The workspace owns terminal sessions and can veto quitting. Close it first.
+    if let Some(main) = windows.get(crate::windows::MAIN) {
+        if let Err(error) = main
+            .unminimize()
+            .and_then(|_| main.show())
+            .and_then(|_| main.set_focus())
+            .and_then(|_| main.close())
+        {
+            cancel_quit(app);
+            return Err(error.to_string());
+        }
+        return Ok(());
+    }
     for window in windows.values() {
         if let Err(error) = window.close() {
             cancel_quit(app);
@@ -1868,6 +1891,17 @@ pub fn window_destroyed(app: &AppHandle, label: &str) {
     };
     if let Some(id) = opened {
         release_note(app, id, label == windows::QUICK);
+    }
+    if !exit && label == windows::MAIN && quitting(app) {
+        for (label, window) in app.webview_windows() {
+            if label != windows::MAIN
+                && let Err(e) = window.close()
+            {
+                cancel_quit(app);
+                report(Err(e.to_string()));
+                break;
+            }
+        }
     }
     if exit {
         // A first save can finish just before the last window closes, while its

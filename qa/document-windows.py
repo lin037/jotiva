@@ -55,12 +55,16 @@ window.__TAURI_INTERNALS__ = {
         if (index === -1) throw Error("Missing file action: " + window.pickFileAction);
         return index;
       }
+      case "open_document_window": window.separateDocument = args.id; return;
+      case "note_action": if (args.action.kind === "duplicate") return fixtureNote("duplicate", args);
+        throw Error("Unexpected note action " + args.action.kind);
       case "copy_text": return;
       case "plugin:event|listen":
         subscribers.set(++sequence, {name:args.event,handler:args.handler}); return sequence;
       case "plugin:event|unlisten": return;
       case "plugin:window|set_title": return;
       case "plugin:window|close": notify("tauri://close-requested"); return;
+      case "live_terminals": return 0;
       case "close_editor_window": window.wasClosed = true; return;
       case "document_menu": window.menu = args; return;
       case "workspace_tab_menu": window.multipleTabs = args.multiple; return;
@@ -71,6 +75,7 @@ window.__TAURI_INTERNALS__ = {
       case "inbox_directory": return "/tmp/Jotiva/其他";
       case "list_folders": case "list_sources": case "workspace_roots": return [];
       case "list_notes": return {items:[],more:false};
+      case "search_document_files": return [];
       case "search_notes": return {current:[],attached:[],documents:[],more:false};
       case "take_dropped_tabs": return (window.droppedTabs ?? []).splice(0);
       case "read_tab_titles": return args.ids.map(id => ({id,title:window.tabNames?.[id] ?? "文档 "+id}));
@@ -144,6 +149,10 @@ def fixture_note(action, args):
         records[id] = {"id": id, "source": "Jotiva", "version": 0, "markdown": ""}
         return id
     note = records[args["id"]]
+    if action == "duplicate":
+        duplicate = max(records) + 1
+        records[duplicate] = {**note, "id": duplicate}
+        return duplicate
     if action == "external":
         external_edits[note["id"]] = args["markdown"]
         return
@@ -421,6 +430,26 @@ def check_tab_history(page):
     active(61)
     assert records[60]["markdown"] == "相同的起点甲。"
     assert page.evaluate("workerMetrics.live === 1 && workerMetrics.peak === 1")
+    def menu(id, action):
+        page.evaluate("action => window.pickFileAction = action", action)
+        page.locator(f'[role=tab][data-note="{id}"]').click(button="right")
+
+    insert(page, "!", "end")
+    menu(61, "复制文档内容")
+    page.wait_for_function("fileMenuCalls.some(call => call.key === 'copy_text' && call.args.text === '磁盘上的新正文！!')")
+    menu(61, "制作副本")
+    active(62)
+    assert records[62]["markdown"] == records[61]["markdown"] == "磁盘上的新正文！!"
+    menu(60, "在新窗口打开")
+    page.wait_for_function("separateDocument === 60")
+    menu(61, "关闭右侧标签")
+    page.wait_for_function("document.querySelectorAll('[role=tab]').length === 2")
+    menu(61, "关闭左侧标签")
+    page.wait_for_function("document.querySelectorAll('[role=tab]').length === 1")
+    drop([60, 1])
+    menu(61, "关闭其他标签")
+    page.wait_for_function("document.querySelectorAll('[role=tab]').length === 1")
+    assert page.locator('[role=tab][aria-selected=true]').get_attribute("data-note") == "61"
     print("Two tabs restored independent Undo and Redo with one live Worker. Switching waited for compositionend. External changes and closed tabs discarded stale history.", flush=True)
 
 

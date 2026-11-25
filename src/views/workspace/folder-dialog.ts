@@ -1,3 +1,4 @@
+import { t, bindLabel, type Label, localized } from "../../i18n";
 import { displayPath } from "../../desktop/platform";
 import { fileName } from "../../ui/file-name";
 import { folders, type Folder, type NoteId } from "../../desktop/ipc";
@@ -16,7 +17,7 @@ export function folderEditor(onSaved: (folder: Folder) => void) {
   const path = element("input");
   path.required = true;
   const place = element("div", "path-field");
-  place.append(path, button("选择…", async () => {
+  place.append(path, button(localized("选择…"), async () => {
     const choice = await folders.choose();
     if (choice) {
       path.value = choice;
@@ -26,20 +27,20 @@ export function folderEditor(onSaved: (folder: Folder) => void) {
   const classify = element("input");
   classify.type = "checkbox";
   const option = element("label", "sheet-check");
-  option.append(classify, "参与 Jev 分类");
+  option.append(classify, element("span", undefined, localized("参与 Jev 分类")));
   const notice = element("p", "form-message");
   notice.setAttribute("role", "status");
-  const save = element("button", "primary", "保存文件夹");
+  const save = element("button", "primary", localized("保存文件夹"));
   save.type = "submit";
-  const cancel = button("取消", () => dialog.close());
+  const cancel = button(localized("取消"), () => dialog.close());
   const actions = element("div", "sheet-actions");
   actions.append(cancel, save);
-  function field(title: string, control: HTMLElement) {
+  function field(title: Label, control: HTMLElement) {
     const label = element("label", "sheet-field");
     label.append(element("span", undefined, title), control);
     return label;
   }
-  form.append(heading, field("路径", place), field("名称", name), field("用途说明", description), option, notice, actions);
+  form.append(heading, field(localized("路径"), place), field(localized("名称"), name), field(localized("用途说明"), description), option, notice, actions);
   dialog.append(form);
   document.body.append(dialog);
   let id: number | null = null;
@@ -62,7 +63,7 @@ export function folderEditor(onSaved: (folder: Folder) => void) {
     const directory = folder?.path ?? await folders.choose().catch(report);
     if (!directory) return;
     id = folder?.id ?? null;
-    heading.textContent = folder ? "归档目录设置" : "导入归档目录";
+    bindLabel(heading, "text", () => folder ? t("归档目录设置") : t("导入归档目录"));
     name.value = folder?.name ?? fileName(directory);
     classify.checked = folder?.classify ?? false;
     description.value = folder?.description ?? "";
@@ -81,17 +82,17 @@ export function moveDocument(
   const form = element("form");
   const label = element("label", "sheet-field");
   const select = element("select");
-  label.append(element("span", undefined, "目标文件夹"), select);
+  label.append(element("span", undefined, localized("目标文件夹")), select);
   const path = element("p", "folder-location muted");
   const notice = element("p", "form-message");
   notice.setAttribute("role", "status");
   const actions = element("div", "sheet-actions");
-  const save = element("button", "primary", "移动");
+  const save = element("button", "primary", localized("移动"));
   save.type = "submit";
-  const cancel = button("取消", () => dialog.close());
-  const add = button("添加文件夹…", () => { dialog.close(); addFolder(); });
+  const cancel = button(localized("取消"), () => dialog.close());
+  const add = button(localized("添加文件夹…"), () => { dialog.close(); addFolder(); });
   actions.append(add, cancel, save);
-  form.append(element("h2", undefined, "移动便签"), label, path, notice, actions);
+  form.append(element("h2", undefined, localized("移动便签")), label, path, notice, actions);
   dialog.append(form);
   document.body.append(dialog);
   let id: NoteId;
@@ -128,7 +129,7 @@ export function moveDocument(
     id = note;
     current = location;
     [choices, inbox] = await Promise.all([folders.list(), folders.inbox()]);
-    const other = element("option", undefined, "其他");
+    const other = element("option", undefined, localized("其他"));
     other.value = "";
     select.replaceChildren(other, ...choices.map(folder => {
       const option = element("option", undefined, folder.name);

@@ -10,6 +10,9 @@ pub(crate) trait HostBackend {
     fn request_accessibility() -> Result<bool, String>;
     fn resigned() -> bool;
     fn raise(host: u64) -> Option<Target>;
+    fn editor_target_after_denied_raise(_host: u64) -> Option<Target> {
+        None
+    }
     fn activate(pid: i32);
     fn unwatch(host: u64);
     fn watch_drag(_started: bool) {}

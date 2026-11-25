@@ -53,13 +53,18 @@
     left: 50%;
     transform: translateX(-50%);
     width: max(100%, min(60vw, var(--jot-search-width)));
-    max-height: min(60dvh, 24rem);
     padding: var(--jot-space-2);
     overflow: hidden;
     border: var(--jot-line-width) solid var(--jot-color-line);
     border-radius: var(--jot-radius-large);
     background: var(--jot-color-bg);
     box-shadow: var(--jot-shadow-popup);
+  }
+  .workspace-search .results {
+    flex: none;
+    max-height: min(60dvh, 24rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .workspace-search .note-row { border: 0; }
   .workspace-search .note-row small { font-size: var(--jot-type-small); }

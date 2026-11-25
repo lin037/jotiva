@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { events } from "../desktop/ipc";
+import { setLanguage } from "../i18n";
 import { accentColors } from "./accent";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -18,6 +19,7 @@ export interface EditingPreferences {
 }
 
 export interface AppearancePreferences {
+  language: import("../i18n").Language;
   baseSize: number | null;
   mode: ThemeMode;
   accent: string | null;
@@ -53,6 +55,7 @@ let customStyle: HTMLStyleElement | undefined;
 function apply(value: Appearance) {
   const stylesheetChanged = value.stylesheet?.css !== appearance?.stylesheet?.css;
   appearance = value;
+  setLanguage(value.language);
   const { dataset, style } = document.documentElement;
   const dark = value.mode === "system" ? media.matches : value.mode === "dark";
   dataset.jotScheme = dark ? "dark" : "light";
@@ -81,8 +84,13 @@ function apply(value: Appearance) {
 }
 
 export async function bindAppearance() {
-  await listen<Appearance>(events.appearanceChanged, ({ payload }) => apply(payload));
-  apply(await invoke<Appearance>("read_appearance"));
+  let updated = false;
+  await listen<Appearance>(events.appearanceChanged, ({ payload }) => {
+    updated = true;
+    apply(payload);
+  });
+  const initial = await invoke<Appearance>("read_appearance");
+  if (!updated) apply(initial);
   media.addEventListener("change", () => apply(appearance));
 }
 

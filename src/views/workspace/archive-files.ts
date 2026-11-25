@@ -1,4 +1,5 @@
-import { fileName } from "../../ui/file-name";
+import { localized } from "../../i18n";
+import { afterNaming, fileName } from "../../ui/file-name";
 import { invoke } from "@tauri-apps/api/core";
 import { openLibraryFile, type NoteId } from "../../desktop/ipc";
 import { button, element } from "../../ui/dom";
@@ -22,6 +23,7 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
   let loaded = false;
 
   function draw() {
+    if (afterNaming(rows, draw)) return;
     const shown = entries.slice(0, visible);
     const selected = entries.find(entry => entry.id === active || entry.path === activePath);
     if (selected && !shown.includes(selected)) shown[shown.length - 1] = selected;
@@ -38,8 +40,8 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
       if (selected === entry) row.setAttribute("aria-current", "true");
       return row;
     }));
-    if (!shown.length) rows.append(element("p", "muted", "暂无 Markdown 文件"));
-    if (shown.length < entries.length) rows.append(button("显示更多", () => { visible += 80; draw(); }, "library-node"));
+    if (!shown.length) rows.append(element("p", "muted", localized("暂无 Markdown 文件")));
+    if (shown.length < entries.length) rows.append(button(localized("显示更多"), () => { visible += 80; draw(); }, "library-node"));
   }
   return {
     panel,
@@ -52,7 +54,7 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
         if (turn !== request) return;
         loaded = false;
         entries = [];
-        rows.replaceChildren(element("p", "muted", "无法读取目录"));
+        rows.replaceChildren(element("p", "muted", localized("无法读取目录")));
         throw error;
       }
       if (turn !== request) return;

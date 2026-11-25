@@ -64,8 +64,15 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
     if (cmd==='context_menu') { window.focusOptions=args.labels; return args.labels.findIndex(v=>v.endsWith('文件树')); }
     if (cmd==='locate') { window.located=args.id; return; }
     if (cmd==='list_notes') return {items:[card], more:false};
+    if (cmd==='search_document_files') return args.query === '混合' ? Array.from({length:28}, (_,i)=>'/work/混合-'+i+'.md') : [];
     if (cmd==='search_notes') {
+      if (args.query === '混合') return {current:[], attached:[], documents:[1,2,3].map(id=>({...card,id,title:'混合记录'+id})), more:false};
       const live={...card,id:7,title:'议程',source:'会议窗口',attached:true};
+      if (args.query === '连续') {
+        const start = args.page * 12;
+        (window.searchBatches ??= []).push(args.page);
+        return {current:[], attached:[], documents:Array.from({length:Math.min(12,26-start)}, (_,i)=>({...card,id:100+start+i,title:'结果 '+(start+i)})), more:start+12<26};
+      }
       if (args.query === '待办') return {current:[],attached:[{...live,id:8,title:'待办'}],documents:[],more:false};
       if (args.page) return {current:[],attached:[],documents:[{...card,id:9,title:'下一页'}],more:false};
       return {current:args.host===11?[{...live,id:6,title:'本窗口议程'}]:[], attached:[live],documents:[card],more:true};
@@ -100,6 +107,46 @@ def expect_hover_appearance(row):
     assert focused[0] != "rgba(0, 0, 0, 0)" and focused[-2:] == ["none", "none"]
     page.mouse.move(0, 0)
     row.focus()
+
+
+def verify_windows_titlebar(browser, url):
+    for scale in (1, 1.25, 1.5):
+        page = browser.new_page(device_scale_factor=scale, viewport={"width": 980, "height": 640})
+        page.add_init_script(IPC + """
+          window.__jotPlatform = {os:'windows', hostWindows:true};
+          const previous = window.__TAURI_INTERNALS__.invoke;
+          window.__TAURI_INTERNALS__.invoke = (cmd,args) => {
+            if(cmd==='plugin:window|is_maximized') return Promise.resolve(false);
+            if(cmd==='system_window_menu') {window.systemMenu=true; return Promise.resolve();}
+            return previous(cmd,args);
+          };
+        """)
+        page.goto(url)
+        bar = page.locator(".workspace-titlebar")
+        search = bar.locator(".workspace-search")
+        expect(page.locator(".document-tools [role=tab]")).to_be_visible()
+        expect(bar.locator(".titlebar-logo")).to_be_visible()
+        for width in (980, 700, 580):
+            page.set_viewport_size({"width": width, "height": 640})
+            page.locator(".cm-content").focus()
+            field = search.bounding_box()
+            caption = bar.locator(".caption-controls").bounding_box()
+            terminal = bar.locator('[aria-controls="workspace-terminal"]').bounding_box()
+            assert abs(field["x"] + field["width"] / 2 - width / 2) <= 1, (width, scale, field)
+            assert field["x"] + field["width"] <= terminal["x"]
+            assert terminal["x"] + terminal["width"] <= caption["x"]
+            assert abs(caption["x"] + caption["width"] - width) <= 1
+            if width <= 680:
+                assert field["width"] <= 34
+                search.locator("input").click()
+                expect(search.locator("input")).to_be_focused()
+                expanded = search.bounding_box()
+                assert expanded["width"] > field["width"] and expanded["y"] >= bar.bounding_box()["height"] - 1
+                assert bar.locator(".caption-controls").bounding_box() == caption
+            page.keyboard.press("Escape")
+        bar.locator(".titlebar-logo").click(button="right")
+        page.wait_for_function("window.systemMenu === true")
+        page.close()
 
 
 def verify_tree_focus(browser, url):
@@ -404,10 +451,23 @@ def verify(browser, url):
     query.press("PageDown")
     expect(page.get_by_role("option", name="下一页")).to_be_visible()
     query.press("PageUp")
-    expect(page.get_by_role("option")).to_have_count(3)
-    query.press("ArrowUp")
+    expect(page.get_by_role("option")).to_have_count(4)
+    query.press("ArrowDown")
     query.press("Enter")
     page.wait_for_function("window.located === 7")
+
+    query.fill("连续")
+    expect(page.get_by_role("option")).to_have_count(12)
+    for _ in range(12):
+        query.press("ArrowDown")
+    expect(query).to_have_attribute("aria-activedescendant", "jot-search-option-112")
+    results = page.locator("#jot-search-results")
+    results.evaluate("list => list.scrollTop = list.scrollHeight")
+    expect(page.get_by_role("option")).to_have_count(26)
+    assert page.evaluate("searchBatches") == [0, 1, 2]
+    query.press("ArrowUp")
+    query.press("Enter")
+    page.wait_for_function("window.located === 111")
     # Type and submit within the same turn, before the normal debounce can replace the old row.
     page.locator('.quick-query input').evaluate("""input => {
       input.value = '待办';
@@ -419,7 +479,7 @@ def verify(browser, url):
     expect(query).to_have_value("待办")
     expect(page.locator(".note-grid .note-row")).to_have_count(1)
     query.fill("")
-    expect(page.locator(".note-grid .note-row")).to_have_count(3)
+    expect(page.locator(".note-grid .note-row").nth(2)).to_be_visible()
     query.press("ArrowDown")
     expect(query).to_have_attribute("aria-activedescendant", "jot-search-option-7")
     query.press("Meta+3")
@@ -498,6 +558,71 @@ def verify(browser, url):
     hover(page.get_by_role("button", name="保存快捷键"), "保存")
     expect(page.locator(".error")).to_be_hidden()
     assert not errors, errors
+
+
+def verify_language(browser, url):
+    context = browser.new_context()
+    context.add_init_script(IPC + r"""
+      const persisted = JSON.parse(localStorage.getItem('qa:appearance') ?? '{}');
+      Object.assign(appearance, persisted);
+      window.__jotPlatform.language = appearance.language ?? 'zh-CN';
+      window.addEventListener('storage', event => {
+        if (event.key !== 'qa:appearance') return;
+        Object.assign(appearance, JSON.parse(event.newValue));
+        window.testEvent('desktop:appearance-changed', appearance);
+      });
+      const nativeInvoke = window.__TAURI_INTERNALS__.invoke;
+      window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
+        if (cmd === 'save_appearance') {
+          localStorage.setItem('qa:appearance', JSON.stringify(args.preferences));
+          Object.assign(appearance, args.preferences);
+          window.testEvent('desktop:appearance-changed', appearance);
+          return;
+        }
+        return nativeInvoke(cmd, args);
+      };
+    """)
+    workspace = context.new_page()
+    workspace.goto(url)
+    expect(workspace.locator(".cm-content")).to_contain_text("会议纪要")
+    workspace.evaluate("window.originalEditor = document.querySelector('.cm-content')")
+    settings = context.new_page()
+    settings.goto(url + "?view=settings")
+    settings.get_by_label("界面语言").select_option("en")
+    settings.wait_for_function("JSON.parse(localStorage.getItem('qa:appearance')).language === 'en'")
+    expect(settings.locator("html")).to_have_attribute("lang", "en")
+    expect(settings.get_by_label("Interface language")).to_have_value("en")
+    settings.get_by_role("button", name="Shortcuts", exact=True).click()
+    expect(settings.get_by_label("Search actions or shortcuts")).to_be_visible()
+    settings.get_by_label("Search actions or shortcuts").fill("task list")
+    expect(settings.locator('[id="key-local-format.task-list"]')).to_be_visible()
+    expect(workspace.get_by_role("combobox", name="Search notes and documents")).to_be_visible()
+    # Titles and document text supplied by users retain the original language.
+    expect(workspace.locator(".cm-content")).to_contain_text("会议纪要")
+    workspace.get_by_role("combobox").focus()
+    expect(workspace.get_by_role("group", name="Documents", exact=True)).to_contain_text("项目记录")
+    settings.get_by_role("button", name="Appearance", exact=True).click()
+    settings.get_by_label("Interface language").select_option("zh-CN")
+    expect(workspace.get_by_role("combobox", name="搜索便签和文档")).to_be_visible()
+    expect(workspace.get_by_role("group", name="文档", exact=True)).to_be_visible()
+    assert workspace.evaluate("originalEditor === document.querySelector('.cm-content')")
+    query = workspace.get_by_role("combobox")
+    query.fill("混合")
+    results = workspace.get_by_role("listbox")
+    expect(results.get_by_role("option")).to_have_count(12)
+    for count in [24, 31]:
+        results.hover()
+        workspace.mouse.wheel(0, 1300)
+        expect(results.get_by_role("option")).to_have_count(count)
+    expect(results.get_by_role("option").last).to_contain_text("混合-27.md")
+    query.fill("")
+    query.fill("混合")
+    expect(results.get_by_role("option")).to_have_count(12)
+    for _ in range(30):
+        query.press("ArrowDown")
+    expect(results.get_by_role("option").last).to_have_attribute("aria-selected", "true")
+    context.close()
+    print("Live language switching preserved the mounted editor. The workspace dropdown reached 31 mixed results by wheel and keyboard.")
 
 
 def verify_shortcut_settings(browser, url):
@@ -688,6 +813,7 @@ def verify_filing_settings(browser, url):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--windows-titlebar", action="store_true")
     mode.add_argument("--tree-focus", action="store_true")
     mode.add_argument("--shortcut-settings", action="store_true")
     mode.add_argument("--filing-settings", action="store_true")
@@ -699,13 +825,17 @@ if __name__ == "__main__":
             with sync_playwright() as playwright:
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 url = f"http://127.0.0.1:{server.server_port}/"
-                if options.shortcut_settings:
+                if options.windows_titlebar:
+                    verify_windows_titlebar(browser, url)
+                elif options.shortcut_settings:
                     verify_shortcut_settings(browser, url)
                 elif options.filing_settings:
                     verify_filing_settings(browser, url)
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:
+                        verify_windows_titlebar(browser, url)
+                        verify_language(browser, url)
                         verify(browser, url)
                 browser.close()
         finally:

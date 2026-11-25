@@ -1,3 +1,5 @@
+import { bindLabel, type Label } from "../i18n";
+
 export const root = document.querySelector<HTMLElement>("#app")!;
 
 const notice = document.createElement("div");
@@ -15,19 +17,19 @@ export function clearError() {
   notice.hidden = true;
 }
 
-export function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+export function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: Label): HTMLElementTagNameMap[K] {
   const result = document.createElement(tag);
   if (className) result.className = className;
   if (tag === "button") result.classList.add("jot-control", "jot-button");
   if (["input", "textarea", "select"].includes(tag)) result.classList.add("jot-control", "jot-field");
-  if (text) result.textContent = text;
+  if (text) bindLabel(result, "text", text);
   return result;
 }
 
-export function button(label: string, action: () => unknown, className?: string, tip?: string) {
+export function button(label: Label, action: () => unknown, className?: string, tip?: Label) {
   const control = element("button", className, label);
   control.type = "button";
-  if (tip) control.dataset.tip = tip;
+  if (tip) bindLabel(control, "data-tip", tip);
   control.addEventListener("click", async () => {
     clearError();
     try {
