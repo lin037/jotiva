@@ -18,7 +18,7 @@
 | 置顶或取消置顶 | ⌥⌘P | Ctrl+Alt+P |
 | 将焦点交还已挂载的窗口 | ⌘Enter | Ctrl+Enter |
 | 返回主窗口 | ⌘ + 反引号 | Ctrl + 反引号 |
-| 在当前位置新建内置终端 | ⌃⇧ + 反引号 | Ctrl+Shift + 反引号 |
+| 跳转到当前位置的终端（首次使用时新建） | ⌃⇧ + 反引号 | Ctrl+Shift + 反引号 |
 | 与主窗口并排 | ⌘ + 反斜杠 | Ctrl + 反斜杠 |
 | 关闭标签或窗口 | ⌘W | Ctrl+W |
 | 打开设置 / 保存并退出 | ⌘, / ⌘Q | Ctrl+, / Ctrl+Q |
@@ -32,7 +32,6 @@
 | --- | --- | --- |
 | 切换即时预览和源码 | ⌘/ | Ctrl+/ |
 | 粗体 / 斜体 | ⌘B / ⌘I | Ctrl+B / Ctrl+I |
-| 切换任务列表 | ⇧⌘9 | Ctrl+Shift+9 |
 | 插入行内代码 / 链接 | ⌃⇧C / ⌃⇧K | Ctrl+Shift+C / Ctrl+Shift+K |
 | 改为 1 至 6 级标题 | ⌃⇧1 至 ⌃⇧6 | Ctrl+Shift+1 至 Ctrl+Shift+6 |
 | 撤销 / 重做 | ⌘Z / ⇧⌘Z | Ctrl+Z / Ctrl+Y |

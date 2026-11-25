@@ -21,21 +21,27 @@ export function bindEditorShortcuts(editor: MarkdownEditor) {
     editor.commands.bind({ id: "history.redo.ctrl-y", command: "history.redo", key: "Ctrl-y" });
   }
   let preferences: LocalBindings = {};
+  let hadChanges = false;
   function refresh() {
     const slots = new Set(editor.commands.shortcutSettings.map(slot => slot.id));
     const changes: LocalBindings = {};
-    const defaults = Object.fromEntries(editor.commands.defaultShortcuts.map(slot => [slot.id, slot.key]));
     // Desktop menus, the shortcut recorder and the editor share the same accelerators.
-    for (const command of commands) {
-      if (!command.editor || !slots.has(command.id)) continue;
-      // Keep component-provided macOS bindings and fill its unassigned slots.
-      if (desktopPlatform.editor === "mac" && (defaults[command.id] || !command.key)) continue;
-      changes[command.id] = command.key ? editorChord(command.key) : null;
+    if (desktopPlatform.editor === "windows") {
+      for (const command of commands) {
+        if (command.editor && slots.has(command.id)) {
+          changes[command.id] = command.key ? editorChord(command.key) : null;
+        }
+      }
     }
     for (const [id, chord] of Object.entries(preferences)) {
       if (slots.has(id)) changes[id] = chord === null ? null : editorChord(chord);
     }
-    editor.commands.setShortcutDefaults(defaults, changes, desktopPlatform.editor);
+    const changed = Object.keys(changes).length > 0;
+    if (changed || hadChanges) {
+      const defaults = Object.fromEntries(editor.commands.defaultShortcuts.map(slot => [slot.id, slot.key]));
+      editor.commands.setShortcutDefaults(defaults, changes, desktopPlatform.editor);
+    }
+    hadChanges = changed;
   }
   const stop = onLocalShortcuts(bindings => { preferences = bindings; refresh(); });
   editor.disposeSignal.addEventListener("abort", stop, { once: true });

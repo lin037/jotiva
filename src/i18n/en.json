@@ -1,5 +1,7 @@
 {
-  "在当前位置新建终端": "New terminal at current location",
+  "打开当前位置的终端": "Open terminal for current location",
+  "最大化终端面板": "Maximize terminal panel",
+  "还原终端面板": "Restore terminal panel",
   "在此处新建终端": "New terminal here",
   "切换终端": "Switch terminal",
   "结束终端并关闭窗口？": "End terminal sessions and close the window?",

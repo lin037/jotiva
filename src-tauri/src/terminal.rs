@@ -100,10 +100,14 @@ fn failure(e: impl std::fmt::Display) -> String {
 }
 
 impl Session {
-    fn start(directory: &Path, inbox: &Path, size: PtySize) -> Result<Self, String> {
+    fn start(
+        mut cmd: CommandBuilder,
+        directory: &Path,
+        inbox: &Path,
+        size: PtySize,
+    ) -> Result<Self, String> {
         #[cfg(windows)]
         let (directory, inbox) = (dunce::simplified(directory), dunce::simplified(inbox));
-        let mut cmd = shell();
         cmd.cwd(directory);
         cmd.env("TERM", "xterm-256color");
         cmd.env("JOTIVA_INBOX_DIR", inbox);
@@ -202,6 +206,7 @@ impl Location {
 #[derive(serde::Serialize)]
 pub struct Started {
     id: u32,
+    shell: String,
     directory: PathBuf,
 }
 
@@ -246,10 +251,26 @@ pub async fn open_terminal(
             .read()
             .unwrap()
             .inbox_directory();
-        let session = Session::start(&directory, &inbox, size(cols, rows))?;
+        let cmd = shell();
+        let program = cmd
+            .get_argv()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| cmd.get_shell().into());
+        let shell = Path::new(&program)
+            .file_name()
+            .unwrap_or(&program)
+            .to_string_lossy()
+            .trim_end_matches(".exe")
+            .to_owned();
+        let session = Session::start(cmd, &directory, &inbox, size(cols, rows))?;
         let id = session.id;
         sessions.insert(id, session);
-        Ok(Started { id, directory })
+        Ok(Started {
+            id,
+            shell,
+            directory,
+        })
     })
     .await
     .map_err(failure)?

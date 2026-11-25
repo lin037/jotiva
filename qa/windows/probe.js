@@ -126,11 +126,6 @@ export async function mounted(ctx) {
   await waitFor(() => editor().textContent.includes("LAST-PAGE") && document.querySelector(".cm-scroller").scrollTop > 0, "last page");
   await input(ctx, "Ctrl+Home", {keys: ["ControlKey", "Home"]});
   await waitFor(() => editor().textContent.includes("Desktop edit") && document.querySelector(".cm-scroller").scrollTop < 5, "first page");
-  const beforeTask = (await run("read_note", {id})).markdown;
-  await input(ctx, "Ctrl+Shift+9", {keys: ["ControlKey", "ShiftKey", "D9"]});
-  await waitFor(async () => (await run("read_note", {id})).markdown === "- [ ] " + beforeTask, "task list shortcut");
-  await input(ctx, "undo task list", {keys: ["ControlKey", "Z"]});
-  await waitFor(async () => (await run("read_note", {id})).markdown === beforeTask, "task list undo");
   insert("quick-sync");
   await waitFor(async () => (await run("read_note", {id})).markdown.includes("quick-sync"), "mounted input on disk");
   await input(ctx, "Ctrl+Z", {keys: ["ControlKey", "Z"]});

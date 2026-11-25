@@ -41,17 +41,34 @@ export async function checkTerminal(os, waitFor, run, report) {
   await run("show_main", {id:nested});
   const tab = await waitFor(() => document.querySelector('[role=tab][aria-selected=true][data-note="' + nested + '"]'), "nested document");
   const shortcut = target => target.dispatchEvent(new KeyboardEvent("keydown", {key:"~", code:"Backquote", ctrlKey:true, shiftKey:true, bubbles:true, cancelable:true}));
-  const chooser = panel.querySelector("select");
+  const sessions = () => panel.querySelectorAll(".terminal-tab");
+  const selected = () => panel.querySelector('.terminal-tab[aria-selected="true"]');
+  const endSelected = () => selected().parentElement.querySelector(".terminal-remove").click();
+  const add = panel.querySelector(".terminal-actions button");
+  const zoom = panel.querySelector(".terminal-actions [aria-pressed]");
+  const first = selected();
   if (os === "windows") {
     tab.focus();
     await report("input " + JSON.stringify({name:"new terminal for current tab", title:await run("plugin:window|title"), keys:["ControlKey","ShiftKey","Oemtilde"]}));
   } else shortcut(tab);
-  await waitFor(() => chooser.options.length === 2 && chooser.selectedOptions[0]?.text === "posts", "new terminal in nested document directory");
-  chooser.selectedIndex = 0;
-  chooser.dispatchEvent(new Event("change"));
+  await waitFor(() => sessions().length === 2 && selected().title.endsWith(sep + "posts"), "new terminal in nested document directory");
+  const second = selected();
+  const screen = panel.querySelector(".terminal-screen:not([hidden])").getBoundingClientRect();
+  if (second.getBoundingClientRect().left < screen.right - 1) throw Error("Terminal tabs must be beside the screen");
+  zoom.click();
+  await waitFor(() => panel.offsetHeight > height + 16, "maximized panel");
+  zoom.click();
+  await waitFor(() => panel.offsetHeight === height + 16, "restored panel");
+  first.click();
   await waitFor(() => contains("sleep-641"), "switch back to the running foreground command");
-  chooser.selectedIndex = 1;
-  chooser.dispatchEvent(new Event("change"));
+  await run("show_main", {id:initial});
+  await waitFor(() => document.querySelector('[role=tab][data-note="' + initial + '"][aria-selected=true]'), "first document");
+  await run("show_main", {id:nested});
+  await waitFor(() => tab.getAttribute("aria-selected") === "true", "second document");
+  if (selected() !== first) throw Error("Switching documents changed terminal");
+  shortcut(tab);
+  shortcut(tab);
+  await waitFor(() => selected() === second && sessions().length === 2, "reused the document's shell");
   input = await waitFor(() => panel.querySelector("textarea:focus"), "second shell");
   send(os === "windows" ? "Write-Output ('dir-' + (Split-Path -Leaf (Get-Location)))" : 'echo "dir-${PWD##*/}"');
   await waitFor(() => contains("dir-posts"), "real nested cwd");
@@ -64,7 +81,6 @@ export async function checkTerminal(os, waitFor, run, report) {
   if (contains("jotiva-drop-proof")) throw Error("Drop submitted command");
   key("Enter", "Enter");
   await waitFor(() => contains("jotiva-drop-proof"), "shell resolved dropped path");
-  const close = panel.querySelector(".terminal-heading button:last-child");
   // Closing the document that started the foreground task must preserve the session.
   document.querySelector('[role=tab][data-note="' + initial + '"]').parentElement.querySelector(".document-tab-close").click();
   await waitFor(() => !document.querySelector('[role=tab][data-note="' + initial + '"]'), "originating tab closed");
@@ -81,8 +97,8 @@ export async function checkTerminal(os, waitFor, run, report) {
     if (result.directory !== expected) throw Error("Incorrect terminal origin " + result.directory);
     await run("close_terminal",{id:result.id});
   }
-  close.click();
-  await waitFor(() => chooser.options.length === 1 && panel.querySelector("textarea:focus"), "first session restored");
+  endSelected();
+  await waitFor(() => sessions().length === 1 && panel.querySelector("textarea:focus"), "first session restored");
   input = panel.querySelector("textarea:focus");
   if (os === "windows") {
     await report("input " + JSON.stringify({name:"interrupt terminal", title:await run("plugin:window|title"), keys:["ControlKey","C"]}));
@@ -97,15 +113,15 @@ export async function checkTerminal(os, waitFor, run, report) {
   send("exit");
   await waitFor(() => !panel.querySelector("[role=status]").hidden, "shell exit");
   if (before !== (await run("plugin:window|get_all_windows")).sort().join(",")) throw Error("Terminal opened a window");
-  panel.querySelector(".terminal-heading button").click();
+  add.click();
   input = await waitFor(() => { const next = panel.querySelector("textarea:focus"); return next !== input && next; }, "fresh terminal");
   send(os === "windows"
     ? "[IO.File]::WriteAllText((Join-Path (Get-Location) terminal-pid.txt), [string]$PID); if ($null -eq $keep) {Write-Output ('fresh-' + 321)}; Start-Sleep -Seconds 45"
     : 'echo $$ > terminal-pid.txt; test -z "$keep" && printf "fresh-%d\\n" 321; sleep 45');
   await waitFor(() => contains("fresh-321"), "independent new session");
-  panel.querySelector(".terminal-heading button:last-child").click();
-  await waitFor(() => chooser.options.length === 1, "ended transcript preserved");
-  panel.querySelector(".terminal-heading button:last-child").click();
+  endSelected();
+  await waitFor(() => sessions().length === 1, "ended transcript preserved");
+  endSelected();
   await waitFor(() => panel.hidden, "terminal closed");
   await run("show_main", {id:initial});
   await waitFor(() => document.querySelector('[role=tab][data-note="' + initial + '"][aria-selected=true]'), "original document reopened");

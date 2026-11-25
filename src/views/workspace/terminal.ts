@@ -4,8 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { localized, bindLabel, t } from "../../i18n";
 import { displayPath, desktopPlatform } from "../../desktop/platform";
 import { notes } from "../../desktop/ipc";
-import { iconButton } from "../../ui/chrome";
-import { element, report } from "../../ui/dom";
+import { icon, iconButton } from "../../ui/chrome";
+import { button, element, report } from "../../ui/dom";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
 
@@ -14,11 +14,22 @@ export type OpenTerminal = (location?: TerminalLocation) => Promise<void>;
 
 interface Session {
   id: number;
-  directory: string;
+  origin: TerminalLocation;
+  lastUsed: number;
+  row: HTMLElement;
+  tab: HTMLButtonElement;
   client: Terminal;
   fit: FitAddon;
   screen: HTMLElement;
   live: boolean;
+}
+
+function sameLocation(a: TerminalLocation, b: TerminalLocation) {
+  switch (a.kind) {
+    case "document": return b.kind === "document" && a.id === b.id;
+    case "workspace": return b.kind === "workspace" && a.path === b.path;
+    case "archive": return b.kind === "archive" && a.folder === b.folder;
+  }
 }
 
 export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonElement, current: () => TerminalLocation, returnFocus: () => void) {
@@ -36,19 +47,32 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
   const title = element("strong", undefined, localized("终端"));
   const ended = element("span", "muted", localized("终端已结束"));
   ended.setAttribute("role", "status");
-  const select = element("select");
-  bindLabel(select, "aria-label", localized("切换终端"));
-  const label = element("span", "terminal-directory muted");
-  const restart = iconButton("add", localized("新建终端"), () => start());
-  const kill = iconButton("close", localized("结束终端"), terminate);
-  const collapse = iconButton("minimize", localized("收起终端"), hide);
-  bar.append(title, label, select, ended, restart, collapse, kill);
+  const list = element("div", "terminal-sessions");
+  list.setAttribute("role", "tablist");
+  list.setAttribute("aria-orientation", "vertical");
+  bindLabel(list, "aria-label", localized("切换终端"));
+  const add = iconButton("add", localized("新建终端"), () => start());
+  const zoomLabel = () => panel.classList.contains("terminal-maximized") ? t("还原终端面板") : t("最大化终端面板");
+  const zoom = iconButton("maximize", zoomLabel, () => {
+    const expanded = panel.classList.toggle("terminal-maximized");
+    zoom.setAttribute("aria-pressed", String(expanded));
+    bindLabel(zoom, "aria-label", zoomLabel);
+    zoom.replaceChildren(icon(expanded ? "restore" : "maximize"));
+  });
+  zoom.setAttribute("aria-pressed", "false");
+  const hideButton = iconButton("close", localized("收起终端"), hide);
+  const actions = element("div", "terminal-actions");
+  actions.append(add, zoom, hideButton);
+  bar.append(title, ended, actions);
+  const deck = element("div", "terminal-deck");
   const body = element("div", "terminal-body");
-  panel.append(handle, bar, body);
+  deck.append(body, list);
+  panel.append(handle, bar, deck);
   parent.append(panel);
 
   const sessions = new Map<number, Session>();
   let active: Session | undefined;
+  let lastUse = 0;
   let opening = Promise.resolve();
   function resize() {
     if (!panel.hidden && active?.screen.clientWidth && active.screen.clientHeight) active.fit.fit();
@@ -84,36 +108,45 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
   }
   function hide() { visible(false); returnFocus(); }
   function update() {
-    const entries = [...sessions.values()];
-    const parts = entries.map(s => s.directory.split(desktopPlatform.pathSeparator).filter(Boolean));
-    select.replaceChildren(...entries.map((s, i) => {
-      let depth = 1;
-      const suffix = (p: string[]) => p.slice(-depth).join(desktopPlatform.pathSeparator);
-      while (depth < parts[i].length && parts.some((p, j) => i !== j && entries[j].directory !== s.directory && suffix(p) === suffix(parts[i]))) depth++;
-      const base = suffix(parts[i]) || s.directory;
-      const same = entries.filter(other => other.directory === s.directory);
-      const option = new Option(same.length > 1 ? base + " · " + s.id : base, String(s.id));
-      option.title = s.directory;
-      return option;
-    }));
-    select.value = String(active?.id);
-    select.hidden = entries.length < 2;
-    label.hidden = !select.hidden;
-    label.textContent = select.selectedOptions[0]?.text ?? "";
-    label.title = select.title = active?.directory ?? "";
+    if (sessions.size === 1 && list.parentNode !== bar) bar.insertBefore(list, actions);
+    if (sessions.size !== 1 && list.parentNode !== deck) deck.append(list);
+    for (const s of sessions.values()) {
+      s.tab.setAttribute("aria-selected", String(s === active));
+      s.tab.tabIndex = s === active ? 0 : -1;
+      s.row.classList.toggle("ended", !s.live);
+    }
     ended.hidden = !active || active.live;
-    kill.disabled = !active;
   }
-  function activate(s: Session) {
+  function activate(s: Session, focusTab = false) {
     if (active) active.screen.hidden = true;
     active = s;
+    s.lastUsed = ++lastUse;
     s.screen.hidden = false;
     visible(true);
     update();
     resize();
-    if (s.live) s.client.focus(); else restart.focus();
+    if (focusTab || !s.live) s.tab.focus(); else s.client.focus();
   }
-  select.onchange = () => { const s = sessions.get(Number(select.value)); if (s) activate(s); };
+  list.addEventListener("keydown", event => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const entries = [...sessions.values()];
+    const index = entries.findIndex(s => s.tab === event.target);
+    if (index < 0) return;
+    let next: Session;
+    switch (event.key) {
+      case "ArrowDown": next = entries[(index + 1) % entries.length]; break;
+      case "ArrowUp": next = entries[(index + entries.length - 1) % entries.length]; break;
+      case "Home": next = entries[0]; break;
+      case "End": next = entries[entries.length - 1]; break;
+      case "Delete":
+        event.preventDefault();
+        void terminate(entries[index]).catch(report);
+        return;
+      default: return;
+    }
+    event.preventDefault();
+    activate(next, true);
+  });
   async function pump(s: Session) {
     try {
       while (s.live) {
@@ -131,14 +164,38 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
       }
     }
   }
-  function start(location = current()) {
+  function mostRecent(entries: Session[]) {
+    return entries.sort((a, b) => b.lastUsed - a.lastUsed)[0];
+  }
+  function start(location = current(), mode: "new" | "reveal" = "new") {
     const task = opening.then(async () => {
-      const {id, directory} = await invoke<{id:number; directory:string}>("open_terminal", { location, cols:80, rows:24 });
+      if (mode === "reveal") {
+        const matching = [...sessions.values()].filter(s => s.live && sameLocation(s.origin, location));
+        const recent = mostRecent(matching);
+        if (recent) { activate(recent); return; }
+      }
+      const {id, shell, directory} = await invoke<{ id: number; shell: string; directory: string }>("open_terminal", { location, cols:80, rows:24 });
       const screen = element("div", "terminal-screen");
       const client = new Terminal({ theme: theme(), cursorBlink: true, scrollback: 3000, fontSize: 13,
         fontFamily: getComputedStyle(panel).getPropertyValue("--jot-font-mono"), minimumContrastRatio: 4.5 });
       const fit = new FitAddon();
-      const s = {id, directory:displayPath(directory), client, fit, screen, live:true};
+      const row = element("div", "terminal-session");
+      const tab = button("", () => activate(s), "terminal-tab");
+      tab.id = "terminal-tab-" + id;
+      tab.setAttribute("role", "tab");
+      screen.id = "terminal-screen-" + id;
+      tab.setAttribute("aria-controls", screen.id);
+      screen.setAttribute("role", "tabpanel");
+      screen.setAttribute("aria-labelledby", tab.id);
+      const path = displayPath(directory);
+      const name = shell + " · " + id;
+      const folder = path.split(desktopPlatform.pathSeparator).filter(Boolean).pop() ?? path;
+      tab.title = name + "\n" + path;
+      tab.append(icon("terminal"), element("span", "terminal-name", shell), element("small", "terminal-id", "#" + id), element("small", "terminal-folder", folder));
+      const remove = iconButton("trash", () => t("结束终端") + " " + name, () => terminate(s));
+      remove.classList.add("terminal-remove");
+      row.append(tab, remove);
+      const s: Session = { id, origin: location, lastUsed: 0, row, tab, client, fit, screen, live: true };
       try {
         body.append(screen);
         visible(true);
@@ -150,11 +207,13 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
             .catch(e => { if (s.live) report(e); });
         });
         client.onResize(({cols, rows}) => { if (s.live) void invoke("resize_terminal", {id, cols, rows}).catch(e => { if (s.live) report(e); }); });
+        list.append(row);
         sessions.set(id, s);
         activate(s);
         void pump(s);
       } catch (e) {
         sessions.delete(id);
+        row.remove();
         screen.remove();
         client.dispose();
         await invoke("close_terminal", {id});
@@ -164,18 +223,20 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
     opening = task.catch(() => {});
     return task;
   }
-  async function terminate() {
-    if (!active) return;
-    const s = active;
-    // Remove it before awaiting IPC so a second click or a late EOF cannot dispose it twice.
+  async function terminate(s: Session) {
+    if (!sessions.delete(s.id)) return;
     const running = s.live;
     s.live = false;
-    sessions.delete(s.id);
     s.client.dispose();
     s.screen.remove();
-    active = undefined;
-    const next = [...sessions.values()].pop();
-    if (next) activate(next); else { update(); hide(); }
+    s.row.remove();
+    const next = s === active ? mostRecent([...sessions.values()]) : active;
+    if (next) activate(next);
+    else {
+      active = undefined;
+      update();
+      hide();
+    }
     if (running) await invoke("close_terminal", { id: s.id });
   }
   async function toggle() {

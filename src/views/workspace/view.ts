@@ -28,7 +28,7 @@ export async function mount() {
   const titlebar = element("header", "workspace-titlebar jot-titlebar");
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
-  const tabs = documentTabs(open, closeTabs, saveOpenNote, newTerminal);
+  const tabs = documentTabs(open, closeTabs, saveOpenNote, openTerminal);
   const editorRoot = element("div", "editor-root");
   editorRoot.id = "workspace-editor-panel";
   const outline = element("aside", "workspace-outline jot-document-outline");
@@ -80,7 +80,7 @@ export async function mount() {
   const library = await librarySidebar(open, folder => {
     resumeMove = false;
     editFolder(folder);
-  }, addSource, (id, folder) => move(id, folder), saveOpenNote, newTerminal);
+  }, addSource, (id, folder) => move(id, folder), saveOpenNote, openTerminal);
   const move = moveDocument((result, folder) => {
     bindLabel(status, "text", () => result.warning ?? t("已移动"));
     void Promise.all([library.showFolder(folder), refreshCard()]).catch(report);
@@ -274,9 +274,9 @@ export async function mount() {
   function panel() {
     return terminal ??= import("./terminal").then(({terminalPanel}) => mountedTerminal = terminalPanel(documentPane, terminalButton, currentLocation, () => editor?.focus()));
   }
-  async function newTerminal(location = currentLocation()) {
+  async function openTerminal(location = currentLocation(), mode: "new" | "reveal" = "new") {
     if (location.kind === "document" && location.id) await saveOpenNote(location.id);
-    await (await panel()).start(location);
+    await (await panel()).start(location, mode);
   }
   const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), async () => (await panel()).toggle());
   terminalButton.setAttribute("aria-expanded", "false");
@@ -341,7 +341,7 @@ export async function mount() {
     previousDocument,
     get closeActive() { return editor && (tabs.multiple || desktopPlatform.windowsChrome || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
     newDocument: newDocument,
-    terminal: () => newTerminal(),
+    terminal: () => openTerminal(currentLocation(), "reveal"),
     save: () => editor?.save(),
     search: finder.focus,
     overview: showOverview,
