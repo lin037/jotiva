@@ -10,6 +10,7 @@ import { commands, matchesShortcut } from "../desktop/shortcuts";
 import { button, report } from "../ui/dom";
 import { fileDialog } from "../ui/file-dialog";
 import { applyIncoming } from "./document-sync";
+import { diagramTheme } from "./diagram-theme";
 import { trackCharacterCount } from "./character-count";
 import { trackListMarkers } from "./list-layout";
 import { retainScrollEnd } from "./scroll-end";
@@ -151,7 +152,7 @@ export class NoteEditor {
         openShortcutSettings: () => { void invoke("show_settings", { section: "shortcuts" }).catch(report); },
         plugins: [
           createHeadingFoldPlugin({ enabled: preferences.foldHeadings }),
-          createMermaidPlugin({ load: () => import("mermaid") }),
+          createMermaidPlugin({ load: () => import("mermaid"), theme: "base", themeVariables: diagramTheme }),
           compact ? createToolbarPlugin({
             enabled: false,
             groups: [
@@ -186,13 +187,13 @@ export class NoteEditor {
       session.#fileButton.hidden = session.storage !== "draft";
       status.before(session.#fileButton);
       const ready = editor;
-      const refreshLayout = (stylesheetChanged = false) => {
+      const refreshLayout = (themeChanged = false) => {
         const next = editorLayout(root);
         if (Number.isFinite(next.fontSize) && next.metrics.tableToolbarHeight > 0
           && JSON.stringify(next) !== JSON.stringify(layout)) {
           layout = next;
           void ready.setLayoutStyle(layout).catch(report);
-        } else if (stylesheetChanged) {
+        } else if (themeChanged) {
           void ready.invalidateLayout().catch(report);
         }
       };
@@ -224,8 +225,8 @@ export class NoteEditor {
         if (opened.#menuActive) opened.publishMenu();
       });
       session.#modeWatcher.observe(root, { attributes: true, attributeFilter: ["data-jot-editor-mode"] });
-      session.#stopAppearance = onAppearanceChange(({ editing }, stylesheetChanged) => {
-        refreshLayout(stylesheetChanged);
+      session.#stopAppearance = onAppearanceChange(({ editing }, themeChanged) => {
+        refreshLayout(themeChanged);
         if (ready.isPluginEnabled("heading-fold") !== editing.foldHeadings) {
           void ready.setPluginEnabled("heading-fold", editing.foldHeadings).then(refreshShortcuts).catch(report);
         }

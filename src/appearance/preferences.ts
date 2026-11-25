@@ -6,8 +6,9 @@ import { accentColors } from "./accent";
 
 import ink from "../../docs/assets/ink-and-steel.css?inline";
 import material from "./material.css?inline";
+import blueprint from "../../docs/assets/blueprint.css?inline";
 
-const presets = { default: "", ink, material };
+const presets = { default: "", ink, material, blueprint };
 export type ThemePreset = keyof typeof presets;
 export type ThemeMode = "system" | "light" | "dark";
 export type WritingFont = "system" | "serif" | "mono";
@@ -50,7 +51,7 @@ export interface Appearance extends AppearancePreferences {
 }
 
 const media = matchMedia("(prefers-color-scheme: dark)");
-const subscribers = new Set<(value: Appearance, stylesheetChanged: boolean) => void>();
+const subscribers = new Set<(value: Appearance, themeChanged: boolean) => void>();
 const fontVariables: Record<WritingFont, string> = {
   system: "--jot-font-ui",
   serif: "--jot-font-serif",
@@ -64,6 +65,9 @@ function apply(value: Appearance) {
   const preset = value.themePreset ?? "default";
   const presetChanged = preset !== (appearance?.themePreset ?? "default");
   const customChanged = value.stylesheet?.css !== appearance?.stylesheet?.css;
+  const scheme = (value.mode === "system" ? media.matches : value.mode === "dark") ? "dark" : "light";
+  const themeChanged = presetChanged || customChanged || value.accent !== appearance?.accent
+    || document.documentElement.dataset.jotScheme !== scheme;
   if (presetChanged) {
     if (preset === "default") {
       presetStyle?.remove();
@@ -78,15 +82,14 @@ function apply(value: Appearance) {
   appearance = value;
   setLanguage(value.language);
   const { dataset, style } = document.documentElement;
-  const dark = value.mode === "system" ? media.matches : value.mode === "dark";
-  dataset.jotScheme = dark ? "dark" : "light";
+  dataset.jotScheme = scheme;
   dataset.jotPaper = value.editing.ruledPaper ? "ruled" : "plain";
   style.setProperty("--jot-preferred-size", String(value.baseSize ?? value.systemSize) + "px");
   style.setProperty("--jot-preferred-editor-font", "var(" + fontVariables[value.editing.font] + ")");
   (value.editing.headingScale ?? defaultHeadingScale).forEach((ratio, index) => {
     style.setProperty("--jot-preferred-heading-ratio-" + (index + 1), String(ratio));
   });
-  const colors = accentColors(value.accent, dark);
+  const colors = accentColors(value.accent, scheme === "dark");
   style.setProperty("--jot-preferred-accent-fill", colors.fill);
   style.setProperty("--jot-preferred-accent-ink", colors.ink);
   style.setProperty("--jot-preferred-on-accent", colors.onFill);
@@ -101,7 +104,7 @@ function apply(value: Appearance) {
       customStyle = undefined;
     }
   }
-  subscribers.forEach(listener => listener(value, presetChanged || customChanged));
+  subscribers.forEach(listener => listener(value, themeChanged));
 }
 
 export async function bindAppearance() {
@@ -119,7 +122,7 @@ export function currentAppearance() {
   return appearance;
 }
 
-export function onAppearanceChange(callback: (value: Appearance, stylesheetChanged: boolean) => void) {
+export function onAppearanceChange(callback: (value: Appearance, themeChanged: boolean) => void) {
   subscribers.add(callback);
   return () => { subscribers.delete(callback); };
 }

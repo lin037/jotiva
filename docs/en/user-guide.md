@@ -74,7 +74,7 @@ Choose **English** or **简体中文** under **Settings → Appearance → Inter
 
 Single-click a file in the sidebar to reuse the italic preview tab. Double-click the file or tab, choose **Keep tab** from the tab menu, or start editing to keep it. Disable **Preview files on single click** in **Settings → Editor** to keep every file. Each press of the global quick-note shortcut creates a fresh note, as does **More → New note** in a note window.
 
-Choose Default, Ink and Steel or Material in **Settings → Appearance**. Open documents and terminals pick up the change immediately. Imported CSS takes precedence.
+Choose Default, Ink and Steel, Material, or Blueprint in **Settings → Appearance**. Blueprint uses a fine grid in the title bar and a solid background for writing. Open documents and terminals pick up the change immediately. Imported CSS takes precedence.
 
 ## Software updates
 

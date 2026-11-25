@@ -30,6 +30,7 @@ pub enum ThemePreset {
     Default,
     Ink,
     Material,
+    Blueprint,
 }
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
@@ -232,6 +233,23 @@ impl Appearance {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn theme_presets_round_trip_from_settings() {
+        let file = std::env::temp_dir().join(format!("jot-presets-{}.json", std::process::id()));
+        let mut appearance = Appearance::load(file.clone()).unwrap();
+        for id in ["ink", "material", "blueprint", "default"] {
+            let preferences =
+                serde_json::from_value(serde_json::json!({ "themePreset": id })).unwrap();
+            appearance.save(preferences).unwrap();
+            appearance = Appearance::load(file.clone()).unwrap();
+            assert_eq!(
+                serde_json::to_value(appearance.view()).unwrap()["themePreset"],
+                id
+            );
+        }
+        fs::remove_file(file).unwrap();
+    }
 
     #[test]
     fn imported_stylesheet_persists_and_invalid_imports_leave_it_in_place() {

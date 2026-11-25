@@ -327,6 +327,7 @@ export async function mount() {
   const scheme = select<ThemeMode>("theme-mode", [["system", localized("跟随系统")], ["light", localized("浅色")], ["dark", localized("深色")]], mode => apply({ mode }));
   const preset = select<ThemePreset>("theme-preset", [
     ["default", localized("默认")], ["ink", localized("墨与钢")], ["material", "Material"],
+    ["blueprint", localized("蓝晒")],
   ], themePreset => apply({ themePreset }));
   const accent = element("input");
   accent.id = "accent";
