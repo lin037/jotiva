@@ -4,6 +4,11 @@ import { events } from "../desktop/ipc";
 import { setLanguage } from "../i18n";
 import { accentColors } from "./accent";
 
+import ink from "../../docs/assets/ink-and-steel.css?inline";
+import material from "./material.css?inline";
+
+const presets = { default: "", ink, material };
+export type ThemePreset = keyof typeof presets;
 export type ThemeMode = "system" | "light" | "dark";
 export type WritingFont = "system" | "serif" | "mono";
 export type HeadingScale = [number, number, number, number, number, number];
@@ -14,6 +19,7 @@ export interface EditingPreferences {
   wrapCode: boolean;
   foldHeadings: boolean;
   toolbar: boolean;
+  previewTabs: boolean;
   headingScale: HeadingScale | null;
   ruledPaper: boolean;
 }
@@ -23,6 +29,7 @@ export interface AppearancePreferences {
   baseSize: number | null;
   mode: ThemeMode;
   accent: string | null;
+  themePreset: ThemePreset;
   editing: EditingPreferences;
 }
 
@@ -50,10 +57,24 @@ const fontVariables: Record<WritingFont, string> = {
   mono: "--jot-font-mono",
 };
 let appearance: Appearance;
+let presetStyle: HTMLStyleElement | undefined;
 let customStyle: HTMLStyleElement | undefined;
 
 function apply(value: Appearance) {
-  const stylesheetChanged = value.stylesheet?.css !== appearance?.stylesheet?.css;
+  const preset = value.themePreset ?? "default";
+  const presetChanged = preset !== (appearance?.themePreset ?? "default");
+  const customChanged = value.stylesheet?.css !== appearance?.stylesheet?.css;
+  if (presetChanged) {
+    if (preset === "default") {
+      presetStyle?.remove();
+      presetStyle = undefined;
+    } else {
+      presetStyle ??= document.createElement("style");
+      presetStyle.dataset.jotPreset = preset;
+      presetStyle.textContent = "@layer jot-preset {\n" + presets[preset] + "\n}";
+      document.head.insertBefore(presetStyle, customStyle ?? null);
+    }
+  }
   appearance = value;
   setLanguage(value.language);
   const { dataset, style } = document.documentElement;
@@ -69,7 +90,7 @@ function apply(value: Appearance) {
   style.setProperty("--jot-preferred-accent-fill", colors.fill);
   style.setProperty("--jot-preferred-accent-ink", colors.ink);
   style.setProperty("--jot-preferred-on-accent", colors.onFill);
-  if (stylesheetChanged) {
+  if (customChanged) {
     if (value.stylesheet) {
       customStyle ??= document.createElement("style");
       customStyle.dataset.jotCustomTheme = "";
@@ -80,7 +101,7 @@ function apply(value: Appearance) {
       customStyle = undefined;
     }
   }
-  subscribers.forEach(listener => listener(value, stylesheetChanged));
+  subscribers.forEach(listener => listener(value, presetChanged || customChanged));
 }
 
 export async function bindAppearance() {

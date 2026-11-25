@@ -25,6 +25,15 @@ impl ThemeMode {
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum ThemePreset {
+    #[default]
+    Default,
+    Ink,
+    Material,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum WritingFont {
     #[default]
     System,
@@ -39,6 +48,7 @@ pub struct Editing {
     pub wrap_code: bool,
     pub fold_headings: bool,
     pub toolbar: bool,
+    pub preview_tabs: bool,
     pub heading_scale: Option<[f64; 6]>,
     pub ruled_paper: bool,
 }
@@ -50,6 +60,7 @@ impl Default for Editing {
             wrap_code: true,
             fold_headings: true,
             toolbar: true,
+            preview_tabs: true,
             heading_scale: None,
             ruled_paper: false,
         }
@@ -69,6 +80,7 @@ pub struct Preferences {
     pub language: crate::i18n::Language,
     pub base_size: Option<f64>,
     pub mode: ThemeMode,
+    pub theme_preset: ThemePreset,
     pub accent: Option<String>,
     pub editing: Editing,
 }
@@ -274,6 +286,7 @@ mod tests {
         assert!(preferences.editing.heading_scale.is_none());
         assert!(!preferences.editing.ruled_paper);
         assert!(!preferences.editing.toolbar);
+        assert!(preferences.editing.preview_tabs);
         assert!(appearance.saved.workspace.sidebar.is_none());
         appearance
             .save_workspace(WorkspaceLayout {

@@ -1,0 +1,50 @@
+:root {
+  --jot-color-bg: #fffbff;
+  --jot-color-chrome: #f3edf7;
+  --jot-color-sidebar: #ece6f0;
+  --jot-color-surface: #f7f2fa;
+  --jot-color-text: #1d1b20;
+  --jot-color-muted: #49454f;
+  --jot-color-line: #cac4d0;
+  --jot-color-line-strong: #79747e;
+  --jot-color-hover: #e8e0eb;
+  --jot-color-active: #e8def8;
+  --jot-color-accent: #6750a4;
+  --jot-color-accent-fill: #6750a4;
+  --jot-color-on-accent: #ffffff;
+  --jot-color-selection: #eaddff;
+  --jot-color-quote: #f1ecf5;
+  --jot-radius-small: 8px;
+  --jot-radius: 12px;
+  --jot-radius-large: 20px;
+  --jot-shadow-popup: 0 3px 12px #21182f30;
+}
+
+:root[data-jot-scheme="dark"] {
+  --jot-color-bg: #141218;
+  --jot-color-chrome: #211f26;
+  --jot-color-sidebar: #2b2930;
+  --jot-color-surface: #211f26;
+  --jot-color-text: #e6e0e9;
+  --jot-color-muted: #cac4d0;
+  --jot-color-line: #49454f;
+  --jot-color-line-strong: #938f99;
+  --jot-color-hover: #38343f;
+  --jot-color-active: #4a4458;
+  --jot-color-accent: #d0bcff;
+  --jot-color-accent-fill: #d0bcff;
+  --jot-color-on-accent: #381e72;
+  --jot-color-selection: #4f378b;
+  --jot-color-quote: #2b2731;
+}
+
+.jot-window-menu, .jot-dialog { border-radius: var(--jot-radius-large); }
+.library-node[aria-current="true"], .document-tab:has([role="tab"][aria-selected="true"]) { border-radius: var(--jot-radius); }
+
+.jot-settings .settings-group {
+  background: var(--jot-color-surface);
+  border: 0;
+  border-radius: var(--jot-radius-large);
+  padding: var(--jot-space-5);
+}
+.jot-button.primary { border-radius: 999px; }

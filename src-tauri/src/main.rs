@@ -11,6 +11,7 @@ mod platform;
 mod settings;
 mod storage;
 mod terminal;
+mod updates;
 mod windows;
 
 use std::sync::{Mutex, RwLock};
@@ -716,6 +717,7 @@ fn save_settings(window: WebviewWindow, preferences: Preferences) -> Result<(), 
     settings::shortcuts::validate_local(&preferences)?;
     let state = app.state::<Mutex<Settings>>();
     let previous = state.lock().unwrap().preferences.clone();
+    let quick = preferences.quick.clone();
     let local = preferences.local.clone();
     let changed = previous.local != local;
     let menu_result = if changed {
@@ -732,6 +734,10 @@ fn save_settings(window: WebviewWindow, preferences: Preferences) -> Result<(), 
                 .map_err(|restore| format!("{error}。恢复菜单键位失败：{restore}"))?;
         }
         return Err(error);
+    }
+    if previous.quick != quick {
+        app.emit("desktop:quick-shortcut-changed", quick)
+            .map_err(|e| e.to_string())?;
     }
     app.emit("desktop:shortcuts-changed", local)
         .map_err(|error| error.to_string())
@@ -784,7 +790,6 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     let mut labels = Vec::new();
     for (id, source) in [
         ("open-main", "打开 Jotiva"),
-        ("open-quick", "速记"),
         ("new-quick", "新建便签"),
         ("search", "查找便签和文档"),
         ("overview", "平铺便签"),
@@ -804,8 +809,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-main" => desktop::report(desktop::open_main(app, None)),
-            "open-quick" => desktop::report(desktop::perform(app, Action::Quick)),
-            "new-quick" => desktop::report(desktop::start_quick(app, true)),
+            "new-quick" => desktop::report(desktop::perform(app, Action::Quick)),
             "search" => desktop::report(desktop::perform(app, Action::Search)),
             "overview" => desktop::report(desktop::show_find(app, true)),
             "dock" => desktop::report(desktop::perform(app, Action::Dock)),
@@ -820,6 +824,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     let mut startup_files = platform::startup_files();
     platform::builder()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(menus::build)
         .on_menu_event(menus::handle)
         .setup(|app| {
@@ -833,6 +838,7 @@ fn main() {
                 data.join("workspace.json"),
             )?));
             app.manage(terminal::Terminal::default());
+            app.manage(updates::Updates::default());
             app.manage(workspace::DroppedTabs::default());
             app.manage(Mutex::new(Folders::load(data.join("folders.json"))?));
             app.manage(Mutex::new(desktop::Desktop::default()));
@@ -854,6 +860,7 @@ fn main() {
             app.state::<Mutex<Settings>>().lock().unwrap().install();
             tray(app.handle())?;
             windows::main(app.handle())?;
+            updates::start(app.handle());
             // Start one light shell during launch. Its normal idle timeout also
             // applies before the first capture and no editor Worker starts here.
             desktop::report(
@@ -983,6 +990,9 @@ fn main() {
             menus::workspace_tab_menu,
             quit,
             cancel_quit,
+            updates::read_update,
+            updates::check_update,
+            updates::install_update,
             read_appearance,
             save_workspace,
             save_appearance,

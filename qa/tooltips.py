@@ -35,7 +35,7 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
       return {preferences, defaults:preferences, trusted:false, shortcutError:null};
     }
     if (cmd==='record_shortcut' || cmd==='quick_presented') return;
-    if (cmd==='new_quick') { window.createdQuick=true; return; }
+    if (cmd==='new_quick') { window.createdQuick=(window.createdQuick ?? 0)+1; return; }
     if (cmd==='drag_window') { window.windowDrags=(window.windowDrags || 0) + 1; return; }
     if (cmd==='note_action' && args.action.kind==='rename') {
       if (args.action.name==='重名.md') throw Error('该名称已存在');
@@ -431,12 +431,20 @@ def verify(browser, url):
     }""")
     page.wait_for_function("window.attachedFromQuick?.id === 1 && attachedFromQuick.choice === 17 && window.dragTracking === false")
     menu.click()
-    for name in ("在此窗口新建便签", "编辑工具栏", "查找便签", "在主窗口编辑", "解除挂载并收回"):
+    for name in ("新建便签", "编辑工具栏", "查找便签", "在主窗口编辑", "解除挂载并收回"):
         page.get_by_role("button", name=name).hover()
         page.wait_for_timeout(460)
         expect(tip).to_have_count(0)
-    page.get_by_role("button", name="在此窗口新建便签").click()
-    page.wait_for_function("window.createdQuick")
+    create = page.get_by_role("button", name="新建便签")
+    expect(create).to_have_attribute("aria-keyshortcuts", "Control+Alt+J")
+    page.evaluate("window.testEvent('desktop:quick-shortcut-changed','Control+Shift+Space')")
+    expect(create).to_have_attribute("aria-keyshortcuts", "Control+Shift+Space")
+    create.click()
+    page.wait_for_function("window.createdQuick === 1")
+    page.evaluate("window.testEvent('desktop:editor-action','new-quick')")
+    page.wait_for_function("window.createdQuick === 2")
+    page.keyboard.press("Meta+n")
+    assert page.evaluate("window.createdQuick") == 2
     expect(page.locator("#quick-actions:popover-open")).to_have_count(0)
     menu.click()
     page.keyboard.press("Escape")

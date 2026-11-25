@@ -68,3 +68,12 @@ Jev filing is off by default. If you turn it on and ask for a suggestion, Jotiva
 ## Change the theme or shortcuts
 
 Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
+
+
+Single-click a file in the sidebar to reuse the italic preview tab. Double-click the file or tab, choose **Keep tab** from the tab menu, or start editing to keep it. Disable **Preview files on single click** in **Settings → Editor** to keep every file. Each press of the global quick-note shortcut creates a fresh note, as does **More → New note** in a note window.
+
+Choose Default, Ink and Steel or Material in **Settings → Appearance**. Open documents and terminals pick up the change immediately. Imported CSS takes precedence.
+
+## Software updates
+
+Signed update-enabled builds check on startup and every six hours. Open **Settings → Software updates** to check manually or install a verified update. Jotiva saves open editors before restarting and asks before closing a running terminal. Install the first update from 0.1.1 manually. Debian installations update through the package manager.

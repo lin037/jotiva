@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       number: ${{ steps.version.outputs.number }}
+      signed: ${{ steps.version.outputs.signed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -30,6 +31,7 @@ jobs:
       - id: version
         env:
           REF_NAME: ${{ github.ref_name }}
+          SIGNED: ${{ inputs.publish || vars.JOTIVA_SIGNED_RELEASE == 'true' }}
         run: |
           python3 - <<'PY'
           import json, os, re, tomllib
@@ -44,6 +46,7 @@ jobs:
           assert ref in (f"v{version}", f"build/v{version}"), (ref, version)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               print(f"number={version}", file=output)
+              print(f"signed={os.environ['SIGNED'].lower()}", file=output)
           PY
 
   ci:
@@ -63,12 +66,47 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+      - name: Import Developer ID application and installer identities
+        if: needs.version.outputs.signed == 'true'
+        env:
+          CERTIFICATES: ${{ secrets.JOTIVA_MAC_CERTIFICATES }}
+          CERT_PASSWORD: ${{ secrets.JOTIVA_MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/jotiva.keychain-db"
+          password=$(openssl rand -hex 32)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 7200 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          cert="$RUNNER_TEMP/developer-id.p12"
+          trap 'rm -f "$cert"' EXIT
+          printf '%s' "$CERTIFICATES" | base64 -D > "$cert"
+          security import "$cert" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
       - name: Build the universal application
+        env:
+          SIGNED: ${{ needs.version.outputs.signed }}
+          JOTIVA_UPDATER_PUBLIC_KEY: ${{ vars.JOTIVA_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          JOT_INSTALLER_IDENTITY: ${{ vars.JOT_INSTALLER_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          python3 scripts/build-macos.py --bundles app --target universal-apple-darwin -- --locked
+          args=()
+          if [[ "$SIGNED" == true ]]; then
+            : "${APPLE_ID:?}" "${APPLE_PASSWORD:?}" "${APPLE_TEAM_ID:?}"
+            python3 scripts/update-release.py config "$RUNNER_TEMP/update.json"
+            args+=(--config "$RUNNER_TEMP/update.json")
+          fi
+          python3 scripts/build-macos.py "${args[@]}" --bundles app --target universal-apple-darwin -- --locked
       - name: Build and verify installers
         env:
+          JOT_INSTALLER_IDENTITY: ${{ needs.version.outputs.signed == 'true' && vars.JOT_INSTALLER_IDENTITY || '' }}
           VERSION: ${{ needs.version.outputs.number }}
         run: |
           python3 -m pip install -r scripts/requirements-macos.txt
@@ -77,6 +115,25 @@ jobs:
           python3 scripts/package-macos.py "$app" --output-dir artifacts
           file="artifacts/Jotiva_${VERSION}_universal"
           python3 qa/macos/installers.py "$app" "$file.dmg" "$file.pkg" --zip "$file.zip"
+      - name: Verify publisher, notarize installers and collect signed update
+        if: needs.version.outputs.signed == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          target=src-tauri/target/universal-apple-darwin/release/bundle/macos
+          xcrun stapler validate "$target/Jotiva.app"
+          dmg=(artifacts/*.dmg)
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "${dmg[0]}"
+          for file in artifacts/*.pkg artifacts/*.dmg; do
+            xcrun notarytool submit "$file" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple "$file"
+            xcrun stapler validate "$file"
+          done
+          cp "$target/Jotiva.app.tar.gz" "$target/Jotiva.app.tar.gz.sig" artifacts/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: packages-macos-universal
@@ -94,7 +151,40 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-web
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: pnpm tauri build --bundles nsis -- --locked
+      - name: Build NSIS installer
+        shell: pwsh
+        env:
+          SIGNED: ${{ needs.version.outputs.signed }}
+          CERTIFICATE: ${{ secrets.JOTIVA_WINDOWS_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.JOTIVA_WINDOWS_CERTIFICATE_PASSWORD }}
+          JOTIVA_UPDATER_PUBLIC_KEY: ${{ vars.JOTIVA_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $configArgs = @()
+          if ($env:SIGNED -eq 'true') {
+            $file = Join-Path $env:RUNNER_TEMP 'publisher.pfx'
+            try {
+              [IO.File]::WriteAllBytes($file, [Convert]::FromBase64String($env:CERTIFICATE))
+              $password = ConvertTo-SecureString $env:CERT_PASSWORD -AsPlainText -Force
+              $cert = Import-PfxCertificate -FilePath $file -CertStoreLocation Cert:\CurrentUser\My -Password $password
+              $env:JOTIVA_CERT_THUMBPRINT = ($cert | Where-Object HasPrivateKey | Select-Object -First 1).Thumbprint
+              if (!$env:JOTIVA_CERT_THUMBPRINT) { throw 'Missing Windows code signing identity' }
+            } finally { Remove-Item -Force -ErrorAction SilentlyContinue $file }
+            $config = Join-Path $env:RUNNER_TEMP 'update.json'
+            python scripts/update-release.py config $config
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            $configArgs = @('--config', $config)
+          }
+          pnpm tauri build @configArgs --bundles nsis -- --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($env:SIGNED -eq 'true') {
+            $files = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe') + @(Get-Item 'src-tauri/target/release/Jotiva.exe')
+            foreach ($file in $files) {
+              $result = Get-AuthenticodeSignature $file.FullName
+              if ($result.Status -ne 'Valid' -or $result.SignerCertificate.Thumbprint -ne $env:JOTIVA_CERT_THUMBPRINT) { throw "Publisher verification failed for $file" }
+            }
+          }
       - name: Check installer and executable metadata
         shell: pwsh
         env:
@@ -115,7 +205,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: packages-windows-x64
-          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe*
           if-no-files-found: error
 
   linux:
@@ -140,7 +230,19 @@ jobs:
           sudo apt-get "${apt_options[@]}" update -o APT::Update::Error-Mode=any
           sudo env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libfuse2t64 patchelf xvfb xauth dbus-x11
-      - run: pnpm tauri build --bundles deb,appimage -- --locked
+      - name: Build Linux packages
+        env:
+          SIGNED: ${{ needs.version.outputs.signed }}
+          JOTIVA_UPDATER_PUBLIC_KEY: ${{ vars.JOTIVA_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          args=()
+          if [[ "$SIGNED" == true ]]; then
+            python3 scripts/update-release.py config "$RUNNER_TEMP/update.json"
+            args+=(--config "$RUNNER_TEMP/update.json")
+          fi
+          pnpm tauri build "${args[@]}" --bundles deb,appimage -- --locked
       - name: Check Debian launcher and AppImage
         env:
           VERSION: ${{ needs.version.outputs.number }}
@@ -159,6 +261,7 @@ jobs:
           test -x squashfs-root/usr/bin/Jotiva
           mkdir -p artifacts
           cp "${deb[0]}" "${appimage[0]}" artifacts/
+          if [[ "${{ needs.version.outputs.signed }}" == true ]]; then cp "${appimage[0]}.sig" artifacts/; fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: packages-linux-x86_64
@@ -184,12 +287,16 @@ jobs:
           VERSION: ${{ needs.version.outputs.number }}
         run: |
           git archive --format=tar.gz --prefix="Jotiva-${VERSION}/" --output="artifacts/Jotiva-${VERSION}-source.tar.gz" HEAD
+          if [[ "${{ needs.version.outputs.signed }}" == true ]]; then
+            python3 scripts/update-release.py manifest artifacts "$VERSION"
+          fi
           cd artifacts
           files=(./*.dmg ./*.pkg ./*.zip ./*-setup.exe ./*.deb ./*.AppImage ./*.tar.gz)
           if [[ -f ../docs/HelloJotiva.md ]]; then
             cp ../docs/HelloJotiva.md .
             files+=(./HelloJotiva.md)
           fi
+          if [[ -f latest.json ]]; then files+=(./*.sig ./latest.json); fi
           sha256sum "${files[@]}" > SHA256SUMS
           sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

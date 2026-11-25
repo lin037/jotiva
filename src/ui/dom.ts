@@ -26,14 +26,14 @@ export function element<K extends keyof HTMLElementTagNameMap>(tag: K, className
   return result;
 }
 
-export function button(label: Label, action: () => unknown, className?: string, tip?: Label) {
+export function button(label: Label, action: (event: MouseEvent) => unknown, className?: string, tip?: Label) {
   const control = element("button", className, label);
   control.type = "button";
   if (tip) bindLabel(control, "data-tip", tip);
-  control.addEventListener("click", async () => {
+  control.addEventListener("click", async event => {
     clearError();
     try {
-      await action();
+      await action(event);
     } catch (error) {
       report(error);
     }

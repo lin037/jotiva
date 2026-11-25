@@ -797,7 +797,7 @@ pub fn perform(app: &AppHandle, action: Action) -> Result<(), String> {
         return Ok(());
     }
     match action {
-        Action::Quick => start_quick(app, false),
+        Action::Quick => start_quick(app),
         Action::Search => show_find(app, false),
         Action::Dock => {
             let state = app.state::<Mutex<Desktop>>();
@@ -860,78 +860,92 @@ pub fn appearance_changed(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-pub fn start_quick(app: &AppHandle, create: bool) -> Result<(), String> {
+fn start_quick(app: &AppHandle) -> Result<(), String> {
     if quitting(app) {
         return Ok(());
     }
     let target = Native::focused(true);
-    let (target, selected, epoch) = {
+    if target.own_app
+        && let Some((label, _)) = app.webview_windows().into_iter().find(|(label, window)| {
+            windows::is_quick(label) && window.is_focused().unwrap_or(false)
+        })
+    {
+        return app
+            .emit_to(label, events::EDITOR_ACTION, "new-quick")
+            .map_err(|e| e.to_string());
+    }
+    let destination = {
         let state = app.state::<Mutex<Desktop>>();
         let mut desktop = state.lock().unwrap();
         if !target.own_app {
-            desktop.standalone = None;
+            if target.id != 0 {
+                desktop.standalone = None;
+            }
             desktop.origin = target.pid;
             desktop.target = (target.id != 0).then_some(target);
         }
-        let selected = match (target.own_app, desktop.mode) {
-            (true, Mode::Edit(id)) => Some(id),
-            _ => desktop
-                .target
-                .and_then(|target| desktop.attachments.get(&target.id)?.selected),
-        };
-        (desktop.target, selected, desktop.epoch)
+        NewQuick::primary(&desktop)
     };
-    if create {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            report(create_quick(app, windows::QUICK.to_string(), epoch).await)
-        });
-        return Ok(());
-    }
-    let id = {
-        let state = app.state::<RwLock<Notes>>();
-        let mut notes = state.write().unwrap();
-        let host = target.map(|target| target.id);
-        let existing = selected.or_else(|| host.and_then(|host| notes.latest(host)));
-        if let Some(id) = existing {
-            id
-        } else {
-            let source = target.map_or_else(|| "Jotiva".into(), |target| target.source());
-            notes.new_note(host, source)
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        report(create_at(app, windows::QUICK.into(), destination).await);
+    });
+    Ok(())
+}
+
+struct NewQuick {
+    host: Option<HostId>,
+    parent: Option<NoteId>,
+    source: String,
+}
+
+impl NewQuick {
+    fn primary(desktop: &Desktop) -> Self {
+        let target = desktop.target.filter(|_| desktop.standalone.is_none());
+        Self {
+            host: target.map(|t| t.id),
+            parent: target
+                .and_then(|t| desktop.attachments.get(&t.id)?.selected)
+                .or(desktop.standalone),
+            source: target.map_or_else(|| "Jotiva".into(), |t| t.source()),
         }
-    };
-    edit(app, id)
+    }
 }
 
 pub async fn create_quick(app: AppHandle, label: String, epoch: u64) -> Result<(), String> {
-    let caller = windows::note_id(&label);
-    let (host, parent, source) = {
+    let destination = {
         let state = app.state::<Mutex<Desktop>>();
         let desktop = state.lock().unwrap();
         if desktop.closing_for_quit.is_some() {
             return Ok(());
         }
-        if let Some(id) = caller {
+        if let Some(id) = windows::note_id(&label) {
             let w = desktop.note_windows.get(&id).ok_or("便签已关闭")?;
             if w.epoch != epoch {
                 return Ok(());
             }
-            (w.host, Some(id), String::new())
+            NewQuick {
+                host: w.host,
+                parent: Some(id),
+                source: String::new(),
+            }
         } else {
             if desktop.epoch != epoch {
                 return Ok(());
             }
-            let target = desktop.target.filter(|_| desktop.standalone.is_none());
-            let parent = target
-                .and_then(|t| desktop.attachments.get(&t.id)?.selected)
-                .or(desktop.standalone);
-            (
-                target.map(|t| t.id),
-                parent,
-                target.map_or_else(|| "Jotiva".into(), |t| t.source()),
-            )
+            NewQuick::primary(&desktop)
         }
     };
+    create_at(app, label, destination).await
+}
+
+async fn create_at(app: AppHandle, label: String, destination: NewQuick) -> Result<(), String> {
+    let NewQuick {
+        host,
+        parent,
+        source,
+    } = destination;
+    let caller = windows::note_id(&label);
     let handle = app.clone();
     let id = tauri::async_runtime::spawn_blocking(move || {
         let state = handle.state::<RwLock<Notes>>();
@@ -958,28 +972,36 @@ pub async fn create_quick(app: AppHandle, label: String, epoch: u64) -> Result<(
         note_saved(&handle, id);
         let _ = handle.emit("desktop:files-changed", ());
         let _ = handle.emit(events::NOTES_CHANGED, ());
-        let current = {
+        let (current, has_parent) = {
             let state = handle.state::<Mutex<Desktop>>();
             let desktop = state.lock().unwrap();
-            desktop.closing_for_quit.is_none()
+            let current = desktop.closing_for_quit.is_none()
                 && match caller {
                     Some(id) => desktop
                         .note_windows
                         .get(&id)
-                        .is_some_and(|w| w.epoch == epoch && w.host == host),
+                        .is_some_and(|w| w.host == host),
                     None => {
-                        desktop.epoch == epoch
-                            && desktop
-                                .target
-                                .filter(|_| desktop.standalone.is_none())
-                                .map(|t| t.id)
-                                == host
+                        desktop
+                            .target
+                            .filter(|_| desktop.standalone.is_none())
+                            .map(|t| t.id)
+                            == host
                     }
-                }
+                };
+            let has_parent = parent.is_some()
+                || desktop.standalone.is_some()
+                || host.is_some_and(|h| {
+                    desktop
+                        .attachments
+                        .get(&h)
+                        .is_some_and(|a| a.selected.is_some())
+                });
+            (current, has_parent)
         };
         let result = if !current {
             Ok(())
-        } else if parent.is_some() {
+        } else if has_parent {
             note_windows::open(
                 &handle,
                 id,
@@ -1802,7 +1824,7 @@ pub fn request_quit(app: &AppHandle) -> Result<(), String> {
     desktop.closing_for_quit = Some(windows.keys().cloned().collect());
     drop(desktop);
     if windows.is_empty() {
-        app.exit(0);
+        crate::updates::finish_quit(app);
     }
     // The workspace owns terminal sessions and can veto quitting. Close it first.
     if let Some(main) = windows.get(crate::windows::MAIN) {
@@ -1827,6 +1849,7 @@ pub fn request_quit(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn cancel_quit(app: &AppHandle) {
+    crate::updates::cancel(app);
     app.state::<Mutex<Desktop>>()
         .lock()
         .unwrap()
@@ -1913,7 +1936,7 @@ pub fn window_destroyed(app: &AppHandle, label: &str) {
                 report(state.write().unwrap().remember(host, identity));
             }
         }
-        app.exit(0);
+        crate::updates::finish_quit(app);
     }
 }
 

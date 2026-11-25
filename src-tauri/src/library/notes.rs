@@ -1065,8 +1065,7 @@ impl Notes {
         Ok(id)
     }
 
-    // Explicit creation publishes the empty Markdown too. A plain capture
-    // shortcut still creates an ephemeral draft until its first input.
+    // Both quick-note entry points reserve an independent Markdown file immediately.
     pub fn create_window_note(
         &mut self,
         host: Option<HostId>,

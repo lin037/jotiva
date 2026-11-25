@@ -5,6 +5,7 @@ interface DesktopEnvironment {
   hostWindows: boolean;
   language?: Language;
   nameOnOpen?: boolean;
+  updatesEnabled?: boolean;
 }
 
 declare global {

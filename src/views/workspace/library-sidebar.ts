@@ -10,13 +10,14 @@ import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
 import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
+import type { OpenMode } from "./document-tabs";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
 import type { OpenTerminal } from "./terminal";
 import { workspaceFiles } from "./workspace-files";
 
 export async function librarySidebar(
-  open: (id: NoteId) => unknown,
+  open: (id: NoteId, mode?: OpenMode) => unknown,
   editFolder: (folder?: Folder) => void,
   addSource: () => void,
   moveArchive: (id: NoteId, folder: number | null) => unknown,

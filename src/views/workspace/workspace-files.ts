@@ -1,3 +1,4 @@
+import type { OpenMode } from "./document-tabs";
 import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
@@ -18,7 +19,7 @@ interface FileEntry {
   directory: boolean;
 }
 
-export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>, newTerminal: OpenTerminal) {
+export function workspaceFiles(openNote: (id: NoteId, mode?: OpenMode) => unknown, flush: (paths: string[]) => Promise<void>, newTerminal: OpenTerminal) {
   const panel = element("div", "workspace-files");
   bindLabel(panel, "aria-label", localized("工作区文件"));
   const expanded = new Set<string>();
@@ -45,8 +46,8 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
   }
 
   function fileRow(file: FileEntry) {
-    const entry = button(file.name, async () => {
-      await openNote(await openLibraryFile(file.path));
+    const entry = button(file.name, async event => {
+      await openNote(await openLibraryFile(file.path), event.detail === 1 ? "preview" : "keep");
     }, "library-node workspace-file");
     entry.title = file.path;
     entry.dataset.file = file.path;

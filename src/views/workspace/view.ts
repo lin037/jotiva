@@ -6,13 +6,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { events, notes, sources, type Card, type NoteId } from "../../desktop/ipc";
 import { bindWindowShortcuts, shortcutHint } from "../../desktop/shortcuts";
+import { watchUpdates } from "../../desktop/updates";
 import { saveBeforeClose } from "../../desktop/window-actions";
 import { NoteEditor } from "../../editor/note-editor";
 import { bindWindowMenu, icon, iconButton } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import { documentStatus } from "../../ui/document-status";
 import { noteList } from "../../ui/note-list";
-import { documentTabs } from "./document-tabs";
+import { currentAppearance, onAppearanceChange } from "../../appearance/preferences";
+import { documentTabs, type OpenMode } from "./document-tabs";
 import { documentDrag } from "./document-drag";
 import { documentPath } from "./document-file-menu";
 import { folderEditor, moveDocument } from "./folder-dialog";
@@ -29,6 +31,7 @@ export async function mount() {
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
   const tabs = documentTabs(open, closeTabs, saveOpenNote, openTerminal);
+  onAppearanceChange(({ editing }) => { if (editing.previewTabs === false) tabs.pin(); });
   const editorRoot = element("div", "editor-root");
   editorRoot.id = "workspace-editor-panel";
   const outline = element("aside", "workspace-outline jot-document-outline");
@@ -160,13 +163,14 @@ export async function mount() {
     return tail;
   }
 
-  function open(id: NoteId) {
-    return enqueue(() => present(id));
+  function open(id: NoteId, mode: OpenMode = "keep") {
+    return enqueue(() => present(id, false, mode));
   }
 
   function openTabs(cards: Pick<Card, "id" | "title">[]) {
     return enqueue(async () => {
       for (const card of cards) {
+        tabs.pin(card.id);
         tabs.add(card.id);
         tabs.rename(card.id, card.title);
       }
@@ -195,8 +199,9 @@ export async function mount() {
     });
   }
 
-  async function present(id?: NoteId, dismiss = false) {
+  async function present(id?: NoteId, dismiss = false, mode: OpenMode = "select") {
     if (editor && editor.id === id) {
+      if (mode === "keep") tabs.pin(id);
       await editor.synchronize();
       editor.focus();
       return;
@@ -223,7 +228,7 @@ export async function mount() {
     }
     const session = tabs.takeSession(id);
     try {
-      editor = await NoteEditor.open(editorRoot, id, status, { counter, mode: session?.mode, history: session?.history });
+      editor = await NoteEditor.open(editorRoot, id, status, { counter, mode: session?.mode, history: session?.history, onEdit: () => tabs.pin(id) });
     } catch (error) {
       tabs.remove(id);
       editorRoot.hidden = footer.hidden = outline.hidden = true;
@@ -231,7 +236,7 @@ export async function mount() {
       empty.hidden = false;
       throw error;
     }
-    tabs.select(id);
+    tabs.select(id, currentAppearance().editing.previewTabs === false ? "keep" : mode);
     windowButton.disabled = outlineButton.disabled = false;
     if (!outline.hidden) void editor.showOutline(outline).catch(report);
     editor.focus(session);
@@ -247,7 +252,7 @@ export async function mount() {
   outlineButton.setAttribute("aria-controls", outline.id);
   outlineButton.setAttribute("aria-expanded", "false");
   const finder = noteList(async (id, card) => {
-    if (!card.attached) return open(id);
+    if (!card.attached) return open(id, "preview");
     await editor?.save();
     await invoke("locate", { id });
   }, { onDismiss: () => editor?.focus() });
@@ -307,7 +312,13 @@ export async function mount() {
   const leading = element("div", "workspace-actions workspace-leading");
   const trailing = element("div", "workspace-actions workspace-trailing");
   leading.append(sidebar);
-  trailing.append(terminalButton);
+  const update = button("", () => invoke("show_settings", { section: "updates" }));
+  update.hidden = true;
+  trailing.append(update, terminalButton);
+  void watchUpdates(status => {
+    update.hidden = status.kind !== "available";
+    if (status.kind === "available") bindLabel(update, "text", () => t("更新到 {version}", { version: status.version }));
+  }).catch(report);
   if (desktopPlatform.windowsChrome) {
     const documentTools = element("div", "document-tools");
     add.replaceChildren(icon("add"));

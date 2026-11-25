@@ -119,6 +119,43 @@
   margin-inline-start: calc(-1 * (var(--jot-task-box-size) + var(--jot-list-marker-gap)));
   margin-inline-end: calc(var(--jot-list-marker-gap) - var(--jot-editor-source-space));
 }
+/* WebKit gives native checks different tints in inactive windows and disabled
+   projections. Paint both representations from the same theme tokens. */
+.jot-editor input.jot-task-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  position: relative;
+  padding: 0;
+  opacity: 1;
+  border: 1px solid var(--jot-color-muted);
+  border-radius: 3px;
+  background: var(--jot-color-bg);
+  vertical-align: middle;
+}
+.jot-editor input.jot-task-checkbox:checked {
+  border-color: var(--jot-color-accent-fill);
+  background: var(--jot-color-accent-fill);
+}
+.jot-editor input.jot-task-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 32%;
+  top: 9%;
+  width: 27%;
+  height: 54%;
+  border: solid var(--jot-color-on-accent);
+  border-width: 0 0.12em 0.12em 0;
+  transform: rotate(45deg);
+}
+.jot-editor input.jot-task-checkbox:focus-visible {
+  outline: 2px solid var(--jot-color-focus);
+  outline-offset: 2px;
+}
+@media (forced-colors: active) {
+  .jot-editor input.jot-task-checkbox { appearance: auto; -webkit-appearance: auto; }
+  .jot-editor input.jot-task-checkbox:checked::after { content: none; }
+}
 .jot-editor .cm-content.jot-live-preview-content .cm-line[data-jot-live-list-marker]:not([data-jot-live-list-marker="•"]):has(.jot-live-preview-task-checkbox)::before,
 .jot-editor .jot-editor-content .jot-list-item[value]:has(.jot-task-checkbox)::before {
   box-sizing: border-box;

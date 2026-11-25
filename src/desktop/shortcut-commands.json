@@ -27,7 +27,6 @@
   {"id": "appearance", "label": "外观设置", "group": "应用", "key": null, "menu": "jot-appearance"},
   {"id": "shortcutHelp", "label": "快捷键速查", "group": "应用", "key": null, "menu": "jot-shortcuts"},
   {"id": "quit", "label": "退出 Jotiva", "group": "应用", "key": "Primary+KeyQ", "menu": "jot-quit"},
-  {"id": "quickNote", "label": "打开速记", "group": "应用", "key": null, "menu": "jot-quick"},
   {"id": "dockWindow", "label": "靠右收拢或还原", "group": "应用", "key": null, "menu": "jot-dock"},
   {"id": "themeSystem", "label": "跟随系统外观", "group": "应用", "key": null, "menu": "jot-system"},
   {"id": "themeLight", "label": "切换浅色外观", "group": "应用", "key": null, "menu": "jot-light"},

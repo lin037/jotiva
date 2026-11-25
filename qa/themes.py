@@ -1,10 +1,12 @@
 """Import the example CSS through Settings and exercise the four bundled views."""
 from functools import partial
 from http.server import ThreadingHTTPServer
+import io
 import os
 import re
 from threading import Thread
 
+from PIL import Image
 from playwright.sync_api import expect, sync_playwright
 
 from tooltips import IPC, PROJECT, Static
@@ -40,7 +42,32 @@ def check_dialog_backdrop(page, expected):
     expect(dialog).to_have_count(0)
 
 
+def check_task_paint(browser, url):
+    context = browser.new_context(device_scale_factor=2)
+    context.add_init_script(IPC + "\nnote.markdown = '# Tasks\\n\\n- [x] live\\n- [x] projection\\n- [ ] open';")
+    page = context.new_page()
+    page.goto(url + "?view=main")
+    boxes = page.locator(".jot-task-checkbox:visible")
+    expect(boxes).to_have_count(3)
+    current = boxes.first
+    def pixels():
+        return Image.open(io.BytesIO(current.screenshot())).convert("RGB").tobytes()
+    for mode in ("light", "dark"):
+        page.evaluate("async mode => testEvent('desktop:appearance-changed', {...await __TAURI_INTERNALS__.invoke('read_appearance'), mode})", mode)
+        current.evaluate("box => box.disabled = false")
+        expect(current).to_have_css("appearance", "none")
+        before = pixels()
+        page.locator(".workspace-search input").focus()
+        assert before == pixels()
+        # The component's document projection renders this same native input disabled.
+        current.evaluate("box => box.disabled = true")
+        assert before == pixels()
+    expect(boxes.nth(2)).not_to_be_checked()
+    context.close()
+
+
 def verify(browser, url):
+    check_task_paint(browser, url)
     context = browser.new_context(color_scheme="light")
     context.add_init_script(IPC + STYLESHEET_IPC)
     settings = context.new_page()
@@ -59,6 +86,13 @@ def verify(browser, url):
     settings.locator("#theme-mode").select_option("light")
     expect(root).to_have_attribute("data-jot-scheme", "light")
 
+    workspace.evaluate("window.previousEditor = document.querySelector('.cm-content')")
+    settings.locator("#theme-preset").select_option("ink")
+    expect(root).to_have_css("background-color", "rgb(247, 244, 234)")
+    settings.locator("#theme-preset").select_option("material")
+    for page in (settings, workspace, quick):
+        expect(page.locator("html")).to_have_css("background-color", "rgb(255, 251, 255)")
+    assert workspace.evaluate("previousEditor === document.querySelector('.cm-content')")
     settings.locator('input[type="file"]').set_input_files(THEME)
     expect(settings.get_by_text(THEME.name, exact=True)).to_be_visible()
     document = context.new_page()
@@ -89,6 +123,8 @@ def verify(browser, url):
     settings.get_by_role("button", name="移除", exact=True).click()
     for page in (settings, workspace, quick, document):
         expect(page.locator("style[data-jot-custom-theme]")).to_have_count(0)
+    expect(root).to_have_css("background-color", "rgb(255, 251, 255)")
+    settings.locator("#theme-preset").select_option("default")
     expect(root).to_have_css("background-color", baseline)
     check_dialog_backdrop(workspace, "rgba(0, 0, 0, 0.25)")
     context.close()

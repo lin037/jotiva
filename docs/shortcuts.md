@@ -22,7 +22,7 @@
 | 与主窗口并排 | ⌘ + 反斜杠 | Ctrl + 反斜杠 |
 | 关闭标签或窗口 | ⌘W | Ctrl+W |
 | 打开设置 / 保存并退出 | ⌘, / ⌘Q | Ctrl+, / Ctrl+Q |
-| 从其他应用打开速记 | Control+Shift+Space | Ctrl+Shift+Space |
+| 新建一张便签（全局） | Control+Shift+Space | Ctrl+Shift+Space |
 
 在 Linux 上，能否用全局快捷键打开速记取决于桌面会话。窗口挂载和自动并排也需要桌面会话支持窗口定位。在文件树里，用方向键选中文件，按 F2 改名，按 Enter 打开。移到废纸篓或回收站时，Mac 用 `⌘Backspace`，Windows 和 Linux 用 `Delete`。
 

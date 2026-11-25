@@ -1,3 +1,4 @@
+import { onAppearanceChange } from "../../appearance/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -99,8 +100,9 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
     const style = getComputedStyle(panel);
     return { background: style.backgroundColor, foreground: style.color, cursor: style.color };
   }
-  new MutationObserver(() => { for (const {client} of sessions.values()) client.options.theme = theme(); })
-    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-jot-scheme", "style"] });
+  onAppearanceChange(() => {
+    for (const {client} of sessions.values()) client.options.theme = theme();
+  });
 
   function visible(value: boolean) {
     panel.hidden = !value;

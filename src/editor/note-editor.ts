@@ -100,16 +100,18 @@ export class NoteEditor {
     private readonly status: HTMLElement,
     private storage: DocumentStorage,
     private readonly onCard?: (card: Card) => void,
+    private readonly onEdit?: () => void,
   ) {}
 
   static async open(root: HTMLElement, id: NoteId, status: HTMLElement, {
-    compact = false, counter, mode = "live-preview", history, onCard,
+    compact = false, counter, mode = "live-preview", history, onCard, onEdit,
   }: {
     compact?: boolean;
     counter?: HTMLElement;
     mode?: MarkdownEditor["mode"];
     history?: MarkdownEditorOptions["history"];
     onCard?: (card: Card) => void;
+    onEdit?: () => void;
   } = {}) {
     root.classList.add("jot-editor");
     root.dataset.jotContext = compact ? "quick" : "workspace";
@@ -179,7 +181,7 @@ export class NoteEditor {
       editor.commands.unregister("mode.preview");
       const refreshShortcuts = bindEditorShortcuts(editor);
       session = new NoteEditor(id, note.source, note.version, initial, editor, worker, status,
-        note.file ? "file" : note.location?.folder != null ? "archive" : "draft", onCard);
+        note.file ? "file" : note.location?.folder != null ? "archive" : "draft", onCard, onEdit);
       if (note.filingTicket !== undefined) session.#openedFiling = { version: note.version, ticket: note.filingTicket };
       session.#fileButton.hidden = session.storage !== "draft";
       status.before(session.#fileButton);
@@ -284,6 +286,7 @@ export class NoteEditor {
 
   private changed() {
     if (this.#closing || this.#removed) return;
+    this.onEdit?.();
     this.#filing?.abort();
     this.#filing = undefined;
     this.#fileButton.disabled = false;
@@ -346,6 +349,7 @@ export class NoteEditor {
       await this.editor.input.settled();
       if (this.#removed || this.editor.confirmedValue === this.markdown) return;
       let markdown = this.editor.confirmedValue;
+      this.onEdit?.();
       try {
         this.version = await notes.save(this.id, this.version, markdown);
       } catch (error) {

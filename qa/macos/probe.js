@@ -640,7 +640,7 @@ if (label === "quick") {
 
   async function exerciseSelection(reopened, state) {
     document.querySelector('button[aria-label="便签操作"]').click();
-    const newNote = await waitFor(() => document.querySelector('#quick-actions:popover-open button[aria-label="在此窗口新建便签"]'));
+    const newNote = await waitFor(() => document.querySelector('#quick-actions:popover-open button[aria-label="新建便签"]'));
     newNote.click();
     const original = await run("read_card", { id: state.id });
     const second = await waitFor(async () => (await run("search_notes", {

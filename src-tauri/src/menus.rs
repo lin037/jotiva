@@ -221,7 +221,7 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             &item("jot-pin", "切换置顶")?,
             &item("document:tile", "与主窗口并排")?,
             &item("jot-previous", "上一份文档")?,
-            &item("jot-quick", "速记")?,
+            &item("jot-quick", "新建便签")?,
             &item("jot-attach", "挂载便签到窗口…")?,
             &item("jot-locate", "定位到宿主窗口")?,
             &item("jot-overview", "平铺便签")?,
@@ -399,6 +399,9 @@ pub fn sync(app: &AppHandle, label: Option<&str>) -> tauri::Result<()> {
             };
             let id = item.id().as_ref();
             let enabled = match id {
+                "jot-new" => {
+                    label.is_some_and(|s| s == windows::MAIN || windows::document_id(s).is_some())
+                }
                 "jot-return-host" => label.is_some_and(windows::is_quick) && document.attached,
                 "jot-pin" => {
                     document.exists
@@ -452,7 +455,6 @@ fn editor_action(app: &AppHandle, action: &str) -> Result<(), String> {
                 .map_err(|error| error.to_string())
         }
         _ => match action {
-            "new" => desktop::start_quick(app, true),
             "find" => desktop::show_find(app, false),
             "overview" => desktop::show_find(app, true),
             _ => Ok(()),

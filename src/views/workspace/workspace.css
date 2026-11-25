@@ -222,6 +222,7 @@
     font-size: var(--jot-type-small);
   }
   .document-tab:has([aria-selected="true"]) { background: var(--jot-color-bg); color: var(--jot-color-text); }
+  .document-tab[data-preview] .document-tab-name { font-style: italic; }
   .document-tab-name, .document-tab-close { border: 0; border-radius: 0; background: transparent; }
   .document-tab-name {
     min-inline-size: 0;

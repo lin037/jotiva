@@ -1,3 +1,4 @@
+import type { OpenMode } from "./document-tabs";
 import { localized } from "../../i18n";
 import { afterNaming, fileName } from "../../ui/file-name";
 import { invoke } from "@tauri-apps/api/core";
@@ -11,7 +12,7 @@ interface ArchiveEntry {
 }
 
 /** List filenames on expansion; a previously unseen file is opened only when chosen. */
-export function archiveFiles(folder: number | null, open: (id: NoteId) => unknown, mark: (row: HTMLElement) => void) {
+export function archiveFiles(folder: number | null, open: (id: NoteId, mode?: OpenMode) => unknown, mark: (row: HTMLElement) => void) {
   const panel = element("div", "library-notes");
   const rows = element("div", "results");
   panel.append(rows);
@@ -29,7 +30,7 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
     if (selected && !shown.includes(selected)) shown[shown.length - 1] = selected;
     rows.replaceChildren(...shown.map(entry => {
       const name = fileName(entry.path);
-      const row = button("", async () => open(entry.id ?? await openLibraryFile(entry.path)), "note-row");
+      const row = button("", async event => open(entry.id ?? await openLibraryFile(entry.path), event.detail === 1 ? "preview" : "keep"), "note-row");
       row.append(element("strong", undefined, name));
       row.title = name;
       row.dataset.file = entry.path;
@@ -68,7 +69,11 @@ export function archiveFiles(folder: number | null, open: (id: NoteId) => unknow
       if (id === active && path === activePath) return;
       active = id;
       activePath = path;
-      draw();
+      const row = Array.from(rows.querySelectorAll<HTMLElement>("[data-file]")).find(row =>
+        row.dataset.note === String(id) || row.dataset.file === path);
+      rows.querySelector("[aria-current]")?.removeAttribute("aria-current");
+      if (row) row.setAttribute("aria-current", "true");
+      else if (entries.some(entry => entry.id === id || entry.path === path)) draw();
     },
   };
 }

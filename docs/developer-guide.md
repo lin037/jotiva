@@ -73,3 +73,16 @@ pnpm tauri dev
 ## 许可证
 
 Jotiva 源码采用 MIT 许可。第三方组件和字体保留各自的许可。更新依赖和锁文件后，用 Python 3.10 或更高版本运行 `python3 scripts/third-party-notices.py`，再将生成的声明随改动一起提交。 [MIT 许可证](../LICENSE) · [第三方许可](../src-tauri/notices/THIRD-PARTY-NOTICES.txt)
+
+
+## 签名发布和自动更新
+
+正式发布由标签上的 Release packages 工作流执行。设置仓库变量 `JOTIVA_SIGNED_RELEASE=true` 可在预构建分支走同一套签名和验证。普通预构建仍可用于安装测试。选择 Publish 时，工作流要求以下发布凭据。
+
+| 用途 | GitHub Actions 配置 |
+| --- | --- |
+| 更新包签名 | 变量 `JOTIVA_UPDATER_PUBLIC_KEY` 为 Tauri 生成的公钥文件内容。将对应私钥、密码分别保存为 secrets `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。离线备份私钥，后续版本使用同一密钥。 |
+| macOS | 将含 Developer ID Application 和 Developer ID Installer 两个身份及私钥的 PKCS#12 文件以 Base64 存入 secret `JOTIVA_MAC_CERTIFICATES`，密码存入 `JOTIVA_MAC_CERTIFICATE_PASSWORD`。身份的完整名称分别放在变量 `APPLE_SIGNING_IDENTITY`、`JOT_INSTALLER_IDENTITY`。公证使用变量 `APPLE_TEAM_ID` 和 secrets `APPLE_ID`、`APPLE_PASSWORD`（应用专用密码）。 |
+| Windows | 此工作流从 secrets `JOTIVA_WINDOWS_CERTIFICATE`（Base64 PFX）和 `JOTIVA_WINDOWS_CERTIFICATE_PASSWORD` 导入发布身份，经 Authenticode 签名并核对 EXE 和 NSIS 安装包的证书指纹。使用硬件或云签名的发布者需用其签名服务替换导入步骤。 |
+
+签名构建为 macOS 通用应用、Windows x64 NSIS 和 Linux x86_64 AppImage 生成带版本的签名。收集步骤生成 `latest.json`，并把更新包、签名和清单一并计入 SHA256SUMS。安装器发布前，可在预构建产物中检查签名和公证。验证 macOS 权限延续需在同一台机器上从旧的 Developer ID 签名版本升级到新版本，保持应用标识、签名团队和安装路径稳定，再检查辅助功能授权。0.1.1 的临时签名与新的 Developer ID 身份不同，首次切换可能需要重新授权。

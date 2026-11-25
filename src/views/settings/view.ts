@@ -4,15 +4,16 @@ import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { accentPreset, accentPresets } from "../../appearance/accent";
-import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, setStylesheet, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type WritingFont } from "../../appearance/preferences";
+import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, setStylesheet, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type ThemePreset, type WritingFont } from "../../appearance/preferences";
 import { commands, effectiveShortcut, fixedShortcuts, globalActions, recordedShortcut, shortcutLabel, type GlobalBindings, type GlobalAction } from "../../desktop/shortcuts";
 import { events } from "../../desktop/ipc";
+import { mountUpdateSettings } from "../../desktop/updates";
 import { accessibilityHelp, watchAccessibility } from "../../desktop/window-access";
 import { icon } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import "./settings.css";
 
-type Section = "appearance" | "editor" | "filing" | "shortcuts" | "windows";
+type Section = "appearance" | "editor" | "filing" | "shortcuts" | "windows" | "updates";
 
 interface SettingsView {
   preferences: GlobalBindings;
@@ -27,6 +28,7 @@ const sections = [
   ["filing", localized("归档"), "folder"],
   ["shortcuts", localized("快捷键"), "keys"],
   ["windows", localized("窗口关联"), "window"],
+  ["updates", localized("软件更新"), "settings"],
 ] as const;
 
 function field(name: Label, controls: HTMLElement | HTMLElement[], id?: string) {
@@ -63,6 +65,7 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
     ["ruledPaper", localized("横线稿纸")],
     ["wrapCode", localized("代码块内自动换行")],
     ["foldHeadings", localized("显示标题折叠控件")],
+    ["previewTabs", localized("单击文件时使用预览标签")],
     ["toolbar", localized("显示主编辑器工具栏")],
   ] as const;
   const checkboxes = new Map<typeof toggles[number][0], HTMLInputElement>();
@@ -114,7 +117,7 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
 
   return (value: EditingPreferences) => {
     family.value = value.font;
-    for (const [key, input] of checkboxes) input.checked = value[key];
+    for (const [key, input] of checkboxes) input.checked = key === "previewTabs" ? value[key] !== false : value[key];
     const scale = value.headingScale ?? defaultHeadingScale;
     levels.forEach((input, i) => {
       if (document.activeElement !== input) input.value = String(Math.round(scale[i] * 100));
@@ -295,13 +298,14 @@ export async function mount() {
     panels.set(id, page);
   }
   root.append(navigation, content);
+  mountUpdateSettings(panels.get("updates")!);
 
   let savingAppearance = Promise.resolve<unknown>(undefined);
   function apply(patch: Partial<AppearancePreferences>, editor?: EditingPatch) {
     const request = savingAppearance.catch(() => {}).then(() => {
-      const { baseSize, mode, accent, language, editing } = currentAppearance();
+      const { baseSize, mode, themePreset, accent, language, editing } = currentAppearance();
       const changes = typeof editor === "function" ? editor(editing) : editor;
-      return saveAppearance({ baseSize, mode, accent, language, editing: { ...editing, ...changes }, ...patch });
+      return saveAppearance({ baseSize, mode, themePreset, accent, language, editing: { ...editing, ...changes }, ...patch });
     });
     savingAppearance = request;
     return request;
@@ -321,6 +325,9 @@ export async function mount() {
   const language = select<AppearancePreferences["language"]>("interface-language", [["zh-CN", "简体中文"], ["en", "English"]],
     language => apply({ language }));
   const scheme = select<ThemeMode>("theme-mode", [["system", localized("跟随系统")], ["light", localized("浅色")], ["dark", localized("深色")]], mode => apply({ mode }));
+  const preset = select<ThemePreset>("theme-preset", [
+    ["default", localized("默认")], ["ink", localized("墨与钢")], ["material", "Material"],
+  ], themePreset => apply({ themePreset }));
   const accent = element("input");
   accent.id = "accent";
   accent.type = "color";
@@ -343,6 +350,7 @@ export async function mount() {
   palette.append(custom);
   appearance.append(
     field(localized("界面语言"), language, language.id),
+    field(localized("界面主题"), preset, preset.id),
     field(localized("界面模式"), scheme, scheme.id),
     field(localized("基础字号"), [font, element("span", "muted", "pt"), applySize, systemSize], font.id),
     field(localized("强调色"), palette),
@@ -382,6 +390,7 @@ export async function mount() {
     font.value = String(value.baseSize ?? value.systemSize);
     systemSize.disabled = value.baseSize === null;
     scheme.value = value.mode;
+    preset.value = value.themePreset ?? "default";
     language.value = value.language ?? "zh-CN";
     const selected = accentPreset(value.accent);
     swatches.forEach((swatch, index) => swatch.setAttribute("aria-pressed", String(accentPresets[index] === selected)));

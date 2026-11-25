@@ -114,7 +114,12 @@ export async function mount() {
   }
 
   const collapse = () => leaveView(() => invoke("dismiss_quick"));
-  const create = () => afterSave(() => invoke("new_quick", { epoch: presented }));
+  async function create() {
+    const epoch = presented;
+    if (epoch !== latest) return;
+    await editor?.save();
+    if (epoch === latest) await invoke("new_quick", { epoch });
+  }
   const find = (tiled = false) => leaveView(() => {
     if (!editPane.hidden) editor?.rememberViewport();
     return invoke("show_find", { tiled });
@@ -162,7 +167,7 @@ export async function mount() {
     format.setAttribute("aria-pressed", "false");
     const recall = entry("source", localized("解除挂载并收回"), () => afterSave(() => invoke("recall_note", { id })));
     recall.dataset.recall = "";
-    const add = entry("add", localized("在此窗口新建便签"), create, "newDocument");
+    const add = entry("add", localized("新建便签"), create, "quick");
     add.dataset.newNote = "";
     menu.append(add, entry("search", localized("查找便签"), () => find(), "search"), element("hr"), format,
       entry("open", localized("在主窗口编辑"), () => afterSave(() => invoke("show_main", { id }))), recall);
@@ -208,10 +213,6 @@ export async function mount() {
   function updateEditChrome(view: Extract<QuickView, { kind: "edit" }>) {
     const pin = editPane.querySelector<HTMLButtonElement>("[data-pin]")!;
     displayPin(pin, view.pinned);
-    const add = editPane.querySelector<HTMLButtonElement>("[data-new-note]")!;
-    const label = () => view.standalone ? t("新建独立便签") : t("在此窗口新建便签");
-    bindLabel(add.querySelector("span")!, "text", label);
-    bindLabel(add, "aria-label", label);
     editPane.querySelector("[draggable=true]")?.setAttribute("aria-description", view.source ? sourceLabel(view.source) : t("独立便签"));
     editPane.querySelector<HTMLElement>("[data-recall]")!.hidden = !view.source;
   }
@@ -425,7 +426,6 @@ export async function mount() {
   const returnHost = () => afterSave(() => invoke("return_to_host", { id: editor?.id ?? folded?.id }));
   bindWindowShortcuts({
     main, pin: () => { if (!editPane.hidden) pin(); }, get returnHost() { return attached ? returnHost : undefined; },
-    newDocument: create,
     save: () => editor?.save(),
     search: () => find(),
     overview: () => find(true),
@@ -452,7 +452,7 @@ export async function mount() {
     listen(events.notesChanged, () => { void search?.refresh().catch(report); }),
     getCurrentWindow().listen<string>(events.editorAction, ({ payload }) => {
       const actions: Record<string, () => unknown> = {
-        main, pin, "return-host": returnHost, new: create, save: () => editor?.save(), file: () => editor?.file(), find: () => find(), overview: () => find(true),
+        main, pin, "return-host": returnHost, "new-quick": create, save: () => editor?.save(), file: () => editor?.file(), find: () => find(), overview: () => find(true),
       };
       void Promise.resolve().then(() => {
         const action = actions[payload];

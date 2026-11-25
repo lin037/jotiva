@@ -21,6 +21,7 @@ fn builder(app: &AppHandle, label: impl AsRef<str>) -> Builder<'_> {
         "os": std::env::consts::OS,
         "hostWindows": crate::platform::host_windows(),
         "language": crate::i18n::language(),
+        "updatesEnabled": crate::updates::enabled(app),
     });
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
         .on_navigation(|url| url.scheme() != "file")
@@ -97,6 +98,7 @@ pub fn document(app: &AppHandle, id: NoteId, title: &str, name_on_open: bool) ->
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SettingsSection {
+    Updates,
     Appearance,
     Editor,
     Filing,
