@@ -4,17 +4,18 @@ import "../styles/dialog.css";
 
 interface FileDialogOptions {
   initial?: string;
+  allowEmpty?: boolean;
   detail?: string;
   signal?: AbortSignal;
 }
 
-export function fileDialog(title: string, action: string, { initial, detail, signal }: FileDialogOptions = {}): Promise<string | undefined> {
+export function fileDialog(title: string, action: string, { initial, allowEmpty, detail, signal }: FileDialogOptions = {}): Promise<string | undefined> {
   return new Promise(resolve => {
     const dialog = element("dialog", "sheet jot-dialog");
     const form = element("form");
     const heading = element("h2", undefined, title);
     const input = element("input");
-    input.required = true;
+    input.required = !allowEmpty;
     input.value = initial ?? "";
     const ok = element("button", "primary", action);
     ok.type = "submit";

@@ -44,7 +44,7 @@ export async function librarySidebar(
   bindLabel(tabs, "aria-label", localized("文档视图"));
   const workspaceTab = button(localized("工作区"), () => switchTo(true));
   const archiveTab = button(localized("归档"), () => switchTo(false));
-  const add = iconButton("folderAdd", localized("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
+  const add = iconButton("folderAdd", localized("添加工作区文件夹"), localized("添加目录"), () => inWorkspace ? files.add() : editFolder());
   tabs.append(workspaceTab, archiveTab);
   bar.append(tabs, add);
   tree.append(files.panel, archive);

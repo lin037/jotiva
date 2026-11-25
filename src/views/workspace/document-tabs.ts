@@ -49,7 +49,7 @@ export function documentTabs(open: (id: NoteId, mode?: OpenMode) => Promise<void
     const existing = tabs.get(id);
     if (existing) return existing;
     const row = element("div", "document-tab");
-    const title = button("", () => open(id, "select"), "document-tab-name");
+    const title = button("", () => open(id, "select"), "document-tab-name", localized("切换文档"));
     title.addEventListener("dblclick", () => pin(id));
     title.draggable = true;
     title.dataset.note = String(id);

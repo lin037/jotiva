@@ -163,51 +163,67 @@ pub enum Location {
 }
 
 impl Location {
-    fn directory(self, app: &tauri::AppHandle) -> Result<PathBuf, String> {
-        let directory = match self {
+    fn resolve(self, app: &tauri::AppHandle) -> Result<(PathBuf, Option<String>), String> {
+        let (origin, is_file) = match self {
             Self::Document { id } => {
                 let state = app.state::<RwLock<Notes>>();
                 let notes = state.read().unwrap();
-                id.and_then(|id| notes.disk_path(id))
-                    .and_then(Path::parent)
-                    .map(Path::to_owned)
-                    .unwrap_or_else(|| notes.inbox_directory())
+                match id.and_then(|id| notes.disk_path(id)) {
+                    Some(file) => (file.to_owned(), true),
+                    None => (notes.inbox_directory(), false),
+                }
             }
-            Self::Archive { folder: Some(id) } => app
-                .state::<Mutex<Folders>>()
-                .lock()
-                .unwrap()
-                .get(id)?
-                .path
-                .clone(),
-            Self::Archive { folder: None } => app
-                .state::<RwLock<Notes>>()
-                .read()
-                .unwrap()
-                .inbox_directory(),
+            Self::Archive { folder: Some(id) } => (
+                app.state::<Mutex<Folders>>()
+                    .lock()
+                    .unwrap()
+                    .get(id)?
+                    .path
+                    .clone(),
+                false,
+            ),
+            Self::Archive { folder: None } => (
+                app.state::<RwLock<Notes>>()
+                    .read()
+                    .unwrap()
+                    .inbox_directory(),
+                false,
+            ),
             Self::Workspace { path } => {
                 let item = app
                     .state::<Mutex<Workspace>>()
                     .lock()
                     .unwrap()
                     .resolve(&path)?;
-                if item.is_dir() {
-                    item
-                } else {
-                    item.parent().ok_or_else(|| failure(item.display()))?.into()
-                }
+                let is_file = !item.is_dir();
+                (item, is_file)
             }
         };
+        let (directory, file_name) = if is_file {
+            (
+                origin
+                    .parent()
+                    .ok_or_else(|| failure(origin.display()))?
+                    .to_owned(),
+                origin
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned()),
+            )
+        } else {
+            (origin, None)
+        };
         crate::storage::check_directory(&directory).map_err(failure)?;
-        Ok(directory)
+        Ok((directory, file_name))
     }
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Started {
     id: u32,
     shell: String,
     directory: PathBuf,
+    file_name: Option<String>,
 }
 
 fn workspace_only(window: &WebviewWindow) -> Result<(), String> {
@@ -238,7 +254,7 @@ pub async fn open_terminal(
 ) -> Result<Started, String> {
     workspace_only(&window)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let directory = location.directory(window.app_handle())?;
+        let (directory, file_name) = location.resolve(window.app_handle())?;
         let state = window.state::<Terminal>();
         let mut sessions = state.0.lock().unwrap();
         if desktop::quitting(window.app_handle())
@@ -270,6 +286,7 @@ pub async fn open_terminal(
             id,
             shell,
             directory,
+            file_name,
         })
     })
     .await

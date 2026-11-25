@@ -48,6 +48,8 @@ While editing, press **Ctrl + Shift + Backquote** to return to the most recently
 
 The title bar terminal button hides the panel or brings back your last session. Use **+** to start another shell, the session list on the right to switch between shells, and the panel’s top edge to resize it. Switching or closing a document keeps its shell and running commands alive.
 
+A session takes its name from the file or folder where it was opened. Numbers distinguish sessions with the same name. Right-click a session and choose **Rename terminal**, or focus its tab and press F2. Clear the name and save to restore the default.
+
 Drag a file or a document tab into the terminal to insert its quoted path at the cursor. Press Enter when the command is ready. Scripts can read `JOTIVA_INBOX_DIR` to place generated or synced documents in the default archive. Use `$env:JOTIVA_INBOX_DIR` in PowerShell or `"$JOTIVA_INBOX_DIR"` in Bash or Zsh. **Terminate terminal** closes the selected session. If shells are running when you close the main window or quit the app, Jotiva asks for confirmation.
 
 ## Find your notes

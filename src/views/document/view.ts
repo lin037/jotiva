@@ -39,7 +39,7 @@ export async function mount(id: NoteId) {
     },
   });
   let editFolder: ReturnType<typeof folderEditor> | undefined;
-  const pin = iconButton("pin", localized("置顶文档窗口"), async () => {
+  const pin = iconButton("pin", localized("置顶文档窗口"), localized("置顶"), async () => {
     const pinned = pin.getAttribute("aria-pressed") !== "true";
     pin.disabled = true;
     try {
@@ -48,7 +48,6 @@ export async function mount(id: NoteId) {
       bindLabel(pin, "data-tip", () => pinned ? t("取消置顶") : t("置顶"));
     } finally { pin.disabled = false; }
   });
-  bindLabel(pin, "data-tip", localized("置顶"));
   pin.setAttribute("aria-pressed", "false");
   metadata.append(pin, filePath.control);
   root.append(paper, footer);

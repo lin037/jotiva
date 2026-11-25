@@ -243,11 +243,10 @@ export async function mount() {
     await refreshCard();
   }
 
-  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), toggleSidebar), "sidebar");
+  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), localized("侧栏"), toggleSidebar), "sidebar");
   sidebar.setAttribute("aria-pressed", "true");
-  const add = shortcutHint(iconButton("compose", localized("新建文档"), create), "newDocument");
-  bindLabel(add, "data-tip", localized("新建文档"));
-  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), toggleOutline), "outline");
+  const add = shortcutHint(iconButton("compose", localized("新建文档"), localized("新建文档"), create), "newDocument");
+  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), localized("大纲"), toggleOutline), "outline");
   outlineButton.disabled = true;
   outlineButton.setAttribute("aria-controls", outline.id);
   outlineButton.setAttribute("aria-expanded", "false");
@@ -283,10 +282,9 @@ export async function mount() {
     if (location.kind === "document" && location.id) await saveOpenNote(location.id);
     await (await panel()).start(location, mode);
   }
-  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), async () => (await panel()).toggle());
+  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), localized("终端"), async () => (await panel()).toggle());
   terminalButton.setAttribute("aria-expanded", "false");
   terminalButton.setAttribute("aria-controls", "workspace-terminal");
-  bindLabel(terminalButton, "data-tip", localized("显示或隐藏终端"));
   const showSettings = () => invoke("show_settings");
   const windowButton = element("button", "icon-button");
   windowButton.type = "button";
@@ -331,7 +329,7 @@ export async function mount() {
     });
   } else {
     leading.append(add);
-    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings"));
+    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), localized("设置"), showSettings), "settings"));
   }
   titlebar.append(leading, finder.panel, trailing, windowMenu);
   configureTitlebar(titlebar);

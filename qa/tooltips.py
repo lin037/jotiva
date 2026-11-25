@@ -214,6 +214,8 @@ def verify(browser, url):
     page.keyboard.press("Shift+F6")
     expect(page.locator('[data-directory="/work"]')).to_be_focused()
     side = page.get_by_role("button", name="显示或隐藏侧栏")
+    terminal = page.locator('[aria-controls="workspace-terminal"]')
+    hover(terminal, "终端")
     side.hover()
     expect(tip).to_have_count(0)
     expect(tip).to_have_text("侧栏")
@@ -340,6 +342,12 @@ def verify(browser, url):
     fold.click()
     hover(page.locator('.jot-heading-fold-button[aria-expanded="false"]').first, "展开")
     print("Passed outline navigation and document fold controls.", flush=True)
+    toolbar("command.palette").click()
+    for command_id, hint in (("table.next-cell", "下一格"), ("table.delete-row", "删行"),
+                             ("format.heading-2", "二级标题"), ("search.replace-next", "替换当前")):
+        page.get_by_role("searchbox", name="搜索编辑命令").fill(command_id)
+        hover(page.locator(f'[data-jot-command="{command_id}"]'), hint)
+    page.keyboard.press("Escape")
     for mode, label in [("source", "源码"), ("live-preview", "即时预览")]:
         toolbar("command.palette").click()
         page.get_by_role("searchbox", name="搜索编辑命令").fill("mode." + mode)
@@ -600,6 +608,8 @@ def verify_language(browser, url):
     settings.wait_for_function("JSON.parse(localStorage.getItem('qa:appearance')).language === 'en'")
     expect(settings.locator("html")).to_have_attribute("lang", "en")
     expect(settings.get_by_label("Interface language")).to_have_value("en")
+    workspace.locator('[aria-controls="workspace-terminal"]').hover()
+    expect(workspace.locator(".jot-tooltip:popover-open")).to_have_text("Terminal")
     settings.get_by_role("button", name="Shortcuts", exact=True).click()
     expect(settings.get_by_label("Search actions or shortcuts")).to_be_visible()
     settings.get_by_label("Search actions or shortcuts").fill("task list")

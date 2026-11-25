@@ -63,13 +63,10 @@ pub fn builder<'a>(mut builder: Builder<'a>, label: &str) -> Builder<'a> {
     if label != crate::windows::SETTINGS {
         builder = builder.disable_drag_drop_handler();
     }
-    if label == crate::windows::MAIN || crate::windows::is_quick(label) {
-        builder = builder
-            .title_bar_style(TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(LogicalPosition::new(15.0, 19.0));
-    }
     builder
+        .title_bar_style(TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(LogicalPosition::new(15.0, 19.0))
 }
 pub fn configure(window: &WebviewWindow, id: NoteId) -> tauri::Result<()> {
     let panel = window.to_panel::<panel::JotNotePanel>()?;

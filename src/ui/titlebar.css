@@ -35,6 +35,11 @@
     :root[data-platform="windows"] .workspace-search:focus-within { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: min(88vw, var(--jot-search-width)); }
   }
   .secondary-titlebar { grid-template-columns: 1fr minmax(0, auto) 1fr; padding-inline-start: 10px; }
+  .jot-titlebar { color: var(--jot-color-text); }
+  :root[data-platform="macos"] .secondary-titlebar {
+    padding-inline: var(--jot-titlebar-leading-inset);
+  }
+  :root[data-platform="macos"] .secondary-titlebar .caption-title { grid-column: 2; }
   .secondary-titlebar > button { justify-self: start; }
   .caption-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   body:has(> .secondary-titlebar) { display: flex; flex-direction: column; height: 100dvh; }

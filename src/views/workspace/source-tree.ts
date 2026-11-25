@@ -22,7 +22,7 @@ export function sourceTree(open: (id: NoteId) => unknown, add: () => void) {
   panel.setAttribute("role", "region");
   bindLabel(panel, "aria-label", localized("窗口便签"));
   const header = element("header", "library-section-heading");
-  header.append(element("h2", undefined, localized("窗口便签")), iconButton("add", localized("添加来源窗口"), add));
+  header.append(element("h2", undefined, localized("窗口便签")), iconButton("add", localized("添加来源窗口"), localized("添加来源"), add));
   const body = element("div", "source-sections");
   panel.append(header, body);
   const apps = new Map<string, boolean>();
