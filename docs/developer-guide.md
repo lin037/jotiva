@@ -55,7 +55,20 @@ pnpm tauri dev
 
 报告问题时，请附上系统和 Jotiva 的版本、能复现问题的最小 Markdown 示例、操作步骤，以及预期和实际结果。窗口问题请注明关联的应用、屏幕和全屏状态。如果正文丢失，请说明文件放在哪、最后用哪个应用保存，以及 Jotiva 当时显示了什么。发截图或日志前，请删掉私人路径、标题、正文和密钥。
 
-从默认分支建一个工作分支，再提交 Pull Request。写清改了什么、怎么验证的，如果有相关 Issue，也请附上链接。操作方式变了，就一起更新使用手册。
+提交 Pull Request 时，写清改了什么、怎么验证的，如果有相关 Issue，也请附上链接。操作方式变了，就一起更新使用手册。
+
+## 分支与发布
+
+`main` 是唯一长期维护的分支。每项改动从最新的 `main` 开分支，通过 Pull Request 合入 `main`。等 CI 通过后再合并。合并后删除远端工作分支，本地可运行 `git fetch --prune origin` 清理已删除的远端分支引用。
+
+| 分支 | 用途 |
+| --- | --- |
+| `feat/<主题>`、`fix/<主题>` | 功能、修复和日常维护。分支名写改动内容，例如 `fix/windows-window-focus`。 |
+| `verify/<主题>` | 需要推送后立即运行跨平台 CI 时使用。验证结束后，确认需要保留的改动已合入 `main`，再删除分支。 |
+| `release/X.Y.Z` | 需要集中准备版本号和发布说明时使用。发布 PR 合并后删除。 |
+| `build/vX.Y.Z` | 需要预打包时使用。推送会触发 `Release packages`，生成安装包供验证。确认产物已验收且需要保留的改动已合入 `main` 后删除。 |
+
+正式发布时，在 `main` 上要发布的提交打 `vX.Y.Z` 标签。针对该标签手动运行 `Release packages`，勾选 `publish`。工作流会校验标签和代码版本，运行 CI，通过后将安装包发布到 GitHub Releases。用版本标签定位历史版本。 [CI](https://github.com/lin037/jotiva/actions/workflows/ci.yml) · [Release packages](https://github.com/lin037/jotiva/actions/workflows/release.yml)
 
 ## 许可证
 

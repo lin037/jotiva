@@ -35,3 +35,16 @@ The host-window and file-manager interfaces live in `platform/contract.rs`. Look
 Run `pnpm build`, `pnpm test:unit`, and `pnpm test:rust`. If you touch file handling, check what happens after a normal save, an interrupted save, and a conflict. If you change Jev filing, run `pnpm test:filing` against the local mock service. The test guide covers WebKit and the native checks for macOS, Windows, X11, and Wayland. [Test guide (中文)](../verification.md)
 
 Use strict TypeScript and run rustfmt on Rust changes. Include both lockfiles when they change. In a bug report, give the Jotiva version, operating system, architecture, and the smallest sample that reproduces the issue. For window attachment, include the other app and your display setup. On Linux, say whether you're using X11 or Wayland. [Contributing](../../CONTRIBUTING.md)
+
+## Branches and releases
+
+`main` is the only long-lived branch. Start each change from the latest `main`, open a pull request against `main`, and wait for CI before merging. Delete the remote working branch after merge. Run `git fetch --prune origin` to remove stale remote-tracking refs locally.
+
+| Branch | Purpose |
+| --- | --- |
+| `feat/<topic>`, `fix/<topic>` | Features, fixes, and routine maintenance. Name the change, for example `fix/windows-window-focus`. |
+| `verify/<topic>` | Run cross-platform CI on push. Delete the branch after verification once any changes worth keeping have landed on `main`. |
+| `release/X.Y.Z` | Prepare version updates and release notes together when needed. Delete the branch after merging the release PR. |
+| `build/vX.Y.Z` | Build installers for verification. A push starts `Release packages`. Delete the branch once the packages have been checked and any changes worth keeping have landed on `main`. |
+
+For a formal release, tag the release commit on `main` as `vX.Y.Z`. Manually run `Release packages` on that tag and select `publish`. The workflow checks that the source versions match the tag, runs CI, and publishes the packages to GitHub Releases after the checks pass. Use version tags to find past releases. [CI](https://github.com/lin037/jotiva/actions/workflows/ci.yml) · [Release packages](https://github.com/lin037/jotiva/actions/workflows/release.yml)

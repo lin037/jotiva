@@ -4,7 +4,7 @@
 
 ## 提交改动
 
-1. Fork 仓库，从 `main` 建立工作分支。按开发者指南启动 Jotiva。 [本地开发](docs/developer-guide.md)
+1. 从最新的 `main` 建立工作分支。没有仓库写权限时，先 Fork。 [分支与发布](docs/developer-guide.md#分支与发布) · [本地开发](docs/developer-guide.md)
 2. 提交一个可以单独审查的改动。修改用户操作时，同步更新使用手册。修改依赖时，提交对应锁文件和许可声明。
 3. 在 Pull Request 写明问题、改动和实际执行的测试。改了界面可以附截图，改了文件操作请写清原文件在失败或重启后的状态。 [测试说明](docs/verification.md)
 
