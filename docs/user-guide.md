@@ -122,7 +122,6 @@ Jev 归档**默认关闭**，开启后也只会在你主动点击「**用 Jev �
 <summary>配置 HTTP 图床上传参数与 macOS 本地选图提示</summary>
 
 - **HTTP 上传参数**：接口需接收 `POST multipart/form-data` 请求并返回 JSON。例如服务接收字段为 `file`，返回 `{"data":{"url":"https://cdn.example.com/photo.png"}}`，在设置中分别填入 `file` 与 JSON Pointer `/data/url` 即可；如需鉴权可勾选「使用 Bearer 密钥」并在系统凭据中配置密钥。
-- **macOS 本地图片菜单**：如果在工具栏点击选择本地图片时菜单意外收起，重新打开菜单后可用键盘方向键聚焦该选项并按 `Enter` 调出文件选择器。
 
 </details>
 

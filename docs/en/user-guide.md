@@ -120,7 +120,6 @@ When you paste a screenshot or insert an image from the toolbar, Jotiva stores i
 <summary>HTTP upload configuration & macOS local picker tip</summary>
 
 - **HTTP upload fields**: The endpoint must accept `POST multipart/form-data` and return JSON. For example, if the form field is `file` and the response is `{"data":{"url":"https://cdn.example.com/photo.png"}}`, set **Form file field** to `file` and **Image URL JSON Pointer** to `/data/url`. If authentication is required, enable **Use a bearer token** and set up the token in your system credential store.
-- **macOS menu tip**: If clicking the local file option in the image menu closes the menu without opening the picker, reopen the menu, navigate to the option with the arrow keys, and press `Enter`.
 
 </details>
 

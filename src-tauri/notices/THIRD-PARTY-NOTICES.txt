@@ -15309,7 +15309,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------
 
-npm @jot-md/editor 0.4.0
+npm @jot-md/editor 0.4.1
 npm @jot-md/editor-protocol 0.3.1
 
 MIT License

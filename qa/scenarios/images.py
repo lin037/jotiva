@@ -156,11 +156,14 @@ def check_image_settings_and_picker(browser, url, ipc):
     data = pixels.getvalue()
     page.route("**/fixture.png", lambda r: r.fulfill(body=data, content_type="image/png"))
 
-    def select_image():
+    def select_image(*, keyboard=False):
         page.locator('[data-jot-toolbar-command="toolbar.open-image"]').click()
+        button = page.get_by_role("button", name="选择本地图片…")
         with page.expect_file_chooser() as chooser:
-            # WebKit 0.4.0 closes this upstream popover on mouse focusout before click.
-            page.get_by_role("button", name="选择本地图片…").press("Enter")
+            if keyboard:
+                button.press("Enter")
+            else:
+                button.click()
         chooser.value.set_files({"name": "test.png", "mimeType": "image/png", "buffer": data})
 
     content = page.locator(".cm-content")
@@ -171,7 +174,7 @@ def check_image_settings_and_picker(browser, url, ipc):
     assert upload["width"] == 241 and 0 < upload["size"] < len(data)
     assert upload["headers"]["x-jot-revision"] == "3" and upload["headers"]["x-jot-note"] == "1"
     page.evaluate("window.priorVersion = window.savedImageNote; window.failImage = true")
-    select_image()
+    select_image(keyboard=True)
     expect(page.get_by_text("fixture upload failed", exact=True)).to_be_visible()
     assert page.evaluate("window.priorVersion === window.savedImageNote")
     context.close()
