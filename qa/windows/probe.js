@@ -145,7 +145,11 @@ export async function mounted(ctx) {
   collapse.click();
   await waitFor(() => visible(document.querySelector(".quick-folded-bar [data-caption=close]")), "folded window controls");
   await input(ctx, "global quick capture from Edge", {external: true, keys: ["ControlKey", "ShiftKey", "F9"]});
-  await waitFor(async () => document.querySelector(".quick-view[data-mode=edit]") && visible(editor()) &&
-    editor().textContent.includes("main-sync") && await run("plugin:window|is_focused"), "global shortcut reopened mounted note");
+  const sibling = await waitFor(async () => (await run("plugin:window|get_all_windows"))
+    .find(label => /^quick-[1-9]\d*$/.test(label)), "fresh note beside the mounted note");
+  const fresh = await run("read_note", {id: Number(sibling.slice(6))});
+  if (fresh.id === id || fresh.markdown || !(await run("read_note", {id})).markdown.includes("main-sync")) {
+    throw Error("The global shortcut must create a blank note and preserve the previous document");
+  }
   mark("quick-received");
 }

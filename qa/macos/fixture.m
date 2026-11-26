@@ -133,9 +133,7 @@ static CGPoint exposed_point(NSWindow *target) {
     return CGPointZero;
 }
 
-static const char *click_host(NSWindow *target) {
-    CGPoint point = exposed_point(target);
-    if (CGPointEqualToPoint(point, CGPointZero)) return "fixture fully occluded";
+static const char *click_point(CGPoint point) {
     CGEventRef motion = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, point, kCGMouseButtonLeft);
     CGEventPost(kCGHIDEventTap, motion);
     CFRelease(motion);
@@ -143,10 +141,19 @@ static const char *click_host(NSWindow *target) {
     CGEventSetFlags(event, 0);
     CGEventSetIntegerValueField(event, kCGMouseEventClickState, 1);
     CGEventPost(kCGHIDEventTap, event);
-    CGEventSetType(event, kCGEventLeftMouseUp);
+    CFRelease(event);
+    usleep(40000);
+    event = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp, point, kCGMouseButtonLeft);
+    CGEventSetFlags(event, 0);
+    CGEventSetIntegerValueField(event, kCGMouseEventClickState, 1);
     CGEventPost(kCGHIDEventTap, event);
     CFRelease(event);
     return "clicked";
+}
+
+static const char *click_host(NSWindow *target) {
+    CGPoint point = exposed_point(target);
+    return CGPointEqualToPoint(point, CGPointZero) ? "fixture fully occluded" : click_point(point);
 }
 
 static const char *drag_file(pid_t jot_pid, CGPoint start, NSWindow *target, BOOL switching) {
@@ -358,7 +365,8 @@ int main(int argc, char **argv) {
                         printf("status %d %s\n", NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier,
                             app.keyWindow.title.UTF8String ?: "");
                         fflush(stdout);
-                    } else if ([command isEqualToString:@"note-stack"]) {
+                    } else if ([command isEqualToString:@"note-stack"] || [command hasPrefix:@"note-stack "]) {
+                        pid_t note_pid = [command hasPrefix:@"note-stack "] ? [command componentsSeparatedByString:@" "].lastObject.intValue : jot_pid;
                         NSArray *ordered = CFBridgingRelease(CGWindowListCopyWindowInfo(
                             kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
                         NSMutableArray *stack = [NSMutableArray new];
@@ -367,7 +375,7 @@ int main(int argc, char **argv) {
                             NSInteger number = [window[(__bridge NSString *)kCGWindowNumber] integerValue];
                             if (number == a.windowNumber) [stack addObject:@"A"];
                             else if (number == b.windowNumber) [stack addObject:@"B"];
-                            else if (pid == jot_pid) {
+                            else if (pid == note_pid) {
                                 NSString *title = window[(__bridge NSString *)kCGWindowName];
                                 if ([title isEqual:@"Jotiva"] || [title isEqual:@"Jotiva 便签"]) [stack addObject:title];
                             }
@@ -388,10 +396,19 @@ int main(int argc, char **argv) {
                         if (hostNumber == a.windowNumber || hostNumber == b.windowNumber) puts(hostNumber == a.windowNumber ? "A" : "B");
                         else printf("%ld %ld\n", (long)hostPid, (long)hostNumber);
                         fflush(stdout);
-                    } else if ([command isEqualToString:@"geometry"] || [command isEqualToString:@"resize"]) {
+                    } else if ([command hasPrefix:@"click-note"] || [command isEqualToString:@"geometry"] || [command isEqualToString:@"resize"]) {
                         CGRect frame;
                         if (!quick_frame(jot_pid, &frame) || !quick_on_top_at_center(jot_pid, frame)) puts("no quick");
-                        else if ([command isEqualToString:@"resize"]) { resize_quick(frame); puts("resize sent"); }
+                        else if ([command hasPrefix:@"click-note"]) {
+                            // The folded window has an expand button at the trailing end of its title bar.
+                            CGPoint point = frame.size.height <= 120 ? CGPointMake(CGRectGetMaxX(frame)-20, CGRectGetMinY(frame)+19)
+                                : CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame));
+                            NSArray *args = [command componentsSeparatedByString:@" "];
+                            if (args.count == 3) point = CGPointMake(CGRectGetMaxX(frame)-[args[1] doubleValue], CGRectGetMinY(frame)+[args[2] doubleValue]);
+                            CGRect pixel = CGRectMake(point.x-.5, point.y-.5, 1, 1);
+                            double sent = NSDate.date.timeIntervalSince1970 * 1000;
+                            printf("%s %.3f\n", CGRectContainsPoint(frame, point) && quick_on_top_at_center(jot_pid, pixel) ? click_point(point) : "note occluded", sent);
+                        } else if ([command isEqualToString:@"resize"]) { resize_quick(frame); puts("resize sent"); }
                         else printf("frame %.0f %.0f %.0f %.0f\n", frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
                         fflush(stdout);
                     } else if ([command isEqualToString:@"menu-close"]) {
@@ -414,8 +431,10 @@ int main(int argc, char **argv) {
                         bool enter = [command isEqualToString:@"return"];
                         bool quick = [command isEqualToString:@"s"];
                         pid_t expected = quick ? getpid() : jot_pid;
-                        if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != expected ||
-                            !CGPreflightPostEventAccess()) {
+                        // A nonactivating note can own the keyboard while the host remains frontmost.
+                        // Deliver Quit to our test process so a focus change cannot quit another app.
+                        pid_t front = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+                        if ((!quit && front != expected && !(quick && front == jot_pid)) || !CGPreflightPostEventAccess()) {
                             printf("key ignored\n");
                             fflush(stdout);
                             return;
@@ -428,8 +447,13 @@ int main(int argc, char **argv) {
                         CGEventSetFlags(down, mods);
                         CGEventSetFlags(up, mods);
                         double sent = NSDate.date.timeIntervalSince1970 * 1000;
-                        CGEventPost(kCGSessionEventTap, down);
-                        CGEventPost(kCGSessionEventTap, up);
+                        if (quit) {
+                            CGEventPostToPid(jot_pid, down);
+                            CGEventPostToPid(jot_pid, up);
+                        } else {
+                            CGEventPost(kCGSessionEventTap, down);
+                            CGEventPost(kCGSessionEventTap, up);
+                        }
                         CFRelease(down);
                         CFRelease(up);
                         printf("key posted %.3f\n", sent);

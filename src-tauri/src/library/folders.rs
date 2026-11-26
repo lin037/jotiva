@@ -331,13 +331,23 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert!(enabled(&folders).is_empty());
-        folders
-            .save(input(Some(added.id), &imported, true), false)
-            .unwrap();
+        let renamed = FolderInput {
+            name: "Meetings".into(),
+            description: "Weekly discussions and action items".into(),
+            ..input(Some(added.id), &imported, true)
+        };
+        folders.save(renamed, true).unwrap();
+        let reloaded = Folders::load_fixture(config.clone())
+            .unwrap()
+            .filing_candidates();
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded[0].id, added.id);
+        assert_eq!(reloaded[0].name, "Meetings");
         assert_eq!(
-            enabled(&Folders::load_fixture(config.clone()).unwrap()),
-            [added.id]
+            reloaded[0].description,
+            "Weekly discussions and action items"
         );
+        assert_eq!(reloaded[0].path, imported);
         folders
             .save(input(Some(added.id), &imported, false), false)
             .unwrap();

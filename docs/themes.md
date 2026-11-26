@@ -1,16 +1,48 @@
-# 外观和主题
+# 外观、排版与主题定制
 
-在「设置 → 外观」可以选浅色、深色，或跟随系统。基础字号可设为 11–18 pt，标题栏控件、侧栏、对话框和速记都会跟着调整。显示缩放沿用桌面设置。
+[项目首页](../README.md) · [使用手册](user-guide.md) · [English](en/themes.md)
 
-雾蓝、松绿、藤紫和陶土各有浅色与深色版本。选「自定…」可指定按钮填色。Jotiva 按填色亮度选用黑字或白字，同时给链接、选中图标和焦点边框生成适合当前背景的同色系颜色。内置界面的正文大小文字以 4.5∶1 为最低对比度。 [W3C 文字对比度说明](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+Jotiva 将 **「整套外观主题」** 和 **「个人排版偏好」** 拆开管理：你可以随时切换或分享主题配色，同时保留自己设好的字号、字体、标题比例和样式微调。主题仍可以调整默认的正文字号比例。
 
-「设置 → 编辑器」中，H1–H6 的字号分别按正文字号的百分比设置，范围为 80%–240%。每项标签会预览相应字号，点「恢复默认」可以还原。这里也能更换正文字体、开启横线稿纸、切换折叠控件、代码换行及主窗工具栏。主窗口和速记默认使用素纸。
+---
 
-## 导入 CSS
+## 一、个人排版与内置外观
 
-想试试自定义主题，可以下载墨钢主题。它用了直角边框、暖黄色和衬线字体，有浅色和深色两套配色。 [墨钢主题](assets/ink-and-steel.css)
+打开 **「设置 → 界面外观」** 与 **「设置 → 编辑选项」**，即可调整以下选项（所有已打开的窗口与内置终端会同步生效）：
 
-在「设置 → 外观」点「导入 CSS…」，选好文件后，Jotiva 会保存一份副本，并在现有窗口和新窗口里应用这套样式。默认变量最先加载，接着是应用样式，最后是导入的 CSS。CSS 文件不能超过 128 KB，资源访问遵守应用内置的规则。想恢复默认样式，可以从应用菜单选「主题 → 关闭自定义 CSS」。原生菜单和 macOS 窗口按钮仍由操作系统绘制。
+- **外观模式与强调色**：选择浅色、深色或跟随系统；内置雾蓝、松绿、藤紫、陶土四种配色，也可以「自定…」按钮填充色（Jotiva 会自动计算保证文字可读的对比度）。
+- **界面主题**：内置 **默认**、**墨与钢**、**Material** 与 **蓝晒** 四套主题，每套均提供浅色与深色版本。
+- **独立于主题的个人排版**：
+  - 基础字号（`11–18 px`）同步缩放界面控件、侧栏与便签；
+  - 正文字体（系统字体 / 衬线 / 等宽）与 H1–H6 标题字号比例（`80%–240%`）；
+  - 横线稿纸、标题折叠控件、代码块自动换行与主窗工具栏开关；
+  - **全局样式微调**：直接输入或粘贴 CSS，点击左下角「**格式化**」整理缩进，再点右下角「**保存**」应用。切换任何主题时，这里保存的习惯都会保留；清空后保存即可移除。
+
+---
+
+## 二、导入与分享 CSS 主题
+
+导入的主题是一份非空、UTF-8 编码的 `.css` 文件（上限 128 KB），方便像普通文件一样保存、分享与更新：
+
+1. 在 **「设置 → 界面外观 → 我的主题」** 点击「**导入主题…**」，选择本地 `.css` 文件，Jotiva 会将其复制到应用主题目录，并以文件名（去掉 `.css`）作为主题名称。
+2. 在「**界面主题**」列表中选中刚导入的主题即可即时换色。
+3. **更新与改名**：重新导入同名 `.css` 时可选择更新现有主题或另存新名。正在使用的主题更新后会立即生效。在「我的主题」中重命名会同步修改已安装的主题文件。
+
+---
+
+## 三、主题编写参考（进阶）
+
+### 快速起步：基于「墨与钢」改色
+内置的 [墨与钢主题 CSS](assets/ink-and-steel.css) 和 [蓝晒主题 CSS](assets/blueprint.css) 都在文件顶部集中定义了浅色/深色色表。复制一份另存为新文件名，修改顶部几个变量即可得到一套完整主题：
+
+| 想改什么 | 修改「墨与钢」开头对应的变量 |
+| --- | --- |
+| 强调色与按钮 | `--ink-accent`（同时影响链接、流程图边框与甘特图任务条）、`--ink-on-accent`（按钮及任务条上的文字色） |
+| 纸张与侧栏底色 | `--ink-paper`（编辑区背景）、`--ink-panel`（侧栏背景） |
+| 正文与辅助文字 | `--ink-text`（正文与图内文字）、`--ink-muted`（次要文字与连线） |
+
+### 通用主题变量（`--jot-*`）
+如果需要跨主题通用（或直接写进「全局样式微调」），推荐覆盖公共 `--jot-*` 变量，详见 [默认 token 定义](../src/styles/tokens.css)：
 
 ```css
 :root {
@@ -18,8 +50,8 @@
   --jot-color-accent-fill: #6760ad;
   --jot-color-on-accent: #ffffff;
   --jot-color-sidebar: #f5f2fa;
-  --jot-font-base: 13px;
-  --jot-editor-font-size: 15px;
+  --jot-editor-scale: 1.15;
+  --jot-quick-scale: 1.08;
   --jot-sidebar-width: clamp(12rem, 24%, 17rem);
 }
 
@@ -29,26 +61,17 @@
   --jot-color-accent-fill: #c6b8fd;
   --jot-color-on-accent: #1c1826;
 }
-
-.jot-editor[data-jot-context="quick"] {
-  --jot-editor-size: 14px;
-}
 ```
 
-| 改哪里 | 入口 |
+| 定制范围 | 常用入口 |
 | --- | --- |
-| 背景、文字、选中效果 | `--jot-color-bg`、`--jot-color-text`、`--jot-color-muted`、`--jot-color-hover`、`--jot-color-active`、`--jot-color-line` |
-| 强调色、按钮及焦点 | `--jot-color-accent` 用于链接和图标。按钮填色与文字分别用 `--jot-color-accent-fill` 和 `--jot-color-on-accent`。焦点边框和光晕用 `--jot-color-focus` 和 `--jot-focus-ring`。 |
-| 顶部与左侧区域 | `--jot-color-chrome`、`--jot-color-sidebar`、`--jot-sidebar-width`、`--jot-search-width` |
-| 基础排版和操作尺寸 | `--jot-font-base`、`--jot-font-ui`、`--jot-type-small`、`--jot-icon-size`、`--jot-control-height` |
-| 正文 | `--jot-editor-font-family`、`--jot-editor-font-size`、`--jot-quick-font-size`、`--jot-editor-pad-inline` |
-| 标题和稿纸 | `--jot-editor-heading-ratio-1` 至 `--jot-editor-heading-ratio-6` 使用数值倍数。横线颜色用 `--jot-color-rule-paper`。 |
-| 大纲 | `.jot-document-outline` 和 `--jot-outline-width`。标题缩进、命中高亮及强调色使用组件的 `--jot-outline-indent`、`--jot-outline-highlight` 和 `--jot-outline-accent`。 |
-| 滚动条 | `--jot-scrollbar-thumb`、`--jot-scrollbar-thumb-hover`、`--jot-scrollbar-track` 和 `--jot-scrollbar-thumb-size` 控制颜色与滑块粗细。`--jot-scrollbar-width` 控制页面原生滚动条的可拖动宽度。正文与大纲由组件保留操作区域，共用上述滑块外观。 |
-| 窗口和控件 | `.jot-workspace`、`.jot-document-window`、`.jot-titlebar`、`.jot-search`、`.jot-sidebar`、`.jot-settings`、`.jot-quick`、`.jot-statusbar`、`.jot-dialog`、`.jot-tooltip` |
-| 弹窗背景 | `--jot-color-backdrop` 控制弹窗后方的遮罩。默认用半透明黑色压暗原来的界面，可在浅、深色主题中分别设置。 |
-| 主窗或速记的编辑器 | `.jot-editor[data-jot-context="workspace"]`、`.jot-editor[data-jot-context="quick"]`。局部字号用 `--jot-editor-size`。 |
+| **基础配色** | `--jot-color-bg`、`--jot-color-text`、`--jot-color-muted`、`--jot-color-hover`、`--jot-color-active`、`--jot-color-line`、`--jot-color-backdrop` |
+| **强调与焦点** | `--jot-color-accent`、`--jot-color-accent-fill`、`--jot-color-on-accent`、`--jot-color-focus`、`--jot-focus-ring` |
+| **布局与字号** | `--jot-color-chrome`、`--jot-color-sidebar`、`--jot-sidebar-width`、`--jot-outline-width`、`--jot-font-base`、`--jot-editor-scale`、`--jot-quick-scale` |
+| **正文与稿纸** | `--jot-editor-font-family`、`--jot-editor-font-size`、`--jot-quick-font-size`、`--jot-editor-pad-inline`、`--jot-color-rule-paper`、`--jot-editor-heading-ratio-1`–`6` |
+| **代码块与引用** | `--jot-color-surface`（行内代码底色）、`--jot-color-quote`、`--jot-color-line-strong` |
+| **Mermaid 图表** | 流程图/时序图等自动映射 `--jot-color-surface`、`--jot-color-accent`、`--jot-color-text`、`--jot-color-muted`；多系列图（饼图/Git/思维导图/时间线）使用 `--jot-color-series-1` 至 `12` |
+| **窗口与局部范围** | `.jot-workspace`、`.jot-document-window`、`.jot-quick`、`.jot-titlebar`、`.jot-sidebar`、`.jot-settings`、`.jot-editor[data-jot-context="workspace"]`、`.jot-editor[data-jot-context="quick"]` |
 
-拖动分隔线后，主窗优先用用户保存的栏宽。双击分隔线清除这个值，恢复主题给的默认宽度。
-
-以上入口是主题可依赖的名称。正文的字体、字号和表格工具栏几何通过组件公开排版 API 传给 DOM 和离屏布局估算。自定义排版使用表中的 token。组件生成的内部节点类名会随组件版本变化。 [默认 token](../src/styles/tokens.css)
+> [!NOTE]
+> 拖动主窗分隔条保存栏宽后，会优先使用你拖出的宽度；双击分隔条可恢复主题默认宽度。请尽量基于上述公开 token 编写样式，编辑器内部生成的节点类名可能随版本调整。

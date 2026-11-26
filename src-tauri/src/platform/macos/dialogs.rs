@@ -1,6 +1,7 @@
 use std::ffi::{CStr, c_char, c_void};
 unsafe extern "C" {
     fn jot_choose_markdown() -> *mut c_char;
+    fn jot_choose_css() -> *mut c_char;
     fn jot_file_error(message: *const c_char);
     fn jot_choose_folder() -> *mut c_char;
     fn free(pointer: *mut c_void);
@@ -36,4 +37,7 @@ pub async fn choose() -> Result<Option<String>, String> {
 }
 pub async fn choose_markdown() -> Result<Option<String>, String> {
     crate::windows::on_main_thread(pick_markdown).await
+}
+pub async fn choose_css() -> Result<Option<String>, String> {
+    crate::windows::on_main_thread(|| chosen_text(unsafe { jot_choose_css() })).await
 }

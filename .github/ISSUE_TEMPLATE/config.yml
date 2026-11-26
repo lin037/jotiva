@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: 安全问题 / Security issue
+  - name: 安全问题私下报告 / Security advisory
     url: https://github.com/lin037/jotiva/security/advisories/new
-    about: 通过私下报告提交安全问题。 Report vulnerabilities privately.
+    about: 如涉及文件丢失、密钥泄露或权限绕过，请通过此入口私下提交。Report security issues privately.

@@ -1,18 +1,22 @@
-import { t, message, type Label, bindLabel, localized } from "../../i18n";
+import { field, select } from "./controls";
+import { mountImageSettings } from "./images";
+import { mountGlobalCss, mountThemeSettings } from "./themes";
+import { t, message, bindLabel, localized } from "../../i18n";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { accentPreset, accentPresets } from "../../appearance/accent";
-import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, setStylesheet, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type WritingFont } from "../../appearance/preferences";
+import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type WritingFont } from "../../appearance/preferences";
 import { commands, effectiveShortcut, fixedShortcuts, globalActions, recordedShortcut, shortcutLabel, type GlobalBindings, type GlobalAction } from "../../desktop/shortcuts";
 import { events } from "../../desktop/ipc";
+import { mountUpdateSettings } from "../../desktop/updates";
 import { accessibilityHelp, watchAccessibility } from "../../desktop/window-access";
 import { icon } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import "./settings.css";
 
-type Section = "appearance" | "editor" | "filing" | "shortcuts" | "windows";
+type Section = "appearance" | "editor" | "images" | "filing" | "shortcuts" | "windows" | "updates";
 
 interface SettingsView {
   preferences: GlobalBindings;
@@ -22,34 +26,14 @@ interface SettingsView {
 }
 
 const sections = [
-  ["appearance", localized("外观"), "appearance"],
-  ["editor", localized("编辑器"), "format"],
-  ["filing", localized("归档"), "folder"],
+  ["appearance", localized("界面外观"), "appearance"],
+  ["editor", localized("编辑选项"), "format"],
+  ["images", localized("图片管理"), "image"],
+  ["filing", localized("文档归档"), "folder"],
   ["shortcuts", localized("快捷键"), "keys"],
   ["windows", localized("窗口关联"), "window"],
+  ["updates", localized("软件更新"), "settings"],
 ] as const;
-
-function field(name: Label, controls: HTMLElement | HTMLElement[], id?: string) {
-  const row = element("div", "settings-field");
-  const label = id ? element("label", undefined, name) : element("span", undefined, name);
-  const items = element("div", "settings-field-controls");
-  if (id) label.setAttribute("for", id);
-  items.append(...(Array.isArray(controls) ? controls : [controls]));
-  row.append(label, items);
-  return row;
-}
-
-function select<T extends string>(id: string, options: readonly (readonly [T, Label])[], changed: (value: T) => unknown) {
-  const input = element("select");
-  input.id = id;
-  for (const [value, text] of options) {
-    const option = element("option", undefined, text);
-    option.value = value;
-    input.append(option);
-  }
-  input.addEventListener("change", () => { void Promise.resolve().then(() => changed(input.value as T)).catch(report); });
-  return input;
-}
 
 type EditingPatch = Partial<EditingPreferences> | ((value: EditingPreferences) => Partial<EditingPreferences>);
 
@@ -63,6 +47,7 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
     ["ruledPaper", localized("横线稿纸")],
     ["wrapCode", localized("代码块内自动换行")],
     ["foldHeadings", localized("显示标题折叠控件")],
+    ["previewTabs", localized("单击文件时使用预览标签")],
     ["toolbar", localized("显示主编辑器工具栏")],
   ] as const;
   const checkboxes = new Map<typeof toggles[number][0], HTMLInputElement>();
@@ -114,7 +99,7 @@ function mountEditorSettings(page: HTMLElement, change: (patch: EditingPatch) =>
 
   return (value: EditingPreferences) => {
     family.value = value.font;
-    for (const [key, input] of checkboxes) input.checked = value[key];
+    for (const [key, input] of checkboxes) input.checked = key === "previewTabs" ? value[key] !== false : value[key];
     const scale = value.headingScale ?? defaultHeadingScale;
     levels.forEach((input, i) => {
       if (document.activeElement !== input) input.value = String(Math.round(scale[i] * 100));
@@ -143,8 +128,9 @@ function mountFilingSettings(page: HTMLElement) {
   saveStatus.setAttribute("role", "status");
   const save = element("button", "primary", localized("保存设置"));
   save.type = "submit";
-  const actions = element("div", "settings-field-controls settings-css-actions");
-  actions.append(save);
+  const actions = element("div", "settings-field-controls");
+  actions.classList.add("settings-save-actions");
+  actions.append(saveStatus, save);
   filing.append(
     element("h2", undefined, localized("Jev 归档")),
     element("p", "settings-detail", localized("点击「用 Jev 归档」时，Jotiva 会把当前便签的前 6000 个字符和参与分类的目录名称、说明发给下方的服务。确认建议后，文件才会移动。")),
@@ -152,7 +138,7 @@ function mountFilingSettings(page: HTMLElement) {
     field(localized("地址类型"), kind, kind.id),
     field(localized("服务地址"), endpoint, endpoint.id),
     field(localized("模型名称"), model, model.id),
-    actions, saveStatus,
+    actions,
   );
 
   const keys = element("section", "settings-group");
@@ -163,11 +149,14 @@ function mountFilingSettings(page: HTMLElement) {
   keyNotice.setAttribute("role", "status");
   const configure = button(localized("配置密钥…"), () => changeKey("set"));
   const remove = button(localized("移除密钥"), () => changeKey("remove"));
-  const keyActions = element("div", "settings-field-controls settings-css-actions");
+  const keyActions = element("div", "settings-field-controls");
   keyActions.append(configure, remove);
-  keys.append(element("h2", undefined, localized("API 密钥")),
+  const keyText = element("div", "settings-action-copy");
+  keyText.append(element("h2", undefined, localized("API 密钥")),
     element("p", "settings-detail", () => t("密钥保存在{store}中，仅用于上方填写的服务地址。", { store: desktopPlatform.keyStore })),
-    keyStatus, keyActions, keyNotice);
+    keyStatus, keyNotice);
+  keys.classList.add("settings-action-card");
+  keys.append(keyText, keyActions);
   page.append(filing, keys);
 
   let hasKey: boolean | null = null;
@@ -290,18 +279,19 @@ export async function mount() {
     nav.set(id, tab);
     const page = element("section", "settings-page");
     page.hidden = true;
-    page.append(element("h1", undefined, id === "editor" ? localized("编辑器画面") : title));
+    page.append(element("h1", undefined, title));
     content.append(page);
     panels.set(id, page);
   }
   root.append(navigation, content);
+  mountUpdateSettings(panels.get("updates")!);
 
   let savingAppearance = Promise.resolve<unknown>(undefined);
   function apply(patch: Partial<AppearancePreferences>, editor?: EditingPatch) {
     const request = savingAppearance.catch(() => {}).then(() => {
-      const { baseSize, mode, accent, language, editing } = currentAppearance();
+      const { baseSize, mode, themePreset, themeFile, accent, language, editing } = currentAppearance();
       const changes = typeof editor === "function" ? editor(editing) : editor;
-      return saveAppearance({ baseSize, mode, accent, language, editing: { ...editing, ...changes }, ...patch });
+      return saveAppearance({ baseSize, mode, themePreset, themeFile, accent, language, editing: { ...editing, ...changes }, ...patch });
     });
     savingAppearance = request;
     return request;
@@ -321,6 +311,7 @@ export async function mount() {
   const language = select<AppearancePreferences["language"]>("interface-language", [["zh-CN", "简体中文"], ["en", "English"]],
     language => apply({ language }));
   const scheme = select<ThemeMode>("theme-mode", [["system", localized("跟随系统")], ["light", localized("浅色")], ["dark", localized("深色")]], mode => apply({ mode }));
+  const themes = mountThemeSettings(apply);
   const accent = element("input");
   accent.id = "accent";
   accent.type = "color";
@@ -343,6 +334,7 @@ export async function mount() {
   palette.append(custom);
   appearance.append(
     field(localized("界面语言"), language, language.id),
+    field(localized("界面主题"), themes.preset, themes.preset.id),
     field(localized("界面模式"), scheme, scheme.id),
     field(localized("基础字号"), [font, element("span", "muted", "pt"), applySize, systemSize], font.id),
     field(localized("强调色"), palette),
@@ -352,29 +344,8 @@ export async function mount() {
     void apply({ baseSize: font.valueAsNumber }).catch(report);
   });
 
-  const cssName = element("p", "settings-detail muted");
-  const file = element("input");
-  file.type = "file";
-  file.accept = ".css,text/css";
-  file.hidden = true;
-  const importCss = button(localized("导入 CSS…"), () => file.click());
-  const removeCss = button(localized("移除"), () => setStylesheet(null));
-  const cssActions = element("div", "settings-field-controls settings-css-actions");
-  cssActions.append(file, importCss, removeCss);
-  file.addEventListener("change", async () => {
-    const picked = file.files?.[0];
-    if (!picked) return;
-    file.value = "";
-    try {
-      if (picked.size > 128 * 1024 || !picked.name.toLowerCase().endsWith(".css")) throw new Error(t("请选择不超过 128 KB 的 CSS 文件"));
-      await setStylesheet({ name: picked.name, css: await picked.text() });
-    } catch (error) {
-      report(error);
-    }
-  });
-  const css = element("section", "settings-group");
-  css.append(element("h2", undefined, localized("自定义 CSS")), cssName, cssActions);
-  panels.get("appearance")!.append(appearance, css);
+  const css = mountGlobalCss();
+  panels.get("appearance")!.append(appearance, themes.panel, css.panel);
 
   const refreshEditor = mountEditorSettings(panels.get("editor")!, change => apply({}, change));
 
@@ -382,14 +353,14 @@ export async function mount() {
     font.value = String(value.baseSize ?? value.systemSize);
     systemSize.disabled = value.baseSize === null;
     scheme.value = value.mode;
+    themes.refresh(value);
     language.value = value.language ?? "zh-CN";
     const selected = accentPreset(value.accent);
     swatches.forEach((swatch, index) => swatch.setAttribute("aria-pressed", String(accentPresets[index] === selected)));
     const dark = document.documentElement.dataset.jotScheme === "dark";
     accent.value = selected ? selected[dark ? "dark" : "light"] : value.accent!;
     custom.classList.toggle("is-selected", !selected);
-    bindLabel(cssName, "text", () => value.stylesheet?.name ?? t("导入 CSS 可调整界面和正文样式。"));
-    removeCss.hidden = value.stylesheet === null;
+    css.refresh(value.stylesheet);
     refreshEditor(value.editing);
   }
   onAppearanceChange(refreshAppearance);
@@ -454,7 +425,7 @@ export async function mount() {
     bindLabel(status, "text", localized("待保存"));
   });
   const shortcutActions = element("div", "settings-group shortcut-actions");
-  const buttons = element("div", "settings-field-controls settings-css-actions");
+  const buttons = element("div", "settings-field-controls");
   buttons.append(save, reset);
   const searchKeys = element("input");
   searchKeys.type = "search";
@@ -553,6 +524,7 @@ export async function mount() {
   }
   showPermission(current.trusted);
 
+  const loadImages = mountImageSettings(panels.get("images")!);
   function show(id: Section) {
     if (!panels.has(id)) return;
     if (recording) void record().catch(report);
@@ -563,6 +535,8 @@ export async function mount() {
       else tab.removeAttribute("aria-current");
     }
     content.scrollTop = 0;
+    if (id === "appearance") void themes.load().catch(report);
+    if (id === "images") void loadImages().catch(report);
     if (id === "filing") void loadFiling();
     stopCheckingPermission?.();
     stopCheckingPermission = undefined;
@@ -570,7 +544,10 @@ export async function mount() {
       stopCheckingPermission = watchAccessibility(showPermission, error => { permission.textContent = String(error); });
     }
   }
-  await getCurrentWindow().listen<Section>(events.settingsSection, ({ payload }) => show(payload));
+  await Promise.all([
+    getCurrentWindow().listen<Section>(events.settingsSection, ({ payload }) => show(payload)),
+    getCurrentWindow().listen(events.imageSettingsChanged, () => { void loadImages().catch(report); }),
+  ]);
   const initial = (window as Window & { __jotSettingsSection?: Section }).__jotSettingsSection;
-  show(initial && panels.has(initial) ? initial : "appearance");
+  show(initial ?? "appearance");
 }

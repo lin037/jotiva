@@ -1,4 +1,24 @@
 @layer jot-ui {
+  .jot-chevron {
+    flex: none;
+    width: var(--jot-space-2);
+    height: var(--jot-space-2);
+    border-block-start: var(--jot-line-width) solid var(--jot-color-muted);
+    border-inline-end: var(--jot-line-width) solid var(--jot-color-muted);
+    transform: rotate(45deg);
+  }
+  [aria-expanded="true"] > .jot-chevron,
+  details[open] > summary > .jot-chevron { transform: rotate(135deg); }
+  .jot-disclosure {
+    display: flex;
+    align-items: center;
+    gap: var(--jot-space-2);
+    padding-inline-start: var(--jot-space-1);
+    list-style: none;
+    cursor: pointer;
+  }
+  .jot-disclosure::-webkit-details-marker { display: none; }
+
   .jot-control {
     font: inherit;
     color: inherit;

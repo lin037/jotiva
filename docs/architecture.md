@@ -1,80 +1,81 @@
-# Jotiva 实现说明
+# Jotiva 架构与实现说明
 
-[开发者指南](developer-guide.md)
+[开发者指南](developer-guide.md) · [测试与发布](verification.md) · [English](en/architecture.md)
 
-## 桌面平台边界
+本文档概括 Jotiva 的跨平台边界、编辑器与窗口调度模型、防冲突保存机制以及 Jev 归档协议，供贡献者快速建立全局认知。
 
-文档库负责保存正文和修订记录，Tauri 管理 Jotiva 自己的窗口与菜单，各平台的宿主适配器负责识别其他应用的窗口。文档 ID 独立于窗口句柄。因此，关闭原来的窗口后，仍可以重新挂载便签，也可以在另一个窗口打开同一份文档。
+---
+
+## 1. 桌面平台边界
+
+Jotiva 将**文档实体（文档 ID）**与**系统窗口句柄**彻底解耦：即使宿主应用窗口关闭，对应便签依然保留完整身份与正文，可以重新挂载到其他窗口，或在主窗口、独立文档窗口中打开同一份文件。
+
+业务层统一通过 `src-tauri/src/platform/contract.rs` 中的 `HostBackend`、`FileManager` 等抽象与系统交互，平台差异收敛在 `src-tauri/src/platform/{macos,windows,linux}/` 与共用的 `platform/shared/` 中：
 
 | 能力 | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| 主窗、设置、独立文档 | AppKit 标题栏，主窗叠加系统红绿灯 | 自绘标题栏、右侧窗口控制、应用菜单、WebView2 | 自绘标题栏、应用菜单、WebKitGTK |
-| 快捷键、设置与退出 | ⌘ 主键，应用菜单含设置与退出 | Ctrl 主键，工具菜单含设置，文件菜单含退出 | 同 Windows，全局快捷键依赖桌面会话 |
-| 浮窗与宿主 | NSPanel、Spaces、Accessibility 及原有身份恢复 | Win32 枚举、选择、监听前台和关闭事件；同一运行期间按窗口关联 | X11 通过 EWMH 枚举、关联与监听外部窗口；原生 Wayland 会话使用独立便签 |
-| 在文件管理器中定位 | Finder 选中文件 | Windows Shell 定位并选中文件 | Tauri opener 调用桌面文件管理服务 |
-| 保存时检验被替换的版本 | Darwin 文件交换 | ReplaceFileW 保留被替换的文件 | Linux renameat2 文件交换 |
-| Jev 凭据 | 钥匙串 | Windows 凭据管理器 | 使用 Secret Service、secret-tool 和 zenity |
+| **窗口与 WebView** | AppKit 标题栏，主窗叠加系统红绿灯 | 自绘标题栏与控制按钮、WebView2 | 自绘标题栏、WebKitGTK |
+| **浮窗与宿主追踪** | `NSPanel`、Spaces、Accessibility（能明确识别宿主窗口时可跨重启恢复挂载） | Win32 枚举、前景与关闭监听（运行期内关联） | X11/EWMH 枚举与事件监听；原生 Wayland 仅使用独立便签 |
+| **文件管理器定位** | Finder 选中目标文件 | Windows Shell 定位并选中 | Tauri opener 调用桌面文件管理服务 |
+| **原子文件替换** | Darwin 文件交换 | `ReplaceFileW` | Linux `renameat2` |
+| **密钥与凭据存储** | macOS 钥匙串 | Windows 凭据管理器 | Secret Service（配合 `secret-tool` 与 `zenity`） |
 
-业务代码通过 `platform` 调用系统功能。`HostBackend` 定义如何与宿主窗口交互，`FileManager` 定义文件管理操作。三个系统各有自己的模块，`shared` 放共用的 Tauri 实现。编译时选择对应模块，创建窗口时把平台信息传给前端。添加桌面功能时，先查 Tauri 是否已有接口。系统专用的操作放在适配器里，业务层仍使用同样的命令和数据格式。 [平台模块](../src-tauri/src/platform/mod.rs) · [接口定义](../src-tauri/src/platform/contract.rs) · [前端配置](../src/desktop/platform.ts)
+---
 
-## 窗口与编辑器
+## 2. 窗口调度与编辑器生命周期
 
-所有窗口共用同一个 HTML 入口，TypeScript 根据 Tauri 的窗口标签加载视图。主窗口是 `main`，设置是 `settings`，速记是 `quick` 或 `quick-*`，独立文档是 `document-*`。主窗口只运行当前标签的编辑器和 Worker。切走时会先保存正文，再保留撤销快照、选区、阅读位置和编辑模式。每开一个独立文档窗口，就会新建一份编辑会话。
+- **单入口多视图**：所有窗口共用一个前端入口，由 `src/main.ts` 根据窗口标签（`main`、`settings`、`quick` / `quick-*`、`document-*`）加载对应视图。
+- **低内存与快切标签**：主窗口同一时间仅运行当前激活标签的编辑器实例与 Worker；切走标签前先冲刷待保存内容，并保留撤销历史、选区、滚动位置与编辑模式（即时预览 / 源码）。每个独立文档窗口持有独立的编辑会话。
+- **时序安全与资源回收**：`desktop.rs` 通过递增的 `epoch` 编号协调速记窗口状态切换，WebView 准备好对应视图后带回同一 `epoch` 确认，丢弃过期响应。折叠便签后会回收 Worker，隐藏窗口超过空闲期后可释放 WebView，仍可从菜单栏或系统托盘重新唤起，也可使用已注册的全局热键。
 
-速记由 `desktop.rs` 协调，额外速记窗在 `desktop/note_windows.rs` 管理。Rust 用递增的 `epoch` 标记视图切换，WebView 在准备好编辑、摘要或搜索界面后用同一个编号确认。旧确认会被丢弃。折叠便签后可回收 Worker，隐藏窗口经过空闲期后可销毁 WebView。仅菜单栏常驻时仍可以用热键唤起。 [窗口事件定义](../src-tauri/src/events.rs)
+---
 
-macOS 用 AppKit 和 Accessibility 监听其他应用的窗口，Windows 用 Win32，Linux 用 X11/EWMH。macOS 能确认是同一个窗口时，可以恢复挂载。Windows 和 Linux 的窗口标识只在当前会话里有效。关联窗口关闭后，可在「待重新挂载」里为便签重新选一个窗口。窗口列表可以按标题筛选。切回原窗口时，便签会重新显示，键盘焦点仍在原窗口。 [宿主代码](../src-tauri/src/host.rs)
+## 3. 增量解析、保存与防冲突合并
 
-## 文档怎样保存
+1. **输入先显示，后台增量解析**：用户输入立即反馈在编辑器中，由 `editor.worker.ts` 内的 Rust/Wasm 引擎增量解析并优先投影视口附近内容；停止输入片刻后的延时保存会等待 Worker 确认正文后再提交给后端。
+2. **原子写入与冲突保护**：Rust 端通过文档 ID 校验期望修订号与磁盘当前内容，先在同目录写入临时文件再执行原子替换；若元数据提交失败则尝试恢复原文件，并保留原文件的 `CRLF` / `LF` 换行风格。
+3. **多窗口同步与冲突恢复**：同一文档在多个窗口打开时，若各窗口修改了互不重叠的区域，前端会尝试自动合并（`document-sync.ts`）；若存在重叠冲突或被外部应用修改，前端提供「**另存编辑并重载**」，将未保存修改安全存至「归档 → 其他」后再加载磁盘最新版本。
 
-1. 输入先到编辑器，延时保存会等待 Worker 确认正文。切换、关闭和退出也会先处理待保存的输入。
-2. Rust 用文档 ID 找到记录，检查版本及磁盘内容。替换 Markdown 前在同目录写入临时文件，检查旧内容后替换目标。记录提交失败时尝试恢复原文件。
-3. Jotiva 的其他窗口收到更新后可以读取新版本。若本地和另一窗口修改了不同范围，前端会尝试合并。遇到重叠、外部编辑产生的保存冲突或目标无法读取时，界面可以把尚未保存的输入另存到「其他」。
-4. 便签从「其他」移到用户目录时保留文档 ID。文档绑定与文件位置独立，解除挂载后仍能打开原文。
+---
 
-[编辑会话](../src/editor/note-editor.ts) · [文本合并](../src/editor/document-sync.ts) · [文件写入](../src-tauri/src/storage.rs)
+## 4. 本地数据布局
 
-## 本地数据
+应用状态目录由 Tauri 的 `app_data_dir()` 决定（例如 macOS `~/Library/Application Support/io.github.lin037.jot.desktop/`、Windows `%APPDATA%\io.github.lin037.jot.desktop`、Linux `$XDG_DATA_HOME/io.github.lin037.jot.desktop`，未设置 `XDG_DATA_HOME` 时使用 `~/.local/share`）。
 
-应用数据目录由 Tauri 的 `app_data_dir()` 解析。macOS 使用 `~/Library/Application Support/io.github.lin037.jot.desktop/`，Windows 使用 `%APPDATA%\io.github.lin037.jot.desktop`，Linux 默认使用 `$XDG_DATA_HOME/io.github.lin037.jot.desktop`（通常位于 `~/.local/share`）。
-
-| 路径 | 内容 |
+| 路径 | 用途 |
 | --- | --- |
-| `notes/其他/*.md` | 默认归档中的真实文档。新建的无名速记在首次保存正文后写入。 |
-| `notes/<id>.json` | 便签正文快照、修订号、标题、归档路径和来源。 |
-| `notes/window-bindings.json`、`notes/sources.json` | 窗口身份与手动登记的来源。 |
-| `notes/closing-sources/` | 解除来源时的中间状态，用于下次启动继续处理。 |
-| `workspace.json`、`folders.json` | 工作区目录，归档名称、路径、说明和分类选择。 |
-| `appearance.json`、`settings.json` | 外观和快捷键。快捷键设置保存三项全局键位及用户改过的应用内键位。 |
-| `filing.json` | Jev 归档开关、服务地址和模型名称。密钥由各平台的系统凭据存储管理。 |
+| `notes/其他/*.md` | 默认归档收件箱中的真实 Markdown 文件（新建窗口便签时即创建空文件）。 |
+| `notes/<id>.json` | 便签正文快照、修订号、标题、归档路径与来源记录。 |
+| `notes/window-bindings.json`、`notes/sources.json` | 窗口关联状态与手动登记来源；`notes/closing-sources/` 记录解除中状态以便重启续接。 |
+| `workspace.json`、`folders.json` | 工作区根目录列表（展开目录时按级懒读取）及归档目录显示名、说明与分类开关。 |
+| `appearance.json`、`settings.json` | 当前主题、排版偏好、全局样式微调及快捷键覆写配置。 |
+| `themes/` | 导入的 CSS 主题文件。 |
+| `filing.json` | Jev 归档开关、服务地址与模型名（API 密钥不落明文文件，仅存系统凭据库）。 |
 
-归档设置页用表单里的服务地址查询密钥。WebView 只会收到有没有配置密钥，或查询失败的原因。添加和更换密钥都用系统密码框，归档设置可以单独保存。
+---
 
-从系统文件管理器或工作区打开的 Markdown 和 UTF-8 文本文件留在原位置。保存时沿用原文件的 CRLF 或 LF 换行。注册工作区只是把路径存起来，展开目录时才读取那一级的子项。 [便签库](../src-tauri/src/library/notes.rs) · [工作区](../src-tauri/src/library/workspace.rs)
-
-应用内默认键位由 `src/desktop/shortcut-commands.json` 和 `shortcut-editor.json` 定义。设置页、应用菜单和编辑器共用这两份清单。保存后，各窗口收到更新事件，已打开的文档也会使用新键位。系统编辑操作、方向键选择和特定控件的导航操作列在 `shortcut-reference.json`。 [快捷键说明](shortcuts.md)
-
-## Jev 归档
+## 5. Jev 归档交互流程
 
 ```mermaid
 sequenceDiagram
     actor U as 用户
     participant E as 编辑器
-    participant R as 本机归档服务
-    participant J as Jev
-    U->>E: 在「其他」中选择「用 Jev 归档」
-    E->>R: 保存便签，提交文档 ID 与修订号
-    R->>R: 检查开关、正文长度和参与分类的目录
-    R->>J: 正文摘录、目录名称与说明
-    J-->>R: 候选目录编号或无匹配
-    R-->>E: 显示建议
-    U->>E: 确认移动
-    E->>R: 应用所选建议
-    R->>R: 核对便签与目标，移动 Markdown
+    participant R as Rust 后端
+    participant J as Jev 服务
+    U->>E: 点击「用 Jev 归档」
+    E->>R: 保存正文，提交文档 ID 与修订号
+    R->>R: 校验开关、正文与参与分类的目录列表
+    R->>J: 发送正文摘录与候选目录（choice 单选题）
+    J-->>R: 返回候选目录选项或 other
+    alt 有匹配目录
+        R-->>E: 展示建议目录
+        U->>E: 确认移动
+        E->>R: 执行归档移动
+        R->>R: 校验目标目录，移动磁盘文件并保留文档 ID
+    else 无匹配目录
+        R-->>E: 提示便签保留在「其他」
+    end
 ```
 
-归档对接 Jev 协议的 `choice` 类型。每次请求只有一道单选题 `questions.destination`。每个参与分类的目录占一个选项，键为 `folder_<id>`，说明包含目录名称和用途。服务在 `answers.destination` 返回 `type: "choice"` 和选中的 `choice`，例如 `folder_7`。选择 `other` 表示没有匹配。Jotiva 校验返回值，用本地目录记录查找磁盘路径。 [请求与响应处理](../src-tauri/src/settings/filing.rs)
-
-自建服务可以使用路径前缀。例如基础地址 `https://example.org/team` 对应的 POST 地址是 `https://example.org/team/v1/systemone`。基础地址以 `/v1` 结尾时只追加 `/systemone`。「完整接口地址」直接使用填写的请求路径。远程接口必须使用 HTTPS。HTTP 仅接受本机回环地址 `127.0.0.1` 和 `[::1]`，可以指定端口。Jotiva 会直接连接这两种地址上的服务。密钥与最终的请求地址绑定，平台适配器从系统凭据存储读取密钥并设置 Bearer 认证，请求不跟随重定向。 [macOS 请求与钥匙串](../src-tauri/src/platform/macos/objc/filing.m) · [Windows 与 Linux 请求](../src-tauri/src/platform/shared/filing.rs)
-
-每次网络请求限时 25 秒。连接中断、超时或 HTTP 502、503、504 会在 750 毫秒后重试一次，发送前再次核对请求是否有效。认证错误、限流和格式异常会在编辑器中提示。用户可以修改设置或稍后再发起一次。模拟服务的测试入口是 `pnpm test:filing`。 [测试说明](verification.md)
+- 后端仅在用户主动触发时发起请求，将目标目录编码为 Jev `choice` 协议的 `questions.destination`（选项键如 `folder_<id>`，含名称与用途说明，`other` 表示无匹配）。
+- 远程地址强制 HTTPS（仅 `127.0.0.1` 与 `[::1]` 允许 HTTP），不跟随重定向，单次请求超时 25 秒，对超时、连接失败或 502/503/504 会在 750 毫秒后重试一次。相关实现位于 [settings/filing.rs](../src-tauri/src/settings/filing.rs)。

@@ -105,12 +105,16 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 pub fn create_markdown(path: &Path, contents: &str) -> io::Result<()> {
+    create_file(path, contents.as_bytes())
+}
+
+pub(crate) fn create_file(path: &Path, contents: &[u8]) -> io::Result<()> {
     if fs::symlink_metadata(path).is_ok() {
         return Err(io::ErrorKind::AlreadyExists.into());
     }
     let (temporary, mut file) = staged_file(path, 0o666)?;
     if let Err(error) = file
-        .write_all(contents.as_bytes())
+        .write_all(contents)
         .and_then(|()| file.sync_all())
         .and_then(|()| rename_exclusive(&temporary, path))
     {

@@ -23,7 +23,7 @@ const documentName = (card: Card) => fileName(card.file ?? card.archivePath ?? c
 
 function foldedCard(view: Extract<QuickView, { kind: "summary" }>, expand: () => unknown) {
   const card = element("div", "quick-folded");
-  const header = element("header", "quick-folded-bar");
+  const header = element("header", "quick-folded-bar jot-titlebar");
   const rename = () => editFileName(title, title.textContent, name => notes.rename(view.note.id, name));
   const title = button("", rename, "quick-summary-title", localized("改名"));
   const excerpt = element("p", "quick-summary-excerpt muted");
@@ -38,7 +38,7 @@ function foldedCard(view: Extract<QuickView, { kind: "summary" }>, expand: () =>
     event.preventDefault();
     rename();
   });
-  header.append(title, iconButton("expand", localized("展开便签"), expand));
+  header.append(title, iconButton("expand", localized("展开便签"), localized("展开"), expand));
   if (desktopPlatform.customCaption) configureTitlebar(header, true);
   card.append(header);
   if (!view.docked) {
@@ -114,7 +114,12 @@ export async function mount() {
   }
 
   const collapse = () => leaveView(() => invoke("dismiss_quick"));
-  const create = () => afterSave(() => invoke("new_quick", { epoch: presented }));
+  async function create() {
+    const epoch = presented;
+    if (epoch !== latest) return;
+    await editor?.save();
+    if (epoch === latest) await invoke("new_quick", { epoch });
+  }
   const find = (tiled = false) => leaveView(() => {
     if (!editPane.hidden) editor?.rememberViewport();
     return invoke("show_find", { tiled });
@@ -141,13 +146,12 @@ export async function mount() {
     toggle.append(icon("more"));
     bindWindowMenu(toggle, menu, () => editor?.focus());
     function entry(glyph: "add" | "format" | "search" | "open" | "source", label: Label, action: () => unknown, key?: string) {
-      const row = iconButton(glyph, label, () => {
+      const row = button("", () => {
         menu.hidePopover();
         return action();
-      });
-      row.classList.replace("icon-button", "quick-menu-item");
-      row.classList.add("jot-window-menu-item");
-      row.append(element("span", undefined, label));
+      }, "quick-menu-item jot-window-menu-item");
+      bindLabel(row, "aria-label", label);
+      row.append(icon(glyph), element("span", undefined, label));
       if (key) {
         shortcutHint(row, key);
         row.append(shortcutHint(element("kbd"), key));
@@ -162,7 +166,7 @@ export async function mount() {
     format.setAttribute("aria-pressed", "false");
     const recall = entry("source", localized("解除挂载并收回"), () => afterSave(() => invoke("recall_note", { id })));
     recall.dataset.recall = "";
-    const add = entry("add", localized("在此窗口新建便签"), create, "newDocument");
+    const add = entry("add", localized("新建便签"), create, "quick");
     add.dataset.newNote = "";
     menu.append(add, entry("search", localized("查找便签"), () => find(), "search"), element("hr"), format,
       entry("open", localized("在主窗口编辑"), () => afterSave(() => invoke("show_main", { id }))), recall);
@@ -174,8 +178,7 @@ export async function mount() {
       pickWindow ??= windowPicker();
       pickWindow(t("挂载到窗口"), t("挂载"), async choice => { await notes.attach(id, choice); });
     });
-    const handle = iconButton("window", localized("拖动挂载或点选窗口"), choose);
-    bindLabel(handle, "data-tip", localized("拖动挂载"));
+    const handle = iconButton("window", localized("拖动挂载或点选窗口"), localized("拖动挂载"), choose);
     handle.hidden = !desktopPlatform.hostWindows;
     handle.draggable = desktopPlatform.hostWindows;
     handle.addEventListener("dragstart", event => {
@@ -208,10 +211,6 @@ export async function mount() {
   function updateEditChrome(view: Extract<QuickView, { kind: "edit" }>) {
     const pin = editPane.querySelector<HTMLButtonElement>("[data-pin]")!;
     displayPin(pin, view.pinned);
-    const add = editPane.querySelector<HTMLButtonElement>("[data-new-note]")!;
-    const label = () => view.standalone ? t("新建独立便签") : t("在此窗口新建便签");
-    bindLabel(add.querySelector("span")!, "text", label);
-    bindLabel(add, "aria-label", label);
     editPane.querySelector("[draggable=true]")?.setAttribute("aria-description", view.source ? sourceLabel(view.source) : t("独立便签"));
     editPane.querySelector<HTMLElement>("[data-recall]")!.hidden = !view.source;
   }
@@ -331,7 +330,7 @@ export async function mount() {
         draw(view.rail);
         const header = titleBar();
         header.append(element("h1", "quick-title", localized("当前窗口的便签")),
-          shortcutHint(iconButton("grid", localized("平铺便签"), () => find(true)), "overview"));
+          shortcutHint(iconButton("grid", localized("平铺便签"), localized("平铺"), () => find(true)), "overview"));
         otherPane.append(header, rail, pager);
         return;
       }
@@ -345,7 +344,7 @@ export async function mount() {
         search = noteList(id => afterSave(() => invoke("locate", { id })), { host });
       } else search.setHost(host);
       search.setTiled(view.tiled);
-      const switchLayout = iconButton(view.tiled ? "list" : "grid", () => view.tiled ? t("列表显示") : t("平铺显示"), () => find(!view.tiled));
+      const switchLayout = iconButton(view.tiled ? "list" : "grid", () => view.tiled ? t("列表显示") : t("平铺显示"), () => view.tiled ? t("列表") : t("平铺"), () => find(!view.tiled));
       search.panel.querySelector("header")?.remove();
       const header = titleBar();
       const field = element("label", "quick-query");
@@ -365,7 +364,7 @@ export async function mount() {
     const path = documentPath();
     metadata.append(path.control);
     const actions = moreActions(view.id);
-    const pin = iconButton("pin", localized("置顶便签"), async () => {
+    const pin = iconButton("pin", localized("置顶便签"), localized("跨窗置顶"), async () => {
       const pinned = pin.getAttribute("aria-pressed") !== "true";
       pin.disabled = true;
       try {
@@ -378,7 +377,7 @@ export async function mount() {
     pin.dataset.pin = "";
     displayPin(pin, view.pinned);
     actions.toggle.disabled = true;
-    header.append(title, iconButton("collapse", localized("折叠便签"), collapse, "Esc"), attachmentButton(view.id), pin, actions.toggle, actions.menu);
+    header.append(title, iconButton("collapse", localized("折叠便签"), localized("折叠"), collapse, "Esc"), attachmentButton(view.id), pin, actions.toggle, actions.menu);
     const paper = element("main", "quick-editor");
     const editorRoot = element("div", "editor-root");
     paper.append(editorRoot);
@@ -425,7 +424,6 @@ export async function mount() {
   const returnHost = () => afterSave(() => invoke("return_to_host", { id: editor?.id ?? folded?.id }));
   bindWindowShortcuts({
     main, pin: () => { if (!editPane.hidden) pin(); }, get returnHost() { return attached ? returnHost : undefined; },
-    newDocument: create,
     save: () => editor?.save(),
     search: () => find(),
     overview: () => find(true),
@@ -452,7 +450,7 @@ export async function mount() {
     listen(events.notesChanged, () => { void search?.refresh().catch(report); }),
     getCurrentWindow().listen<string>(events.editorAction, ({ payload }) => {
       const actions: Record<string, () => unknown> = {
-        main, pin, "return-host": returnHost, new: create, save: () => editor?.save(), file: () => editor?.file(), find: () => find(), overview: () => find(true),
+        main, pin, "return-host": returnHost, "new-quick": create, save: () => editor?.save(), file: () => editor?.file(), find: () => find(), overview: () => find(true),
       };
       void Promise.resolve().then(() => {
         const action = actions[payload];

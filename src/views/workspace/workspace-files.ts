@@ -1,3 +1,4 @@
+import type { OpenMode } from "./document-tabs";
 import { t, bindLabel, localized } from "../../i18n";
 import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { invoke } from "@tauri-apps/api/core";
@@ -11,6 +12,7 @@ import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
 import type { OpenTerminal } from "./terminal";
 import { treeRow } from "./source-tree";
+import { manageFolderImages } from "../../ui/image-dialog";
 
 interface FileEntry {
   name: string;
@@ -18,7 +20,7 @@ interface FileEntry {
   directory: boolean;
 }
 
-export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths: string[]) => Promise<void>, newTerminal: OpenTerminal) {
+export function workspaceFiles(openNote: (id: NoteId, mode?: OpenMode) => unknown, flush: (paths: string[]) => Promise<void>, newTerminal: OpenTerminal) {
   const panel = element("div", "workspace-files");
   bindLabel(panel, "aria-label", localized("工作区文件"));
   const expanded = new Set<string>();
@@ -45,8 +47,8 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
   }
 
   function fileRow(file: FileEntry) {
-    const entry = button(file.name, async () => {
-      await openNote(await openLibraryFile(file.path));
+    const entry = button(file.name, async event => {
+      await openNote(await openLibraryFile(file.path), event.detail === 1 ? "preview" : "keep");
     }, "library-node workspace-file");
     entry.title = file.path;
     entry.dataset.file = file.path;
@@ -187,6 +189,7 @@ export function workspaceFiles(openNote: (id: NoteId) => unknown, flush: (paths:
     const menu = directory ? [
       { label: t("新建文档"), run: () => createFile(row) },
       { label: t("新建文件夹…"), run: () => createDirectory(path) },
+      { label: t("图片管理…"), run: () => manageFolderImages(path, row) },
     ] : [
       { label: t("打开"), run: async () => openNote(await openLibraryFile(path)) },
       { label: t("在新窗口打开"), run: async () => invoke("open_document_window", { id: await openLibraryFile(path) }) },

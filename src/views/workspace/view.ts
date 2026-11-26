@@ -1,18 +1,21 @@
 import { t, bindLabel, localized } from "../../i18n";
 import { titlebar as configureTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
+import { environment } from "../../desktop/environment";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { events, notes, sources, type Card, type NoteId } from "../../desktop/ipc";
 import { bindWindowShortcuts, shortcutHint } from "../../desktop/shortcuts";
+import { watchUpdates } from "../../desktop/updates";
 import { saveBeforeClose } from "../../desktop/window-actions";
 import { NoteEditor } from "../../editor/note-editor";
 import { bindWindowMenu, icon, iconButton } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import { documentStatus } from "../../ui/document-status";
 import { noteList } from "../../ui/note-list";
-import { documentTabs } from "./document-tabs";
+import { currentAppearance, onAppearanceChange } from "../../appearance/preferences";
+import { documentTabs, type OpenMode } from "./document-tabs";
 import { documentDrag } from "./document-drag";
 import { documentPath } from "./document-file-menu";
 import { folderEditor, moveDocument } from "./folder-dialog";
@@ -29,6 +32,7 @@ export async function mount() {
   const workspace = element("div", "workspace");
   const documentPane = element("main", "document-pane");
   const tabs = documentTabs(open, closeTabs, saveOpenNote, openTerminal);
+  onAppearanceChange(({ editing }) => { if (editing.previewTabs === false) tabs.pin(); });
   const editorRoot = element("div", "editor-root");
   editorRoot.id = "workspace-editor-panel";
   const outline = element("aside", "workspace-outline jot-document-outline");
@@ -160,13 +164,14 @@ export async function mount() {
     return tail;
   }
 
-  function open(id: NoteId) {
-    return enqueue(() => present(id));
+  function open(id: NoteId, mode: OpenMode = "keep") {
+    return enqueue(() => present(id, false, mode));
   }
 
   function openTabs(cards: Pick<Card, "id" | "title">[]) {
     return enqueue(async () => {
       for (const card of cards) {
+        tabs.pin(card.id);
         tabs.add(card.id);
         tabs.rename(card.id, card.title);
       }
@@ -195,8 +200,9 @@ export async function mount() {
     });
   }
 
-  async function present(id?: NoteId, dismiss = false) {
+  async function present(id?: NoteId, dismiss = false, mode: OpenMode = "select") {
     if (editor && editor.id === id) {
+      if (mode === "keep") tabs.pin(id);
       await editor.synchronize();
       editor.focus();
       return;
@@ -223,7 +229,7 @@ export async function mount() {
     }
     const session = tabs.takeSession(id);
     try {
-      editor = await NoteEditor.open(editorRoot, id, status, { counter, mode: session?.mode, history: session?.history });
+      editor = await NoteEditor.open(editorRoot, id, status, { counter, mode: session?.mode, history: session?.history, onEdit: () => tabs.pin(id) });
     } catch (error) {
       tabs.remove(id);
       editorRoot.hidden = footer.hidden = outline.hidden = true;
@@ -231,23 +237,22 @@ export async function mount() {
       empty.hidden = false;
       throw error;
     }
-    tabs.select(id);
+    tabs.select(id, currentAppearance().editing.previewTabs === false ? "keep" : mode);
     windowButton.disabled = outlineButton.disabled = false;
     if (!outline.hidden) void editor.showOutline(outline).catch(report);
     editor.focus(session);
     await refreshCard();
   }
 
-  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), toggleSidebar), "sidebar");
+  const sidebar = shortcutHint(iconButton("sidebar", localized("显示或隐藏侧栏"), localized("侧栏"), toggleSidebar), "sidebar");
   sidebar.setAttribute("aria-pressed", "true");
-  const add = shortcutHint(iconButton("compose", localized("新建文档"), create), "newDocument");
-  bindLabel(add, "data-tip", localized("新建文档"));
-  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), toggleOutline), "outline");
+  const add = shortcutHint(iconButton("compose", localized("新建文档"), localized("新建文档"), create), "newDocument");
+  const outlineButton = shortcutHint(iconButton("outline", localized("文档大纲"), localized("大纲"), toggleOutline), "outline");
   outlineButton.disabled = true;
   outlineButton.setAttribute("aria-controls", outline.id);
   outlineButton.setAttribute("aria-expanded", "false");
   const finder = noteList(async (id, card) => {
-    if (!card.attached) return open(id);
+    if (!card.attached) return open(id, "preview");
     await editor?.save();
     await invoke("locate", { id });
   }, { onDismiss: () => editor?.focus() });
@@ -278,10 +283,9 @@ export async function mount() {
     if (location.kind === "document" && location.id) await saveOpenNote(location.id);
     await (await panel()).start(location, mode);
   }
-  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), async () => (await panel()).toggle());
+  const terminalButton = iconButton("terminal", localized("显示或隐藏终端"), localized("终端"), async () => (await panel()).toggle());
   terminalButton.setAttribute("aria-expanded", "false");
   terminalButton.setAttribute("aria-controls", "workspace-terminal");
-  bindLabel(terminalButton, "data-tip", localized("显示或隐藏终端"));
   const showSettings = () => invoke("show_settings");
   const windowButton = element("button", "icon-button");
   windowButton.type = "button";
@@ -307,8 +311,14 @@ export async function mount() {
   const leading = element("div", "workspace-actions workspace-leading");
   const trailing = element("div", "workspace-actions workspace-trailing");
   leading.append(sidebar);
-  trailing.append(terminalButton);
-  if (desktopPlatform.windowsChrome) {
+  const update = button("", () => invoke("show_settings", { section: "updates" }));
+  update.hidden = true;
+  trailing.append(update, terminalButton);
+  void watchUpdates(status => {
+    update.hidden = status.kind !== "available";
+    if (status.kind === "available") bindLabel(update, "text", () => t("更新到 {version}", { version: status.version }));
+  }).catch(report);
+  if (desktopPlatform.customCaption) {
     const documentTools = element("div", "document-tools");
     add.replaceChildren(icon("add"));
     documentTools.append(tabs.bar, add, outlineButton, windowButton);
@@ -320,7 +330,7 @@ export async function mount() {
     });
   } else {
     leading.append(add);
-    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), showSettings), "settings"));
+    trailing.append(outlineButton, windowButton, shortcutHint(iconButton("settings", localized("设置"), localized("设置"), showSettings), "settings"));
   }
   titlebar.append(leading, finder.panel, trailing, windowMenu);
   configureTitlebar(titlebar);
@@ -339,7 +349,7 @@ export async function mount() {
     editor: () => editor?.focus(), workspace: () => focusFiles(true), archive: () => focusFiles(false),
     tile: () => editor?.command("tile"),
     previousDocument,
-    get closeActive() { return editor && (tabs.multiple || desktopPlatform.windowsChrome || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
+    get closeActive() { return editor && (tabs.multiple || environment.os === "windows" || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
     newDocument: newDocument,
     terminal: () => openTerminal(currentLocation(), "reveal"),
     save: () => editor?.save(),
@@ -349,10 +359,11 @@ export async function mount() {
     settings: showSettings,
     quit: () => invoke("quit"),
   });
-  await getCurrentWindow().listen<NoteId>(events.mainNote, event => { void open(event.payload).catch(report); });
-  await getCurrentWindow().listen(events.sidebarToggle, toggleSidebar);
-  await getCurrentWindow().listen("desktop:workspace-added", () => { void library.showWorkspace().catch(report); });
-  await getCurrentWindow().listen<string>(events.editorAction, ({ payload }) => {
+  const currentWindow = getCurrentWindow();
+  const mainNoteListener = currentWindow.listen<NoteId>(events.mainNote, event => { void open(event.payload).catch(report); });
+  const sidebarListener = currentWindow.listen(events.sidebarToggle, toggleSidebar);
+  const workspaceListener = currentWindow.listen("desktop:workspace-added", () => { void library.showWorkspace().catch(report); });
+  const actionListener = currentWindow.listen<string>(events.editorAction, ({ payload }) => {
     const actions: Record<string, () => unknown> = {
       "close-tab": () => !document.querySelector("dialog[open]") && closeActive(),
       "previous-document": previousDocument, new: newDocument, save: () => editor?.save(), file: () => editor?.file(), find: finder.focus,
@@ -379,7 +390,7 @@ export async function mount() {
     dirty = false;
     void Promise.all([library.refresh(sourcesChanged), refreshCard(), finder.refresh()]).catch(report);
   }
-  await listen<NoteId | null>(events.notesChanged, ({ payload }) => {
+  const notesListener = listen<NoteId | null>(events.notesChanged, ({ payload }) => {
     if (document.hasFocus()) refresh(payload === null);
     else {
       dirty = true;
@@ -388,7 +399,7 @@ export async function mount() {
     }
   });
   let titleRefresh = 0;
-  await listen("desktop:files-changed", () => {
+  const filesListener = listen("desktop:files-changed", () => {
     const ids = tabs.ids().filter(id => id !== editor?.id);
     if (!ids.length) return;
     const turn = ++titleRefresh;
@@ -396,7 +407,7 @@ export async function mount() {
       if (turn === titleRefresh) for (const card of cards) tabs.rename(card.id, card.title);
     }).catch(report);
   });
-  await listen<NoteId[]>("desktop:notes-removed", ({ payload }) => {
+  const removedListener = listen<NoteId[]>("desktop:notes-removed", ({ payload }) => {
     void enqueue(async () => {
       for (const id of payload) if (id !== editor?.id) tabs.remove(id);
       if (!editor || !payload.includes(editor.id)) return;
@@ -405,14 +416,14 @@ export async function mount() {
       await library.refresh();
     }).catch(report);
   });
-  await listen(events.foldersChanged, () => {
+  const foldersListener = listen(events.foldersChanged, () => {
     void library.loadFolders().then(refreshCard).catch(report);
   });
   window.addEventListener("focus", () => {
     if (dirty) refresh();
     library.refreshFiles();
   });
-  await saveBeforeClose(async () => {
+  const closeListener = saveBeforeClose(async () => {
     if (terminal) await (await terminal).ready();
     if (await invoke<number>("live_terminals") > 0 && await fileDialog(t("结束终端并关闭窗口？"), t("结束并关闭"), {
       detail: t("关闭主窗口会结束所有终端会话及其前台任务。")
@@ -426,7 +437,10 @@ export async function mount() {
     const cards = await invoke<Pick<Card, "id" | "title">[]>("take_dropped_tabs");
     if (cards.length) await openTabs(cards);
   };
-  await getCurrentWindow().listen("desktop:dropped-tabs", () => { void receiveDrops().catch(report); });
+  const dropsListener = currentWindow.listen("desktop:dropped-tabs", () => { void receiveDrops().catch(report); });
+  // Keep the initial document and drag queue reads behind their subscriptions.
+  await Promise.all([mainNoteListener, sidebarListener, workspaceListener, actionListener, notesListener,
+    filesListener, removedListener, foldersListener, closeListener, dropsListener]);
   const initial = await invoke<NoteId | null>("initial_note");
   if (initial !== null) await open(initial);
   await receiveDrops();

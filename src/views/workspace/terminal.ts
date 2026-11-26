@@ -1,3 +1,4 @@
+import { onAppearanceChange } from "../../appearance/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -5,6 +6,8 @@ import { localized, bindLabel, t } from "../../i18n";
 import { displayPath, desktopPlatform } from "../../desktop/platform";
 import { notes } from "../../desktop/ipc";
 import { icon, iconButton } from "../../ui/chrome";
+import { fileDialog } from "../../ui/file-dialog";
+import { popupMenu } from "../../ui/context-menu";
 import { button, element, report } from "../../ui/dom";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
@@ -15,6 +18,9 @@ export type OpenTerminal = (location?: TerminalLocation) => Promise<void>;
 interface Session {
   id: number;
   origin: TerminalLocation;
+  defaultName: string;
+  name: HTMLElement;
+  badge: HTMLElement;
   lastUsed: number;
   row: HTMLElement;
   tab: HTMLButtonElement;
@@ -51,16 +57,17 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
   list.setAttribute("role", "tablist");
   list.setAttribute("aria-orientation", "vertical");
   bindLabel(list, "aria-label", localized("切换终端"));
-  const add = iconButton("add", localized("新建终端"), () => start());
+  const add = iconButton("add", localized("新建终端"), localized("新建终端"), () => start());
   const zoomLabel = () => panel.classList.contains("terminal-maximized") ? t("还原终端面板") : t("最大化终端面板");
-  const zoom = iconButton("maximize", zoomLabel, () => {
+  const zoom = iconButton("maximize", zoomLabel, () => panel.classList.contains("terminal-maximized") ? t("还原") : t("最大化"), () => {
     const expanded = panel.classList.toggle("terminal-maximized");
     zoom.setAttribute("aria-pressed", String(expanded));
     bindLabel(zoom, "aria-label", zoomLabel);
+    bindLabel(zoom, "data-tip", () => expanded ? t("还原") : t("最大化"));
     zoom.replaceChildren(icon(expanded ? "restore" : "maximize"));
   });
   zoom.setAttribute("aria-pressed", "false");
-  const hideButton = iconButton("close", localized("收起终端"), hide);
+  const hideButton = iconButton("close", localized("收起终端"), localized("收起终端"), hide);
   const actions = element("div", "terminal-actions");
   actions.append(add, zoom, hideButton);
   bar.append(title, ended, actions);
@@ -95,12 +102,17 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
     event.preventDefault();
     height(panel.offsetHeight + (event.key === "ArrowUp" ? 16 : -16));
   };
-  function theme() {
+  function appearanceOptions() {
     const style = getComputedStyle(panel);
-    return { background: style.backgroundColor, foreground: style.color, cursor: style.color };
+    const font = getComputedStyle(body);
+    return { theme: { background: style.backgroundColor, foreground: style.color, cursor: style.color },
+      fontSize: Number.parseFloat(font.fontSize), fontFamily: font.fontFamily };
   }
-  new MutationObserver(() => { for (const {client} of sessions.values()) client.options.theme = theme(); })
-    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-jot-scheme", "style"] });
+  onAppearanceChange(() => {
+    const options = appearanceOptions();
+    for (const {client} of sessions.values()) client.options = options;
+    resize();
+  });
 
   function visible(value: boolean) {
     panel.hidden = !value;
@@ -110,7 +122,14 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
   function update() {
     if (sessions.size === 1 && list.parentNode !== bar) bar.insertBefore(list, actions);
     if (sessions.size !== 1 && list.parentNode !== deck) deck.append(list);
+    const names = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const {name} of sessions.values()) {
+      if (names.has(name.textContent)) duplicates.add(name.textContent);
+      names.add(name.textContent);
+    }
     for (const s of sessions.values()) {
+      s.badge.hidden = !duplicates.has(s.name.textContent);
       s.tab.setAttribute("aria-selected", String(s === active));
       s.tab.tabIndex = s === active ? 0 : -1;
       s.row.classList.toggle("ended", !s.live);
@@ -127,6 +146,14 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
     resize();
     if (focusTab || !s.live) s.tab.focus(); else s.client.focus();
   }
+  async function rename(s: Session) {
+    const value = await fileDialog(t("重命名终端"), t("保存"), {
+      initial: s.name.textContent, allowEmpty: true, detail: s.tab.getAttribute("aria-description") ?? undefined,
+    });
+    if (value === undefined || !sessions.has(s.id)) return;
+    s.name.textContent = value || s.defaultName;
+    update();
+  }
   list.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const entries = [...sessions.values()];
@@ -138,6 +165,10 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
       case "ArrowUp": next = entries[(index + entries.length - 1) % entries.length]; break;
       case "Home": next = entries[0]; break;
       case "End": next = entries[entries.length - 1]; break;
+      case "F2":
+        event.preventDefault();
+        void rename(entries[index]).catch(report);
+        return;
       case "Delete":
         event.preventDefault();
         void terminate(entries[index]).catch(report);
@@ -174,10 +205,9 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
         const recent = mostRecent(matching);
         if (recent) { activate(recent); return; }
       }
-      const {id, shell, directory} = await invoke<{ id: number; shell: string; directory: string }>("open_terminal", { location, cols:80, rows:24 });
+      const {id, shell, directory, fileName} = await invoke<{ id: number; shell: string; directory: string; fileName: string | null }>("open_terminal", { location, cols:80, rows:24 });
       const screen = element("div", "terminal-screen");
-      const client = new Terminal({ theme: theme(), cursorBlink: true, scrollback: 3000, fontSize: 13,
-        fontFamily: getComputedStyle(panel).getPropertyValue("--jot-font-mono"), minimumContrastRatio: 4.5 });
+      const client = new Terminal({ ...appearanceOptions(), cursorBlink: true, scrollback: 3000, minimumContrastRatio: 4.5 });
       const fit = new FitAddon();
       const row = element("div", "terminal-session");
       const tab = button("", () => activate(s), "terminal-tab");
@@ -188,14 +218,21 @@ export function terminalPanel(parent: HTMLElement, toggleButton: HTMLButtonEleme
       screen.setAttribute("role", "tabpanel");
       screen.setAttribute("aria-labelledby", tab.id);
       const path = displayPath(directory);
-      const name = shell + " · " + id;
-      const folder = path.split(desktopPlatform.pathSeparator).filter(Boolean).pop() ?? path;
-      tab.title = name + "\n" + path;
-      tab.append(icon("terminal"), element("span", "terminal-name", shell), element("small", "terminal-id", "#" + id), element("small", "terminal-folder", folder));
-      const remove = iconButton("trash", () => t("结束终端") + " " + name, () => terminate(s));
+      const defaultName = fileName || path.split(desktopPlatform.pathSeparator).filter(Boolean).pop() || path;
+      const name = element("span", "terminal-name", defaultName);
+      const badge = element("small", "terminal-id", "#" + id);
+      tab.setAttribute("aria-description", (fileName ? fileName + " · " : "") + shell + "\n" + path);
+      tab.setAttribute("aria-keyshortcuts", "F2");
+      bindLabel(tab, "data-tip", localized("切换终端"));
+      tab.append(icon(fileName ? "file" : "folder"), name, badge);
+      const remove = iconButton("trash", localized("结束终端"), localized("结束终端"), () => terminate(s));
+      remove.setAttribute("aria-describedby", tab.id);
       remove.classList.add("terminal-remove");
       row.append(tab, remove);
-      const s: Session = { id, origin: location, lastUsed: 0, row, tab, client, fit, screen, live: true };
+      const s: Session = { id, origin: location, defaultName, name, badge, lastUsed: 0, row, tab, client, fit, screen, live: true };
+      tab.addEventListener("contextmenu", event => {
+        void popupMenu(event, [{label: t("重命名终端"), run: () => rename(s)}]);
+      });
       try {
         body.append(screen);
         visible(true);

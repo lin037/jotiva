@@ -8,6 +8,8 @@ import { copyText, popupMenu } from "../../ui/context-menu";
 import { noteActions } from "./document-file-menu";
 import { button, element, report } from "../../ui/dom";
 
+export type OpenMode = "keep" | "preview" | "select";
+
 interface Tab {
   row: HTMLElement;
   title: HTMLButtonElement;
@@ -16,7 +18,7 @@ interface Tab {
 }
 
 // The order on screen is independent of the order in which documents were last visited.
-export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>, newTerminal: OpenTerminal) {
+export function documentTabs(open: (id: NoteId, mode?: OpenMode) => Promise<void>, close: (ids: NoteId[]) => Promise<void>, save: (id: NoteId) => Promise<void>, newTerminal: OpenTerminal) {
   const bar = element("nav", "document-tabs");
   bar.setAttribute("role", "tablist");
   bindLabel(bar, "aria-label", localized("已打开的文档"));
@@ -24,6 +26,17 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
   const tabs = new Map<NoteId, Tab>();
   const recent = new Set<NoteId>();
   let active: NoteId | undefined;
+  let preview: NoteId | undefined;
+
+  function pin(id = preview) {
+    if (id === undefined || id !== preview) return;
+    const tab = tabs.get(id);
+    if (tab) {
+      delete tab.row.dataset.preview;
+      tab.title.removeAttribute("aria-description");
+    }
+    preview = undefined;
+  }
 
   let multi = false;
   function syncMenu() {
@@ -36,7 +49,8 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     const existing = tabs.get(id);
     if (existing) return existing;
     const row = element("div", "document-tab");
-    const title = button("", () => open(id), "document-tab-name");
+    const title = button("", () => open(id, "select"), "document-tab-name", localized("切换文档"));
+    title.addEventListener("dblclick", () => pin(id));
     title.draggable = true;
     title.dataset.note = String(id);
     title.setAttribute("role", "tab");
@@ -56,6 +70,7 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
       const left = ids.slice(0, index), right = ids.slice(index + 1);
       const { duplicate } = noteActions(() => id, title.textContent, open, save);
       void popupMenu(event, [
+        ...(preview === id ? [{ label: t("保留标签"), run: () => pin(id) }] : []),
         { label: t("复制文档内容"), run: async () => {
           await save(id);
           await copyText((await notes.read(id)).markdown);
@@ -78,13 +93,13 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
         : event.key === "Home" ? ids[0] : event.key === "End" ? ids[ids.length - 1] : undefined;
       if (target !== undefined) {
         event.preventDefault();
-        void open(target).then(() => tabs.get(target)?.title.focus()).catch(report);
+        void open(target, "select").then(() => tabs.get(target)?.title.focus()).catch(report);
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         void close([id]).then(() => active !== undefined && !bar.hidden && tabs.get(active)?.title.focus()).catch(report);
       }
     });
-    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2;
+    bar.hidden = !desktopPlatform.customCaption && tabs.size < 2;
     return tab;
   }
 
@@ -97,29 +112,38 @@ export function documentTabs(open: (id: NoteId) => Promise<void>, close: (ids: N
     active = undefined;
   }
 
-  function select(id: NoteId) {
+  function select(id: NoteId, mode: OpenMode) {
+    const replace = mode === "preview" && !tabs.has(id);
+    if (replace && preview !== undefined) remove(preview);
+    if (mode === "keep") pin(id);
     deactivate();
     const tab = add(id);
+    if (replace) {
+      preview = id;
+      tab.row.dataset.preview = "";
+      bindLabel(tab.title, "aria-description", localized("预览标签，双击保留"));
+    }
     active = id;
     recent.delete(id);
     recent.add(id);
-    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2;
+    bar.hidden = !desktopPlatform.customCaption && tabs.size < 2 && preview === undefined;
     tab.title.tabIndex = 0;
     tab.title.setAttribute("aria-selected", "true");
     if (!bar.hidden) tab.row.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   function remove(id: NoteId) {
+    if (preview === id) preview = undefined;
     tabs.get(id)?.row.remove();
     tabs.delete(id);
     syncMenu();
     recent.delete(id);
     if (active === id) active = undefined;
-    bar.hidden = tabs.size === 0 || (!desktopPlatform.windowsChrome && tabs.size === 1 && active !== undefined);
+    bar.hidden = tabs.size === 0 || (!desktopPlatform.customCaption && tabs.size === 1 && active !== undefined && preview === undefined);
   }
 
   return {
-    bar, select, add, remove, deactivate,
+    bar, select, add, remove, deactivate, pin,
     get multiple() { return multi; },
     ids: () => [...tabs.keys()],
     rename(id: NoteId, name: string) {

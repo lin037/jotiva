@@ -1,4 +1,4 @@
-// Explicitly opened notes have stable native window identities. A hidden WebView
+// Extra notes have stable native window identities. A hidden WebView
 // may be reclaimed without losing the note's host, geometry or presentation.
 use super::*;
 
@@ -20,6 +20,25 @@ pub(super) struct NoteWindow {
 }
 
 impl NoteWindow {
+    fn new(host: Option<HostId>, position: LogicalPosition<f64>, expanded: bool) -> Self {
+        Self {
+            host,
+            expanded,
+            pinned: false,
+            visible: false,
+            dragged: false,
+            search: None,
+            position,
+            edit_size: None,
+            summary_size: None,
+            epoch: 0,
+            focus: None,
+            painted: None,
+            cursor: None,
+            idle: None,
+        }
+    }
+
     pub fn needs_visibility(&self, active: Option<HostId>, docked: bool) -> bool {
         self.host.is_none() || self.pinned || (self.host == active && !docked)
     }
@@ -62,12 +81,14 @@ pub(super) fn open(
 ) -> Result<(), String> {
     let state = app.state::<Mutex<Desktop>>();
     if !state.lock().unwrap().note_windows.contains_key(&id) {
-        let screen = state
-            .lock()
-            .unwrap()
-            .target
-            .filter(|t| Some(t.id) == host)
-            .map(|t| t.screen);
+        let screen = {
+            let desktop = state.lock().unwrap();
+            desktop
+                .active_host
+                .or(desktop.target)
+                .filter(|t| Some(t.id) == host)
+                .map(|t| t.screen)
+        };
         let position = if let Some(parent) = parent {
             let at = host::window_origin(parent).map_err(|e| e.to_string())?;
             let size = parent
@@ -118,25 +139,11 @@ pub(super) fn open(
         } else {
             host::pointer()
         };
-        state.lock().unwrap().note_windows.insert(
-            id,
-            NoteWindow {
-                host,
-                expanded: true,
-                pinned: false,
-                visible: false,
-                dragged: false,
-                search: None,
-                position,
-                edit_size: None,
-                summary_size: None,
-                epoch: 0,
-                focus: None,
-                painted: None,
-                cursor: None,
-                idle: None,
-            },
-        );
+        state
+            .lock()
+            .unwrap()
+            .note_windows
+            .insert(id, NoteWindow::new(host, position, true));
     }
     if let Some(note) = state.lock().unwrap().note_windows.get_mut(&id) {
         note.expanded = true;
@@ -220,30 +227,101 @@ pub(super) fn presented(window: &WebviewWindow, id: NoteId, epoch: u64) -> Resul
     };
     let position = (!searching).then_some(note.position);
     let host = note.host;
-    let target = desktop.target.filter(|t| host == Some(t.id));
+    let target = desktop.active_host.filter(|t| host == Some(t.id));
     drop(desktop);
     windows::present(window, size, target, false, position, dimensions, focus)
         .map_err(|e| e.to_string())
 }
 
-pub(super) fn follow(app: &AppHandle, active: Option<HostId>, docked: bool) -> Result<(), String> {
+fn prepare_host_notes(app: &AppHandle, desktop: &mut Desktop, target: Target) {
+    let notes = app.state::<RwLock<Notes>>();
+    let notes = notes.read().unwrap();
+    // The shared panel owns one slot. Every other saved attachment can be
+    // presented independently, even before this run has created its WebView.
+    let primary = if desktop.keeps_visible() {
+        desktop.current_note()
+    } else {
+        let primary = desktop.shared_note(&notes, target.id);
+        desktop
+            .attachments
+            .entry(target.id)
+            .or_default()
+            .select(primary);
+        primary
+    };
+    let missing: Vec<_> = notes
+        .saved_on_host(target.id)
+        .filter(|id| Some(*id) != primary && !desktop.note_windows.contains_key(id))
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+    let scale = app
+        .state::<Mutex<crate::settings::appearance::Appearance>>()
+        .lock()
+        .unwrap()
+        .scale()
+        .max(1.0);
+    let size = LogicalSize::new(384. * scale, 352. * scale);
+    let layout = desktop.attachments.get(&target.id);
+    let anchor = layout
+        .and_then(|layout| layout.position)
+        .unwrap_or_else(|| windows::default_note_position(target.screen, scale));
+    let anchor_size = layout.and_then(|layout| layout.edit_size).unwrap_or(size);
+    let mut occupied: Vec<_> = desktop
+        .note_windows
+        .values()
+        .filter(|note| {
+            note.host == Some(target.id)
+                || note.visible && note.needs_visibility(Some(target.id), false)
+        })
+        .map(|note| note.position)
+        .collect();
+    for id in missing {
+        let position = windows::beside(anchor, anchor_size, size, target.screen, &occupied);
+        occupied.push(position);
+        desktop
+            .note_windows
+            .insert(id, NoteWindow::new(Some(target.id), position, false));
+    }
+}
+
+pub(super) fn follow(
+    app: &AppHandle,
+    target: Option<Target>,
+    reposition: bool,
+) -> Result<(), String> {
     let state = app.state::<Mutex<Desktop>>();
-    let changes: Vec<_> = {
-        let desktop = state.lock().unwrap();
+    let active = target.map(|target| target.id);
+    let mut changes: Vec<_> = {
+        let mut desktop = state.lock().unwrap();
+        if desktop.closing_for_quit.is_some() {
+            return Ok(());
+        }
+        desktop.active_host = target;
+        if !desktop.docked
+            && let Some(target) = target
+        {
+            prepare_host_notes(app, &mut desktop, target);
+        }
         desktop
             .note_windows
             .iter()
             .filter_map(|(&id, w)| {
-                let show = w.needs_visibility(active, docked)
+                let show = w.needs_visibility(active, desktop.docked)
                     || desktop.accessibility_panels.contains(&Some(id));
-                (show != w.visible).then_some((id, show))
+                let refresh = show && reposition && active.is_some() && w.host == active;
+                (show != w.visible || refresh).then_some((show, id))
             })
             .collect()
     };
-    for (id, show) in changes {
-        update(app, id, show, false)?;
+    changes.sort_unstable();
+    let mut result = Ok(());
+    for (show, id) in changes {
+        let updated = update(app, id, show, false);
+        result = result.and(updated);
     }
-    Ok(())
+    result
 }
 
 pub(super) fn dismiss(app: &AppHandle, id: NoteId) -> Result<(), String> {

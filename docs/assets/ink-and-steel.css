@@ -1,86 +1,91 @@
+/* 墨与钢 · 在「设置 → 界面外观 → 我的主题 → 导入主题…」中打开此文件。
+   换配色先改下面两张色表。只换主题色时，改 accent；底色明暗变化大时，一起调整 on-accent。 */
 :root {
-  --jot-color-bg: #f7f4ea;
-  --jot-color-chrome: #eae2cf;
-  --jot-color-sidebar: #e5ddca;
-  --jot-color-surface: #eee7d6;
-  --jot-color-text: #21252a;
-  --jot-color-muted: #4f4a40;
-  --jot-color-line: #807663;
+  --ink-paper: #f7f4ea;     /* 纸张、编辑区 */
+  --ink-panel: #e5ddca;     /* 侧栏，也是其他面板的配色基础 */
+  --ink-text: #21252a;      /* 正文、图中文字 */
+  --ink-muted: #4f4a40;     /* 次要文字、连线 */
+  --ink-accent: #f1bd50;    /* 主按钮、链接、图表强调色 */
+  --ink-on-accent: #211b10; /* 主按钮和甘特任务条上的文字 */
+}
+
+:root[data-jot-scheme="dark"] {
+  --ink-paper: #23262b;
+  --ink-panel: #2e3238;
+  --ink-text: #f6efdf;
+  --ink-muted: #c9bda7;
+  --ink-accent: #ffcd70;
+  --ink-on-accent: #211b10;
+}
+
+/* 需要单独调整某个部位时，改对应的 Jotiva 变量。 */
+:root {
+  --jot-color-bg: var(--ink-paper);
+  --jot-color-sidebar: var(--ink-panel);
+  --jot-color-text: var(--ink-text);
+  --jot-color-muted: var(--ink-muted);
+  --jot-color-surface: color-mix(in srgb, var(--ink-panel) 50%, var(--ink-paper));
+  --jot-color-chrome: color-mix(in srgb, var(--ink-panel) 76%, var(--ink-paper));
+  --jot-color-hover: color-mix(in srgb, var(--ink-panel) 92%, var(--ink-muted));
+  --jot-color-line: color-mix(in srgb, var(--ink-muted) 70%, var(--ink-panel));
+  --jot-color-line-strong: color-mix(in srgb, var(--ink-muted) 86%, var(--ink-panel));
+  --jot-color-accent-fill: var(--ink-accent);
+  --jot-color-on-accent: var(--ink-on-accent);
+  --jot-color-accent: color-mix(in srgb, var(--ink-accent) 42%, #100b00);
+  --jot-color-focus: var(--jot-color-accent);
+  --jot-color-active: color-mix(in srgb, var(--ink-accent) 65%, var(--ink-paper));
+  --jot-color-selection: color-mix(in srgb, var(--ink-accent) 48%, var(--ink-paper));
+  --jot-color-match: var(--jot-color-selection);
+  --jot-color-match-current: var(--jot-color-active);
+  --jot-color-quote: color-mix(in srgb, var(--ink-panel) 88%, var(--ink-accent));
+  --jot-color-rule-paper: color-mix(in srgb, var(--ink-panel) 78%, var(--ink-muted));
   --jot-color-backdrop: rgb(0 0 0 / 30%);
-  --jot-color-line-strong: #625744;
-  --jot-color-hover: #ded3bd;
-  --jot-color-active: #f1d184;
-  --jot-color-accent: #674100;
-  --jot-color-accent-fill: #f1bd50;
-  --jot-color-on-accent: #211b10;
-  --jot-color-focus: #805300;
-  --jot-color-selection: #f4db9f;
-  --jot-color-match: #f4db9f;
-  --jot-color-match-current: #edc062;
-  --jot-color-quote: #eee4cd;
-  --jot-color-rule-paper: #c5b898;
   --jot-scrollbar-track: transparent;
-  --jot-scrollbar-thumb: #766a57;
-  --jot-scrollbar-thumb-hover: #4d4437;
+  --jot-scrollbar-thumb: var(--jot-color-line);
+  --jot-scrollbar-thumb-hover: var(--ink-muted);
+  --jot-shadow-popup: 4px 4px 0 #28231d44;
+  --ink-titlebar: #252a30;
+  --ink-titlebar-text: #fff1ce;
+
+  --jot-editor-font-family: Georgia, "Songti SC", serif;
+  --jot-editor-scale: calc(16 / 13);
+  --jot-quick-scale: calc(15 / 13);
+  --jot-editor-heading-ratio-1: 1.85;
   --jot-radius-small: 0px;
   --jot-radius: 2px;
   --jot-radius-large: 2px;
-  --jot-shadow-popup: 4px 4px 0 #28231d44;
-  --jot-editor-font-family: Georgia, "Songti SC", serif;
-  --jot-editor-font-size: 16px;
-  --jot-quick-font-size: 15px;
-  --jot-editor-heading-ratio-1: 1.85;
   --jot-sidebar-width: clamp(12rem, 24%, 17rem);
   --jot-outline-width: clamp(11rem, 23%, 17rem);
 }
 
 :root[data-jot-scheme="dark"] {
-  --jot-color-bg: #23262b;
-  --jot-color-chrome: #15171a;
-  --jot-color-sidebar: #2e3238;
-  --jot-color-surface: #353a40;
-  --jot-color-text: #f6efdf;
-  --jot-color-muted: #c9bda7;
-  --jot-color-line: #79736a;
+  --ink-titlebar: color-mix(in srgb, var(--ink-paper) 60%, black);
+  --jot-color-chrome: var(--ink-titlebar);
+  --jot-color-surface: color-mix(in srgb, var(--ink-panel) 95%, var(--ink-text));
+  --jot-color-line: color-mix(in srgb, var(--ink-muted) 50%, var(--ink-panel));
+  --jot-color-line-strong: color-mix(in srgb, var(--ink-muted) 76%, var(--ink-panel));
+  --jot-color-accent: var(--ink-accent);
+  --jot-color-active: color-mix(in srgb, var(--ink-accent) 24%, var(--ink-paper));
+  --jot-color-selection: color-mix(in srgb, var(--ink-accent) 21%, var(--ink-paper));
+  --jot-color-quote: color-mix(in srgb, var(--ink-panel) 94%, var(--ink-accent));
   --jot-color-backdrop: rgb(0 0 0 / 45%);
-  --jot-color-line-strong: #a69a86;
-  --jot-color-hover: #41464d;
-  --jot-color-active: #584623;
-  --jot-color-accent: #ffcd70;
-  --jot-color-accent-fill: #ffcd70;
-  --jot-color-focus: #ffcd70;
-  --jot-color-selection: #5b4925;
-  --jot-color-match: #514222;
-  --jot-color-match-current: #68542d;
-  --jot-color-quote: #373530;
-  --jot-color-rule-paper: #514b42;
   --jot-color-error: #ffb8ac;
-  --jot-scrollbar-thumb: #9d927f;
-  --jot-scrollbar-thumb-hover: #d6c8ae;
   --jot-shadow-popup: 4px 4px 0 #10111488;
 }
 
+/* 标题栏在两种模式下都用深底。搜索框有自己的纸张底色。 */
 .jot-titlebar {
-  --jot-color-text: #fff1ce;
-  --jot-color-muted: #dbcba9;
-  --jot-color-hover: #41464d;
-  --jot-color-active: #584623;
-  --jot-color-accent: #ffcd70;
-  --jot-color-focus: #ffcd70;
-  background: #252a30;
+  --jot-color-text: var(--ink-titlebar-text);
+  --jot-color-muted: color-mix(in srgb, var(--ink-titlebar-text) 80%, var(--ink-titlebar));
+  --jot-color-hover: color-mix(in srgb, var(--ink-titlebar) 85%, var(--ink-titlebar-text));
+  --jot-color-active: color-mix(in srgb, var(--ink-titlebar) 75%, var(--ink-accent));
+  --jot-color-accent: var(--ink-accent);
+  --jot-color-focus: var(--ink-accent);
+  background: var(--ink-titlebar);
   border-block-end: 2px solid var(--jot-color-accent);
 }
 
 .jot-titlebar .jot-search {
-  --jot-color-text: #21252a;
-  --jot-color-muted: #4f4a40;
-}
-
-:root[data-jot-scheme="dark"] .jot-titlebar .jot-search {
-  --jot-color-text: #f6efdf;
-  --jot-color-muted: #c9bda7;
-}
-
-:root[data-jot-scheme="dark"] .jot-titlebar {
-  background: #15171a;
+  --jot-color-text: var(--ink-text);
+  --jot-color-muted: var(--ink-muted);
 }

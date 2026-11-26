@@ -4,6 +4,7 @@ import { button, report } from "./dom";
 
 const glyphs = {
   trash: "M3 4.5h10M6 4.5v-2h4v2M4.5 5l.6 8h5.8l.6-8M7 7v4m2-4v4",
+  image: "M2 3h12v10H2zM2 11l4-4 3 3 2-2 3 3M10.5 5.5h.01",
   terminal: "m2.5 4 4 4-4 4m6 0h5",
   menu: "M2.5 4h11m-11 4h11m-11 4h11",
   minimize: "M3 8.5h10",
@@ -20,6 +21,7 @@ const glyphs = {
   search: "M10.8 10.8l2.7 2.7M7 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z",
   open: "M8.5 2.5h5v5m0-5-6 6m-1-4h-4v9h9v-4",
   sidebar: "M2.5 4a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 13.5 4v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12ZM6 2.5v11",
+  file: "M4 1.5h5l3 3v10H4zM9 1.5v3h3",
   folder: "M2 5V4h4l2 2h5.5l-1 6.5H2z",
   grid: "M2.5 2.5h4v4h-4zm7 0h4v4h-4zm-7 7h4v4h-4zm7 0h4v4h-4z",
   list: "M4.5 4h9m-9 4h9m-9 4h9M2 4h.2M2 8h.2M2 12h.2",
@@ -43,8 +45,9 @@ export function icon(icon: keyof typeof glyphs) {
   return glyph;
 }
 
-export function iconButton(name: keyof typeof glyphs, label: Label, action: () => unknown, key?: string, tip?: Label) {
-  const control = button("", action, "icon-button", tip);
+/** The accessible name describes the action. The localized hint should fit in a few words. */
+export function iconButton(name: keyof typeof glyphs, label: Label, hint: Label, action: () => unknown, key?: string) {
+  const control = button("", action, "icon-button", hint);
   bindLabel(control, "aria-label", label);
   if (key) {
     const shortcut = key.replace("⇧", "Shift+").replace("⌘", "Meta+").replace("Esc", "Escape");

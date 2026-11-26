@@ -48,7 +48,11 @@
   .jot-editor-toolbar {
     --jot-toolbar-padding: var(--jot-space-1) var(--jot-space-2);
   }
-  .jot-editor .jot-editor-toolbar__button { padding-inline: var(--jot-space-1); }
+  .jot-editor .jot-editor-toolbar__button {
+    min-inline-size: max(24px, 1.8rem);
+    padding-inline: var(--jot-space-1);
+  }
+  .jot-editor .jot-editor-toolbar__button .jot-editor-toolbar__chevron { width: .6rem; }
   .jot-editor .jot-editor-toolbar__group { gap: 0; }
   .jot-editor .jot-editor-toolbar__group:not([hidden]) ~ .jot-editor-toolbar__group { padding-inline-start: var(--jot-space-1); }
 }
@@ -79,13 +83,6 @@
 }
 .jot-editor :is(.cm-scroller, .jot-markdown-editor__surface) { overscroll-behavior-y: none; }
 .jot-editor.jot-markdown-editor .cm-content:not(.jot-live-preview-content) { width: 100%; min-width: 0; }
-.jot-editor .cm-content[data-before-heading="first"] > .cm-line:first-child:not([data-jot-heading-level]),
-.jot-editor .cm-content > [data-before-heading="next"] + .cm-line:not([data-jot-heading-level]) {
-  font-size: var(--jot-heading-1-font-size);
-  line-height: var(--jot-heading-1-line-height);
-  font-weight: 700;
-  padding-inline: 0;
-}
 /* Enter creates a plain CodeMirror row before the worker classifies it as a blank or paragraph. */
 .jot-editor .jot-live-preview-content > .cm-line:where(:not(.jot-live-preview-line)) {
   padding-inline: var(--jot-paragraph-padding-x);
@@ -118,6 +115,43 @@
   height: var(--jot-task-box-size);
   margin-inline-start: calc(-1 * (var(--jot-task-box-size) + var(--jot-list-marker-gap)));
   margin-inline-end: calc(var(--jot-list-marker-gap) - var(--jot-editor-source-space));
+}
+/* WebKit gives native checks different tints in inactive windows and disabled
+   projections. Paint both representations from the same theme tokens. */
+.jot-editor input.jot-task-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  position: relative;
+  padding: 0;
+  opacity: 1;
+  border: 1px solid var(--jot-color-muted);
+  border-radius: 3px;
+  background: var(--jot-color-bg);
+  vertical-align: middle;
+}
+.jot-editor input.jot-task-checkbox:checked {
+  border-color: var(--jot-color-accent-fill);
+  background: var(--jot-color-accent-fill);
+}
+.jot-editor input.jot-task-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 32%;
+  top: 9%;
+  width: 27%;
+  height: 54%;
+  border: solid var(--jot-color-on-accent);
+  border-width: 0 0.12em 0.12em 0;
+  transform: rotate(45deg);
+}
+.jot-editor input.jot-task-checkbox:focus-visible {
+  outline: 2px solid var(--jot-color-focus);
+  outline-offset: 2px;
+}
+@media (forced-colors: active) {
+  .jot-editor input.jot-task-checkbox { appearance: auto; -webkit-appearance: auto; }
+  .jot-editor input.jot-task-checkbox:checked::after { content: none; }
 }
 .jot-editor .cm-content.jot-live-preview-content .cm-line[data-jot-live-list-marker]:not([data-jot-live-list-marker="•"]):has(.jot-live-preview-task-checkbox)::before,
 .jot-editor .jot-editor-content .jot-list-item[value]:has(.jot-task-checkbox)::before {

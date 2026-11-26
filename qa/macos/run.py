@@ -93,13 +93,16 @@ def exercise(work, application, data, quick_key, smoke):
                 raise RuntimeError(f"Fixture {host} did not receive focus")
             time.sleep(.05)
 
-    def capture_time(host="A"):
+    expand = None
+    def capture_time(host="A", *, existing=False):
+        nonlocal expand
         wait_host(host)
-        sent = send("s", True)
-        assert sent.startswith("key posted "), sent
+        sent = send(f"click-note {expand[0]} {expand[1]}" if existing else "s", True)
+        assert sent.startswith("clicked " if existing else "key posted "), (sent, expand, send("geometry", True))
         recorded = wait("sample")
+        expand = recorded["expand"]
         assert f"Fixture {host}" in recorded["source"], recorded
-        elapsed = recorded["measured"] - float(sent.split()[2])
+        elapsed = recorded["measured"] - float(sent.split()[-1])
         assert 0 <= elapsed < 3000, elapsed
         time.sleep(.15)
         return round(elapsed, 1), recorded["page"]
@@ -179,14 +182,14 @@ def exercise(work, application, data, quick_key, smoke):
         timings = {"first_ms": first[0]}
         host = "A"
         if not smoke:
-            warm = [capture_time() for _ in range(WARM_SAMPLES)]
+            warm = [capture_time(existing=True) for _ in range(WARM_SAMPLES)]
             assert all(page == first[1] for _, page in warm)
             print("Warm capture", distribution(warm), flush=True)
             send("B")
             time.sleep(16)
             send("A")
             time.sleep(.25)
-            recreated = capture_time()
+            recreated = capture_time(existing=True)
             assert recreated[1] != first[1]
             host = "B"
             send(host)
@@ -195,7 +198,7 @@ def exercise(work, application, data, quick_key, smoke):
             from_tray = capture_time(host)
             assert from_tray[1] != recreated[1]
             timings.update(warm=distribution(warm), recreated_with_summary_ms=recreated[0], tray_without_window_ms=from_tray[0])
-        assert send("s", True).startswith("key posted ")
+        assert send("click-note", True).startswith("clicked ")
         drag = wait("drag-screen", timeout=15)
         assert send(f"expose {drag['target']}", True) == "exposed"
         time.sleep(.25)
@@ -206,9 +209,6 @@ def exercise(work, application, data, quick_key, smoke):
         attachment = wait("reattached", timeout=18)
         assert attachment["target"] != host
         host = attachment["target"]
-        send(host)
-        wait_host(host)
-        assert send("s", True).startswith("key posted ")
         quick_drag = wait("quick-drag-ready")
         host = quick_drag["target"]
         assert send(f"expose-away {quick_drag['x']} {quick_drag['y']} {host}", True) == "exposed"
@@ -240,7 +240,7 @@ def exercise(work, application, data, quick_key, smoke):
         assert returned and all(abs(a-b) < 2 for a,b in zip(resized, returned)), (resized, returned)
         wait_host(host)  # Passive note presentation leaves typing in the clicked document.
         print("Passed passive mouse return with original note size and keyboard focus", flush=True)
-        assert send("s", True).startswith("key posted ")
+        assert send("click-note", True).startswith("clicked ")
         native = wait("native-close")
         assert native["id"] == layout["id"]
         assert native["id"] == attachment["id"]
@@ -384,7 +384,7 @@ def build_test_app(work, identifier, samples, probe="probe.js", query=None, obse
         {
             "identifier": "qa-window-size",
             "windows": ["main"],
-            "permissions": ["core:window:allow-set-size"],
+            "permissions": ["core:window:allow-set-size", "core:window:allow-set-position"],
         },
         {
             "identifier": "qa-close-settings",

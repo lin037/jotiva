@@ -2,12 +2,12 @@ import { t, bindLabel, localized } from "../i18n";
 import { desktopPlatform } from "./platform";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { button, element } from "../ui/dom";
+import { button, disclosureSummary, element } from "../ui/dom";
 import "../styles/dialog.css";
 
 export function accessibilityHelp() {
   const help = element("details", "access-help");
-  const summary = element("summary", undefined, localized("已打开开关，仍提示未授权？"));
+  const summary = disclosureSummary(localized("已打开开关，仍提示未授权？"));
   const guidance = element("p", undefined, localized("替换过应用时，先退出，再从安装位置打开。如果仍提示未授权，在辅助功能列表里移除旧应用的条目，用「＋」添加当前安装的这一份并打开开关。"));
   const path = element("p");
   const finder = button(localized("在 Finder 中显示这份 Jotiva"), () =>

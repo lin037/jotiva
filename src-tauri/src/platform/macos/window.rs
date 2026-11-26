@@ -21,6 +21,7 @@ unsafe extern "C" {
         left: *mut std::ffi::c_void,
         right: *mut std::ffi::c_void,
     );
+    fn jot_center_over(window: *mut std::ffi::c_void, owner: *mut std::ffi::c_void);
     fn jot_activating_note() -> bool;
     fn jot_note_spaces(window: *mut std::ffi::c_void, follows_spaces: bool);
     fn jot_focus_note(window: *mut std::ffi::c_void, move_to_host_space: bool);
@@ -59,17 +60,19 @@ pub fn tile(
     Ok(())
 }
 
+pub fn center_over(window: &WebviewWindow, owner: &WebviewWindow) -> tauri::Result<()> {
+    unsafe { jot_center_over(window.ns_window()?, owner.ns_window()?) };
+    Ok(())
+}
+
 pub fn builder<'a>(mut builder: Builder<'a>, label: &str) -> Builder<'a> {
     if label != crate::windows::SETTINGS {
         builder = builder.disable_drag_drop_handler();
     }
-    if label == crate::windows::MAIN || crate::windows::is_quick(label) {
-        builder = builder
-            .title_bar_style(TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(LogicalPosition::new(15.0, 19.0));
-    }
     builder
+        .title_bar_style(TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(LogicalPosition::new(15.0, 19.0))
 }
 pub fn configure(window: &WebviewWindow, id: NoteId) -> tauri::Result<()> {
     let panel = window.to_panel::<panel::JotNotePanel>()?;

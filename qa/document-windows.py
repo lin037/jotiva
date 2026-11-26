@@ -69,11 +69,15 @@ window.__TAURI_INTERNALS__ = {
       case "document_menu": window.menu = args; return;
       case "workspace_tab_menu": window.multipleTabs = args.multiple; return;
       case "read_settings": return {preferences:{quick:"Control+Shift+Space",search:null,dock:null,local:{}}};
+      case "list_theme_files": return [];
       case "read_appearance": return {baseSize:null, systemSize:13, mode:"light", accent:null,
         workspace:{sidebar:null,outline:null}, stylesheet:null,
         editing:{font:"system",wrapCode:true,foldHeadings:true,toolbar:true,headingScale:null,ruledPaper:false}};
       case "inbox_directory": return "/tmp/Jotiva/其他";
-      case "list_folders": case "list_sources": case "workspace_roots": return [];
+      case "list_folders": case "list_sources": return [];
+      case "workspace_roots": return window.previewIds ? ["/work"] : [];
+      case "workspace_children": return previewIds.map(id => ({name:id+".md",path:"/work/"+id+".md",directory:false}));
+      case "open_library_file": return Number(args.path.split("/").pop().split(".")[0]);
       case "list_notes": return {items:[],more:false};
       case "search_document_files": return [];
       case "search_notes": return {current:[],attached:[],documents:[],more:false};
@@ -720,9 +724,54 @@ def check_missing_history(page, url):
     print("Missing captureHistory reproduced. Markdown saved and three further switches remained editable.", flush=True)
 
 
+def check_preview_tabs(page):
+    for id in range(3, 7):
+        records[id] = {"id": id, "source": "Jotiva", "version": 1, "markdown": f"document {id}"}
+    page.evaluate("window.previewIds = [2,3,4,5,6]; notify('desktop:files-changed')")
+    page.locator('[data-directory="/work"]').click()
+    def row(id):
+        return page.locator(f'[data-file="/work/{id}.md"]')
+    def tab(id):
+        return page.locator(f'[role=tab][data-note="{id}"]')
+    def active(id):
+        expect(tab(id)).to_have_attribute("aria-selected", "true")
+    row(2).click()
+    active(2)
+    expect(page.locator("[data-preview] [role=tab]")).to_have_attribute("data-note", "2")
+    row(3).click()
+    active(3)
+    expect(tab(2)).to_have_count(0)
+    editor = page.locator(".cm-content")
+    editor.press("End")
+    page.keyboard.insert_text(" edited")
+    expect(page.locator("[data-preview]")).to_have_count(0)
+    row(4).click()
+    active(4)
+    row(4).dblclick()
+    expect(page.locator("[data-preview]")).to_have_count(0)
+    row(5).click()
+    active(5)
+    expect(tab(3)).to_be_visible()
+    expect(tab(4)).to_be_visible()
+    page.evaluate("""async () => {
+      const value = await __TAURI_INTERNALS__.invoke('read_appearance');
+      value.editing.previewTabs = false;
+      notify('desktop:appearance-changed', value);
+    }""")
+    expect(page.locator("[data-preview]")).to_have_count(0)
+    row(6).click()
+    active(6)
+    expect(tab(5)).to_be_visible()
+    expect(page.locator("[data-preview]")).to_have_count(0)
+    assert records[3]["markdown"] == "document 3 edited"
+    expect(page.locator(".error")).to_be_hidden()
+    print("Preview replacement, typing, double-click pinning and opt-out passed.")
+
+
 def main():
     cases = {
         "sync": ("main", "Multi-window revision sync, conflicts, document actions and tabs"),
+        "preview": ("main", "Preview tab replacement, pinning and opt-out"),
         "history": ("main", "Tab undo/redo and history reset after an external edit"),
         "resume": ("quick", "Quick note resume, Worker reclamation and stale frames"),
         "capacity": ("main", "Many tabs and scroll stability in a long document"),
@@ -733,7 +782,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name, (_, description) in cases.items():
         parser.add_argument(f"--{name}", action="append_const", const=name, dest="cases", help=description)
-    selected = parser.parse_args().cases or ["sync", "history", "resume"]
+    selected = parser.parse_args().cases or ["sync", "history", "resume", "preview"]
     dist = PROJECT / "dist"
     if not (dist / "index.html").is_file():
         parser.error("Run pnpm build first")
@@ -784,6 +833,8 @@ def run(dist, selected, cases):
                             if case == "caret":
                                 from scenarios.caret import check_heading_caret
                                 check_heading_caret(page)
+                            elif case == "preview":
+                                check_preview_tabs(page)
                             elif case == "resume":
                                 check_quick_resume(page)
                             elif case == "history":

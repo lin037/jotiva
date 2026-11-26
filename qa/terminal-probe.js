@@ -51,8 +51,15 @@ export async function checkTerminal(os, waitFor, run, report) {
     tab.focus();
     await report("input " + JSON.stringify({name:"new terminal for current tab", title:await run("plugin:window|title"), keys:["ControlKey","ShiftKey","Oemtilde"]}));
   } else shortcut(tab);
-  await waitFor(() => sessions().length === 2 && selected().title.endsWith(sep + "posts"), "new terminal in nested document directory");
+  await waitFor(() => sessions().length === 2 && selected().getAttribute("aria-description").endsWith(sep + "posts") && selected().querySelector(".terminal-name").textContent === "a ' $ file.md", "new terminal in nested document directory");
   const second = selected();
+  second.focus();
+  second.dispatchEvent(new KeyboardEvent("keydown", {key:"F2", bubbles:true}));
+  const nameField = await waitFor(() => document.querySelector("dialog[open] input"), "session name editor");
+  nameField.value = "Build";
+  nameField.form.requestSubmit();
+  await waitFor(() => second.querySelector(".terminal-name").textContent === "Build", "renamed the existing session");
+  if (await run("live_terminals") !== 2) throw Error("Renaming replaced a live shell");
   const screen = panel.querySelector(".terminal-screen:not([hidden])").getBoundingClientRect();
   if (second.getBoundingClientRect().left < screen.right - 1) throw Error("Terminal tabs must be beside the screen");
   zoom.click();

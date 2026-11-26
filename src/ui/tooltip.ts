@@ -1,3 +1,4 @@
+import english from "../i18n/en.json";
 import { t, message, language } from "../i18n";
 // Long action names stay on the control for VoiceOver. These are the compact,
 // visible names for Jotiva and the buttons supplied by the released editor.
@@ -15,6 +16,7 @@ const names: Readonly<Record<string, string>> = {
   "授权辅助功能": "授权", "移除密钥": "移除", "系统默认": "默认", "恢复默认": "重置",
   "选择标题级别": "标题", "选择表格尺寸": "表格", "更多格式和插入": "更多",
   "切换有序列表": "有序列表", "切换无序列表": "无序列表", "切换任务列表": "待办",
+  "切换任务完成状态": "切换完成", "重排有序列表编号": "重排编号", "选择图片来源": "图片",
   "切换引用": "引用", "插入链接": "链接", "命令面板": "命令",
   "插入代码块": "代码块", "插入公式块": "公式块", "插入分隔线": "分隔线",
   "插入图片": "图片", "插入表格": "插表", "关闭 · Esc": "关闭",
@@ -22,12 +24,33 @@ const names: Readonly<Record<string, string>> = {
   "折叠或展开当前标题": "切换折叠",
   "在当前行下方插入表格行": "增行", "删除当前表格行": "删行",
   "在当前列右侧插入表格列": "增列", "删除当前表格列": "删列", "清空当前表格单元格": "清空",
+  "用 Jev 归档": "归档", "打开 Jev 归档设置": "归档设置", "安装更新并重启": "安装更新",
+  "在 Finder 中显示这份 Jotiva": "查看位置", "打开辅助功能设置": "打开设置",
+  "返回编辑器": "返回正文", "聚焦文档大纲": "大纲", "聚焦编辑工具栏": "工具栏",
+  "搜索和替换": "替换", "下一个匹配": "下一处", "上一个匹配": "上一处",
+  "替换当前匹配": "替换当前", "选中下一个相同文本": "追加选中",
+  "在当前块后继续编辑": "移到块后", "在当前块前继续编辑": "移到块前",
+  "移到上方单元格": "上一格", "移到下方单元格": "下一格", "展开全部章节": "全部展开",
+  "下一个表格单元格": "下一格", "上一个表格单元格": "上一格",
+  "上方表格单元格": "向上移格", "下方表格单元格": "向下移格",
+  "在下方插入表格行": "增行", "在右侧插入表格列": "增列",
+  "删除表格行": "删行", "删除表格列": "删列", "清空表格单元格": "清空",
+  "快捷键设置": "快捷键", "插入或编辑链接": "链接",
 };
+
+// Resolve the same semantic hint from either localized label. Dynamic controls
+// (filenames, shortcuts, session names) declare their hint with data-tip.
+const hints = new Map<string, string>();
+for (const [label, hint] of Object.entries(names)) {
+  hints.set(label, hint);
+  const translation = english[label as keyof typeof english];
+  if (translation) hints.set(translation.replace(/…$/u, ""), hint);
+}
 
 function shortName(button: HTMLElement, origin: Element) {
   const expanded = button.getAttribute("aria-expanded");
   const requested = button.dataset.tip;
-  if (requested && (language === "en" || /^[\p{Script=Han}]{1,4}$/u.test(requested))) return requested;
+  if (requested) return requested;
   if (button.matches(".jot-outline__row")) {
     return expanded !== null && origin.closest(".jot-outline__toggle") ? expanded === "true" ? t("折叠") : t("展开") : t("定位");
   }
@@ -39,13 +62,19 @@ function shortName(button: HTMLElement, origin: Element) {
   if (button.matches(".note-rail-row")) return t("定位");
   if (button.matches(".recording-key")) return button.getAttribute("aria-pressed") === "true" ? t("取消") : t("录入");
   if (button.matches("[data-rows][data-columns]")) return t("插表");
-  if (button.dataset.jotHeadingLevel && language === "en") return "Heading " + button.dataset.jotHeadingLevel;
-  if (button.dataset.jotHeadingLevel) return "一二三四五六"[Number(button.dataset.jotHeadingLevel) - 1] + "级标题";
+  const level = button.dataset.jotHeadingLevel ?? button.dataset.jotCommand?.match(/^format\.heading-([1-6])$/u)?.[1];
+  if (level) return language === "en" ? "Heading " + level : "一二三四五六"[Number(level) - 1] + "级标题";
   const command = button.hasAttribute("data-jot-command");
   const label = (button.getAttribute("aria-label") || (command && button.firstElementChild?.firstChild?.textContent)
     || button.textContent || button.title).trim().replace(/…$/u, "");
-  if (language === "en") return message(names[label] ?? label);
-  return names[label] ?? (/^[\p{Script=Han}]{1,4}$/u.test(label) ? label : command ? t("执行") : t("选择"));
+  const hint = hints.get(label);
+  if (hint) return message(hint);
+  // A concise button caption can be its own hint; never guess an action from a long description.
+  const caption = (button.textContent || "").trim().replace(/…$/u, "");
+  for (const text of [label, caption]) {
+    if (/^[\p{Script=Han}]{1,4}$/u.test(text) || /^[\w+-]+(?: [\w+-]+){0,2}$/u.test(text) && text.length <= 22) return message(text);
+  }
+  return "";
 }
 
 const controls = 'button, [role="button"], input[type="button"], input[type="submit"], [data-tip]';
@@ -101,6 +130,7 @@ export function bindTooltips() {
     const host = owner.closest("dialog[open], :popover-open") ?? document.body;
     if (tip.parentElement !== host) host.append(tip);
     const text = shortName(owner, origin);
+    if (!text) { hide(); return; }
     tip.textContent = text;
     if (!tip.matches(":popover-open")) tip.showPopover();
     // Keep existing descriptions (including a file path or shortcut) ahead of

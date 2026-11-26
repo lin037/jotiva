@@ -77,6 +77,21 @@ void jot_tile_documents(void *caller, void *left, void *right) {
     arrangeDocuments((__bridge NSWindow *)left, (__bridge NSWindow *)right, ((__bridge NSWindow *)caller).screen ?: NSScreen.mainScreen);
 }
 
+void jot_center_over(void *pointer, void *ownerPointer) {
+    NSWindow *window = (__bridge NSWindow *)pointer;
+    NSWindow *owner = (__bridge NSWindow *)ownerPointer;
+    NSRect frame = window.frame;
+    NSRect anchor = owner.frame;
+    frame.origin.x = NSMidX(anchor) - NSWidth(frame) / 2;
+    frame.origin.y = NSMidY(anchor) - NSHeight(frame) / 2;
+    if (owner.screen) {
+        NSRect work = owner.screen.visibleFrame;
+        frame.origin.x = MAX(NSMinX(work), MIN(frame.origin.x, NSMaxX(work) - NSWidth(frame)));
+        frame.origin.y = MAX(NSMinY(work), MIN(frame.origin.y, NSMaxY(work) - NSHeight(frame)));
+    }
+    [window setFrameOrigin:frame.origin];
+}
+
 static __weak NSWindow *requestedNote;
 
 bool jot_activating_note(void) { return requestedNote != nil; }
@@ -182,12 +197,20 @@ char *jot_choose_folder(void) {
 
 // AppKit's field editor normally handles Escape by restoring the old text.
 // Use the dialog's cancel/create actions for these two text commands.
-char *jot_choose_markdown(void) {
+static char *choose_file(NSArray<UTType *> *types) {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedContentTypes = @[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]];
+    panel.allowedContentTypes = types;
     panel.canChooseDirectories = NO;
     if ([panel runModal] != NSModalResponseOK) return NULL;
     return strdup(panel.URL.fileSystemRepresentation);
+}
+
+char *jot_choose_markdown(void) {
+    return choose_file(@[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]]);
+}
+
+char *jot_choose_css(void) {
+    return choose_file(@[[UTType typeWithFilenameExtension:@"css"]]);
 }
 
 void jot_file_error(const char *message) {

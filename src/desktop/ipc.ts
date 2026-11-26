@@ -7,6 +7,7 @@ export const events = {
   shortcutRecorded: "desktop:shortcut-recorded",
   foldersChanged: "desktop:folders-changed",
   appearanceChanged: "desktop:appearance-changed",
+  imageSettingsChanged: "desktop:image-settings-changed",
   settingsSection: "desktop:settings-section",
   sidebarToggle: "desktop:sidebar-toggle",
   editorAction: "desktop:editor-action",
@@ -95,6 +96,42 @@ export const folders = {
   choose: () => invoke<string | null>("choose_folder"),
   save: (input: Omit<Folder, "id"> & { id: number | null }) => invoke<Folder>("save_folder", { input }),
   move: (id: NoteId, folder: number | null) => invoke<{ path: string | null; warning: string | null }>("move_note", { id, folder }),
+};
+
+export type ImageMode = "relative" | "fixed" | "http";
+export interface ImageRule { path: string; mode: ImageMode; subfolder: string; directory: string }
+export interface ImageUpload {
+  endpoint: string;
+  field: string;
+  responsePointer: string;
+  bearer: boolean;
+}
+export interface ImageConfig extends ImageUpload {
+  defaultMode: ImageMode;
+  rules: ImageRule[];
+  subfolder: string;
+  directory: string;
+  groupByDocument: boolean;
+  compress: boolean;
+}
+interface ImageFolder {
+  path: string;
+  effectiveRule: ImageRule | null;
+  inheritedRule: ImageRule | null;
+}
+interface ImageSettings {
+  config: ImageConfig;
+  revision: number;
+  folder: ImageFolder | null;
+}
+
+export const imageSettings = {
+  read: (folder?: string) => invoke<ImageSettings>("read_image_settings", { folder }),
+  save: (config: ImageConfig, revision: number) => invoke<ImageSettings>("save_image_settings", { config, revision }),
+  saveFolder: (folder: string, rule: ImageRule | null, upload: ImageUpload | null, revision: number) =>
+    invoke<void>("save_image_folder", { folder, rule, upload, revision }),
+  key: (address: string, action: "check" | "set" | "remove", folder?: string) =>
+    invoke<boolean>("image_key", { address, action, folder }),
 };
 
 export const sources = {

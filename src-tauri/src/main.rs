@@ -5,12 +5,14 @@ mod desktop;
 mod events;
 mod host;
 mod i18n;
+mod images;
 mod library;
 mod menus;
 mod platform;
 mod settings;
 mod storage;
 mod terminal;
+mod updates;
 mod windows;
 
 use std::sync::{Mutex, RwLock};
@@ -145,7 +147,7 @@ async fn show_settings(
     app: AppHandle,
     section: Option<windows::SettingsSection>,
 ) -> Result<(), String> {
-    open_settings(&app, section)
+    windows::on_main_thread(move || open_settings(&app, section)).await
 }
 
 fn open_settings(app: &AppHandle, section: Option<windows::SettingsSection>) -> Result<(), String> {
@@ -678,8 +680,54 @@ fn set_stylesheet(app: AppHandle, stylesheet: Option<Stylesheet>) -> Result<(), 
     publish_appearance(&app, view)
 }
 
+#[tauri::command]
+async fn choose_theme_css() -> Result<Option<Stylesheet>, String> {
+    let Some(path) = platform::dialogs::choose_css().await? else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        Appearance::read_theme_source(std::path::Path::new(&path)).map(Some)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn install_theme(
+    app: AppHandle,
+    stylesheet: Stylesheet,
+    title: Option<String>,
+    replace: Option<String>,
+) -> Result<Option<String>, String> {
+    let (conflict, view) = {
+        let state = app.state::<Mutex<Appearance>>();
+        state
+            .lock()
+            .unwrap()
+            .install_theme(stylesheet, title.as_deref(), replace.as_deref())?
+    };
+    if let Some(view) = view {
+        publish_appearance(&app, view)?;
+    }
+    Ok(conflict)
+}
+
+#[tauri::command]
+fn rename_theme(app: AppHandle, file: String, title: String) -> Result<(), String> {
+    let view = app
+        .state::<Mutex<Appearance>>()
+        .lock()
+        .unwrap()
+        .rename_theme(&file, &title)?;
+    if let Some(view) = view {
+        publish_appearance(&app, view)?;
+    }
+    Ok(())
+}
+
 fn publish_appearance(app: &AppHandle, view: AppearanceView) -> Result<(), String> {
-    menus::sync_theme(app, &view).map_err(|error| error.to_string())?;
+    menus::sync_theme(app, view.mode(), view.has_stylesheet())
+        .map_err(|error| error.to_string())?;
     app.emit(events::APPEARANCE_CHANGED, view)
         .map_err(|error| error.to_string())
 }
@@ -716,6 +764,7 @@ fn save_settings(window: WebviewWindow, preferences: Preferences) -> Result<(), 
     settings::shortcuts::validate_local(&preferences)?;
     let state = app.state::<Mutex<Settings>>();
     let previous = state.lock().unwrap().preferences.clone();
+    let quick = preferences.quick.clone();
     let local = preferences.local.clone();
     let changed = previous.local != local;
     let menu_result = if changed {
@@ -732,6 +781,10 @@ fn save_settings(window: WebviewWindow, preferences: Preferences) -> Result<(), 
                 .map_err(|restore| format!("{error}。恢复菜单键位失败：{restore}"))?;
         }
         return Err(error);
+    }
+    if previous.quick != quick {
+        app.emit("desktop:quick-shortcut-changed", quick)
+            .map_err(|e| e.to_string())?;
     }
     app.emit("desktop:shortcuts-changed", local)
         .map_err(|error| error.to_string())
@@ -784,7 +837,6 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     let mut labels = Vec::new();
     for (id, source) in [
         ("open-main", "打开 Jotiva"),
-        ("open-quick", "速记"),
         ("new-quick", "新建便签"),
         ("search", "查找便签和文档"),
         ("overview", "平铺便签"),
@@ -804,8 +856,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-main" => desktop::report(desktop::open_main(app, None)),
-            "open-quick" => desktop::report(desktop::perform(app, Action::Quick)),
-            "new-quick" => desktop::report(desktop::start_quick(app, true)),
+            "new-quick" => desktop::report(desktop::perform(app, Action::Quick)),
             "search" => desktop::report(desktop::perform(app, Action::Search)),
             "overview" => desktop::report(desktop::show_find(app, true)),
             "dock" => desktop::report(desktop::perform(app, Action::Dock)),
@@ -820,6 +871,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     let mut startup_files = platform::startup_files();
     platform::builder()
+        .register_asynchronous_uri_scheme_protocol("asset", images::serve)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(menus::build)
         .on_menu_event(menus::handle)
         .setup(|app| {
@@ -827,33 +880,44 @@ fn main() {
             app.manage(storage::lock_library(&data)?);
             app.manage(RwLock::new(Notes::load(data.join("notes"))?));
             app.manage(Mutex::new(Settings::load(data.join("settings.json"))?));
+            app.manage(Mutex::new(images::Images::load(data.join("images.json"))?));
             app.manage(Mutex::new(Filing::load(data.join("filing.json"))?));
             app.manage(Mutex::new(Appearance::load(data.join("appearance.json"))?));
             app.manage(Mutex::new(workspace::Workspace::load(
                 data.join("workspace.json"),
             )?));
             app.manage(terminal::Terminal::default());
+            app.manage(updates::Updates::default());
             app.manage(workspace::DroppedTabs::default());
             app.manage(Mutex::new(Folders::load(data.join("folders.json"))?));
             app.manage(Mutex::new(desktop::Desktop::default()));
             app.manage(Mutex::new(menus::Context::default()));
-            let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
-            i18n::set_language(appearance.language());
-            app.set_theme(appearance.mode().native());
-            menus::sync_theme(app.handle(), &appearance)?;
+            let (language, mode, has_stylesheet) = {
+                let state = app.state::<Mutex<Appearance>>();
+                let appearance = state.lock().unwrap();
+                (
+                    appearance.language(),
+                    appearance.mode(),
+                    appearance.has_stylesheet(),
+                )
+            };
+            i18n::set_language(language);
+            app.set_theme(mode.native());
+            menus::sync_theme(app.handle(), mode, has_stylesheet)?;
             let keys = app
                 .state::<Mutex<Settings>>()
                 .lock()
                 .unwrap()
                 .preferences
                 .clone();
-            if !keys.local.is_empty() || appearance.language() == i18n::Language::English {
+            if !keys.local.is_empty() || language == i18n::Language::English {
                 menus::apply_keys(app.handle(), &keys)?;
             }
             desktop::start(app.handle())?;
             app.state::<Mutex<Settings>>().lock().unwrap().install();
             tray(app.handle())?;
             windows::main(app.handle())?;
+            updates::start(app.handle());
             // Start one light shell during launch. Its normal idle timeout also
             // applies before the first capture and no editor Worker starts here.
             desktop::report(
@@ -983,10 +1047,23 @@ fn main() {
             menus::workspace_tab_menu,
             quit,
             cancel_quit,
+            images::read_image_settings,
+            images::save_image_settings,
+            images::save_image_folder,
+            images::image_key,
+            images::image_options,
+            images::store_note_image,
+            updates::read_update,
+            updates::check_update,
+            updates::install_update,
             read_appearance,
             save_workspace,
             save_appearance,
             set_stylesheet,
+            choose_theme_css,
+            settings::appearance::list_theme_files,
+            install_theme,
+            rename_theme,
             read_settings,
             save_settings,
             record_shortcut,

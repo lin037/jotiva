@@ -1,6 +1,6 @@
 use crate::platform::{HostBackend, Native};
 use crate::{host::Target, library::notes::NoteId, windows::Builder};
-use tauri::{LogicalPosition, LogicalSize, WebviewWindow};
+use tauri::{LogicalPosition, LogicalSize, PhysicalPosition, WebviewWindow};
 pub fn builder<'a>(builder: Builder<'a>, _label: &str) -> Builder<'a> {
     builder.decorations(false).shadow(true)
 }
@@ -47,6 +47,38 @@ pub fn tile(
     }
     Ok(())
 }
+
+pub fn center_over(window: &WebviewWindow, owner: &WebviewWindow) -> tauri::Result<()> {
+    if !crate::platform::can_position_windows() {
+        return Ok(());
+    }
+    let origin = owner.outer_position()?;
+    let anchor = owner.outer_size()?;
+    let monitor = owner.current_monitor()?;
+    let size = window
+        .outer_size()?
+        .to_logical::<f64>(window.scale_factor()?)
+        .to_physical::<u32>(owner.scale_factor()?);
+    let centered =
+        |start, extent, size| i64::from(start) + (i64::from(extent) - i64::from(size)) / 2;
+    let mut x = centered(origin.x, anchor.width, size.width);
+    let mut y = centered(origin.y, anchor.height, size.height);
+    if let Some(monitor) = monitor {
+        let work = monitor.work_area();
+        let left = i64::from(work.position.x);
+        let top = i64::from(work.position.y);
+        x = x.clamp(
+            left,
+            left + i64::from(work.size.width.saturating_sub(size.width)),
+        );
+        y = y.clamp(
+            top,
+            top + i64::from(work.size.height.saturating_sub(size.height)),
+        );
+    }
+    window.set_position(PhysicalPosition::new(x as i32, y as i32))
+}
+
 pub fn place(
     window: &WebviewWindow,
     origin: LogicalPosition<f64>,

@@ -3,6 +3,7 @@ import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { copyText, popupMenu } from "../../ui/context-menu";
+import { manageFolderImages } from "../../ui/image-dialog";
 import { noteActions } from "./document-file-menu";
 import { attachOnSwitch } from "./document-drag";
 import { folders, notes, openLibraryFile, type Folder, type NoteId } from "../../desktop/ipc";
@@ -10,13 +11,14 @@ import { iconButton } from "../../ui/chrome";
 import { button, element, report } from "../../ui/dom";
 import { afterNaming, createInline, editFileName, nameCreatedDocument, fileName } from "../../ui/file-name";
 import { fileSelection } from "./file-selection";
+import type { OpenMode } from "./document-tabs";
 import { archiveFiles } from "./archive-files";
 import { sourceTree, treeRow } from "./source-tree";
 import type { OpenTerminal } from "./terminal";
 import { workspaceFiles } from "./workspace-files";
 
 export async function librarySidebar(
-  open: (id: NoteId) => unknown,
+  open: (id: NoteId, mode?: OpenMode) => unknown,
   editFolder: (folder?: Folder) => void,
   addSource: () => void,
   moveArchive: (id: NoteId, folder: number | null) => unknown,
@@ -43,7 +45,7 @@ export async function librarySidebar(
   bindLabel(tabs, "aria-label", localized("文档视图"));
   const workspaceTab = button(localized("工作区"), () => switchTo(true));
   const archiveTab = button(localized("归档"), () => switchTo(false));
-  const add = iconButton("folderAdd", localized("添加工作区文件夹"), () => inWorkspace ? files.add() : editFolder());
+  const add = iconButton("folderAdd", localized("添加工作区文件夹"), localized("添加目录"), () => inWorkspace ? files.add() : editFolder());
   tabs.append(workspaceTab, archiveTab);
   bar.append(tabs, add);
   tree.append(files.panel, archive);
@@ -156,6 +158,7 @@ export async function librarySidebar(
       void popupMenu(event, [
         { label: t("新建文档"), run: () => createInline(() => createInArchive(row)) },
         terminal,
+        { label: t("图片管理…"), run: () => manageFolderImages(directory, row) },
         ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
         { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },
@@ -198,7 +201,7 @@ export async function librarySidebar(
   await listen("desktop:files-changed", () => {
     if (!inWorkspace && !sidebar.hidden) void refreshArchive().catch(report);
   });
-  await switchTo(localStorage.getItem("jot-library-view") !== "archive");
+  void switchTo(localStorage.getItem("jot-library-view") !== "archive").catch(report);
   return {
     sidebar,
     setActive(id: NoteId, path?: string) {

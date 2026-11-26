@@ -2,13 +2,14 @@ import { t, bindLabel, type Label, localized } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { desktopPlatform } from "../desktop/platform";
+import { environment } from "../desktop/environment";
 import { dragOnMouseDown, icon, iconButton } from "./chrome";
 import { element, report } from "./dom";
 import appIcon from "../assets/jot.svg";
 import "./titlebar.css";
 
 function appMenu() {
-  const button = iconButton("menu", localized("应用菜单"), () => {
+  const button = iconButton("menu", localized("应用菜单"), localized("应用菜单"), () => {
     const { left, bottom } = button.getBoundingClientRect();
     return invoke("application_menu", { x: left, y: bottom });
   });
@@ -17,7 +18,7 @@ function appMenu() {
 }
 
 function captionButton(action: "close" | "minimize" | "maximize", label: Label, click: () => Promise<void>) {
-  const button = iconButton(action, label, click);
+  const button = iconButton(action, label, label, click);
   button.classList.add("caption-button");
   button.dataset.caption = action;
   bindLabel(button, "title", label);
@@ -38,6 +39,7 @@ export function titlebar(region: HTMLElement, compact = false) {
       const maximized = await win.isMaximized();
       const label = () => maximized ? t("还原窗口") : t("最大化");
       bindLabel(maximize, "title", label);
+      bindLabel(maximize, "data-tip", label);
       bindLabel(maximize, "aria-label", label);
       maximize.replaceChildren(icon(maximized ? "restore" : "maximize"));
     };
@@ -47,13 +49,13 @@ export function titlebar(region: HTMLElement, compact = false) {
     const leading = region.querySelector(".workspace-leading");
     if (leading) {
       leading.prepend(appMenu());
-      if (desktopPlatform.windowsChrome) {
-        const logo = element("img", "titlebar-logo");
-        logo.src = appIcon;
-        logo.alt = "Jotiva";
-        logo.draggable = false;
-        leading.prepend(logo);
-        for (const part of [logo, leading, region.querySelector(".workspace-trailing")]) part?.setAttribute("data-tauri-drag-region", "");
+      const logo = element("img", "titlebar-logo");
+      logo.src = appIcon;
+      logo.alt = "Jotiva";
+      logo.draggable = false;
+      leading.prepend(logo);
+      for (const part of [logo, leading, region.querySelector(".workspace-trailing")]) part?.setAttribute("data-tauri-drag-region", "");
+      if (environment.os === "windows") {
         region.addEventListener("contextmenu", event => {
           if (!(event.target instanceof Element) || !event.target.hasAttribute("data-tauri-drag-region")) return;
           event.preventDefault();
@@ -64,17 +66,17 @@ export function titlebar(region: HTMLElement, compact = false) {
     else region.prepend(appMenu());
   }
   controls.append(captionButton("close", localized("关闭窗口"), () => win.close()));
-  const trailing = desktopPlatform.windowsChrome && region.querySelector(".workspace-trailing");
+  const trailing = region.querySelector(".workspace-trailing");
   (trailing || region).append(controls);
 }
 
 export function secondaryTitlebar(title: Label) {
-  if (!desktopPlatform.customCaption) return;
   const bar = element("header", "secondary-titlebar jot-titlebar");
   const text = element("span", "caption-title", title);
   text.setAttribute("data-tauri-drag-region", "");
   bar.append(text);
-  titlebar(bar);
+  if (desktopPlatform.customCaption) titlebar(bar);
+  else bar.setAttribute("data-tauri-drag-region", "");
   document.body.prepend(bar);
   new MutationObserver(() => { text.textContent = document.title; }).observe(
     document.querySelector("title")!, { childList: true, characterData: true, subtree: true });

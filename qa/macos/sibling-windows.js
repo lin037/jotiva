@@ -1,5 +1,6 @@
 const api = window.__TAURI_INTERNALS__;
-const keepMain = new URL(import.meta.url).searchParams.get("main") === "open";
+const options = new URL(import.meta.url).searchParams;
+const keepMain = options.get("main") === "open";
 const label = api.metadata.currentWindow.label;
 const run = (command, args = {}) => api.invoke(command, args);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,7 +24,37 @@ async function type(text, id) {
   if (!document.execCommand("insertText", false, text)) throw Error("Could not enter " + text);
   await wait(async () => (await run("read_note", {id})).markdown.includes(text), "saved " + text);
 }
+async function checkRestart() {
+  if (label !== "main") return;
+  const previous = (await run("list_notes", {query:"#probe:pair", offset:0})).items[0];
+  if (previous) {
+    const marker = await run("read_note", {id:previous.id});
+    const { id, second } = JSON.parse(marker.markdown.split("\n")[1]);
+    await wait(async () => (await Promise.all([id, second].map(id => run("read_card", {id}))))
+      .every(card => card.attached), "both attachments recovered");
+    await record("bindings-restored", {});
+    return;
+  }
+  if (!await run("accessibility_trusted")) throw Error("The native restart probe needs macOS Accessibility access");
+  await record("main-ready", {});
+  const host = await wait(async () => (await run("source_choices"))?.find(choice => choice.title === "Fixture A"),
+    "selectable Fixture A");
+  const source = await run("register_source", {choice:host.choice});
+  const id = await run("create_from_text", {text:"original-note", source});
+  const second = await run("create_from_text", {text:"second-note", source});
+  await run("locate", {id});
+  await wait(async () => (await run("quick_view")).id === id &&
+    await run("plugin:window|is_visible", {label:"quick"}), "first note on the host");
+  await run("locate", {id:second});
+  await wait(async () => (await run("plugin:window|get_all_windows")).includes("quick-" + second) &&
+    await run("plugin:window|is_visible", {label:"quick-" + second}), "second note on the host");
+  const cards = await Promise.all([id, second].map(id => run("read_card", {id})));
+  await record("pair", {id, second, paths:cards.map(card => card.archivePath), source:cards[0].source});
+  await run("quit");
+}
+
 async function check() {
+  if (options.has("restart")) return checkRestart();
   if (label === "main") {
     await wait(() => document.querySelector(".jot-workspace"), "main ready");
     await record("main-ready", {});
@@ -43,9 +74,13 @@ async function check() {
     const { id } = await run("quick_view");
     await type("original-note", id);
     const original = editor();
-    document.querySelector('button[aria-label="便签操作"]').click();
-    const add = await wait(() => document.querySelector('#quick-actions:popover-open button[data-new-note]'), "new note menu");
-    add.click();
+    if (new URL(import.meta.url).searchParams.has("repeat")) {
+      await record("repeat", {});
+    } else {
+      document.querySelector('button[aria-label="便签操作"]').click();
+      const add = await wait(() => document.querySelector('#quick-actions:popover-open button[data-new-note]'), "new note menu");
+      add.click();
+    }
     await wait(async () => (await run("plugin:window|get_all_windows")).some(w => w.startsWith("quick-")), "second native window");
     const sibling = (await run("plugin:window|get_all_windows")).find(w => w.startsWith("quick-"));
     const second = Number(sibling.slice(6));

@@ -40,11 +40,13 @@ pub struct Settings {
 
 impl Settings {
     pub fn load(file: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let preferences = match fs::read(&file) {
+        let mut preferences: Preferences = match fs::read(&file) {
             Ok(content) => serde_json::from_slice(&content)?,
             Err(err) if err.kind() == io::ErrorKind::NotFound => Preferences::default(),
             Err(err) => return Err(err.into()),
         };
+        // The quick-note menu now uses the registered global shortcut.
+        preferences.local.remove("quickNote");
         let bindings = Bindings::parse(&preferences)?;
         Ok(Self {
             file,

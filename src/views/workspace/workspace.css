@@ -8,11 +8,6 @@
     grid-template-columns: minmax(max-content, 1fr) minmax(0, min(48%, var(--jot-search-width))) minmax(max-content, 1fr);
     column-gap: var(--jot-space-2);
     align-items: center;
-    flex: none;
-    height: var(--jot-titlebar-height);
-    border-bottom: var(--jot-line-width) solid var(--jot-color-line);
-    background: var(--jot-color-chrome);
-    user-select: none;
   }
   .workspace-actions { display: flex; align-items: center; min-width: 0; }
   .workspace-leading { gap: var(--jot-space-1); padding-inline-start: var(--jot-titlebar-leading-inset); }
@@ -140,15 +135,6 @@
   .library-node:is(:hover, :focus):enabled { background: var(--jot-color-hover); }
   .library-node[aria-expanded="true"] { font-weight: var(--jot-weight-semibold); }
   .node-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .tree-caret {
-    flex: none;
-    width: var(--jot-space-2);
-    height: var(--jot-space-2);
-    border-block-start: var(--jot-line-width) solid var(--jot-color-muted);
-    border-inline-end: var(--jot-line-width) solid var(--jot-color-muted);
-    transform: rotate(45deg);
-  }
-  .library-node[aria-expanded="true"] .tree-caret { transform: rotate(135deg); }
   .tree-children, .library-notes {
     margin-inline-start: var(--jot-space-3);
     padding-inline-start: var(--jot-space-2);
@@ -222,6 +208,7 @@
     font-size: var(--jot-type-small);
   }
   .document-tab:has([aria-selected="true"]) { background: var(--jot-color-bg); color: var(--jot-color-text); }
+  .document-tab[data-preview] .document-tab-name { font-style: italic; }
   .document-tab-name, .document-tab-close { border: 0; border-radius: 0; background: transparent; }
   .document-tab-name {
     min-inline-size: 0;

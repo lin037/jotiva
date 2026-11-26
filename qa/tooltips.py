@@ -27,7 +27,10 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
       const listeners = events.get(args.event) ?? [];
       listeners.push(args.handler); events.set(args.event,listeners); return args.handler;
     }
+    if (cmd==='read_image_settings') return {revision:0,folder:null,config:{defaultMode:'relative',rules:[],subfolder:'_assets',
+      directory:'',groupByDocument:false,compress:false,endpoint:'',field:'file',responsePointer:'/url',bearer:false}};
     if (cmd==='read_appearance') return appearance;
+    if (cmd==='list_theme_files') return [];
     if (cmd==='accessibility_trusted') return !window.permissionMissing;
     if (cmd==='quick_view') return {epoch:1, kind:'edit', id:1, standalone:false, pinned:false, source:'会议'};
     if (cmd==='read_settings') {
@@ -35,7 +38,7 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
       return {preferences, defaults:preferences, trusted:false, shortcutError:null};
     }
     if (cmd==='record_shortcut' || cmd==='quick_presented') return;
-    if (cmd==='new_quick') { window.createdQuick=true; return; }
+    if (cmd==='new_quick') { window.createdQuick=(window.createdQuick ?? 0)+1; return; }
     if (cmd==='drag_window') { window.windowDrags=(window.windowDrags || 0) + 1; return; }
     if (cmd==='note_action' && args.action.kind==='rename') {
       if (args.action.name==='重名.md') throw Error('该名称已存在');
@@ -109,11 +112,10 @@ def expect_hover_appearance(row):
     row.focus()
 
 
-def verify_windows_titlebar(browser, url):
+def verify_desktop_titlebar(browser, url, platform):
     for scale in (1, 1.25, 1.5):
         page = browser.new_page(device_scale_factor=scale, viewport={"width": 980, "height": 640})
-        page.add_init_script(IPC + """
-          window.__jotPlatform = {os:'windows', hostWindows:true};
+        page.add_init_script(IPC + f"\nwindow.__jotPlatform = {{os:'{platform}', hostWindows:true}};\n" + """
           const previous = window.__TAURI_INTERNALS__.invoke;
           window.__TAURI_INTERNALS__.invoke = (cmd,args) => {
             if(cmd==='plugin:window|is_maximized') return Promise.resolve(false);
@@ -145,7 +147,10 @@ def verify_windows_titlebar(browser, url):
                 assert bar.locator(".caption-controls").bounding_box() == caption
             page.keyboard.press("Escape")
         bar.locator(".titlebar-logo").click(button="right")
-        page.wait_for_function("window.systemMenu === true")
+        if platform == "windows":
+            page.wait_for_function("window.systemMenu === true")
+        else:
+            assert not page.evaluate("window.systemMenu === true")
         page.close()
 
 
@@ -214,6 +219,8 @@ def verify(browser, url):
     page.keyboard.press("Shift+F6")
     expect(page.locator('[data-directory="/work"]')).to_be_focused()
     side = page.get_by_role("button", name="显示或隐藏侧栏")
+    terminal = page.locator('[aria-controls="workspace-terminal"]')
+    hover(terminal, "终端")
     side.hover()
     expect(tip).to_have_count(0)
     expect(tip).to_have_text("侧栏")
@@ -261,11 +268,12 @@ def verify(browser, url):
         ("history.undo","撤销"), ("history.redo","重做"), ("toolbar.open-heading","标题"),
         ("format.bold","加粗"), ("format.italic","斜体"), ("format.code","行内代码"), ("format.link","链接"),
         ("format.bullet-list","无序列表"), ("format.ordered-list","有序列表"), ("format.quote","引用"),
+        ("format.task-list","待办"), ("toolbar.open-image","图片"),
         ("toolbar.open-table","表格"), ("toolbar.open-more","更多"), ("search.open","搜索"), ("command.palette","命令"),
     ]:
         hover(toolbar(command), label)
 
-    print("Passed workspace controls, keyboard access and the 14 published toolbar buttons.", flush=True)
+    print("Passed workspace controls, keyboard access and the published toolbar buttons.", flush=True)
     bold = toolbar("format.bold")
     hover(bold, "加粗")
     expect(bold).to_have_attribute("title", "")
@@ -307,8 +315,9 @@ def verify(browser, url):
         page.wait_for_function("size => parseFloat(getComputedStyle(document.documentElement).fontSize) === size", arg=scale)
         positions = bar.locator("[data-jot-toolbar-command]").evaluate_all(
             "buttons => buttons.map(button => button.getBoundingClientRect().top)")
-        assert len(positions) == 14 and max(positions) - min(positions) < 1, positions
-        assert bar.evaluate("t => t.scrollWidth > t.clientWidth") == (scale == 18)
+        assert len(positions) == 16 and max(positions) - min(positions) < 1, positions
+        size = bar.evaluate("t => [t.scrollWidth, t.clientWidth]")
+        assert (size[0] > size[1]) == (scale == 18), (width, scale, size)
     # The component's roving focus must also expose the focused button on a narrow toolbar.
     toolbar("format.bold").focus()
     page.keyboard.press("End")
@@ -340,6 +349,12 @@ def verify(browser, url):
     fold.click()
     hover(page.locator('.jot-heading-fold-button[aria-expanded="false"]').first, "展开")
     print("Passed outline navigation and document fold controls.", flush=True)
+    toolbar("command.palette").click()
+    for command_id, hint in (("table.next-cell", "下一格"), ("table.delete-row", "删行"),
+                             ("format.heading-2", "二级标题"), ("search.replace-next", "替换当前")):
+        page.get_by_role("searchbox", name="搜索编辑命令").fill(command_id)
+        hover(page.locator(f'[data-jot-command="{command_id}"]'), hint)
+    page.keyboard.press("Escape")
     for mode, label in [("source", "源码"), ("live-preview", "即时预览")]:
         toolbar("command.palette").click()
         page.get_by_role("searchbox", name="搜索编辑命令").fill("mode." + mode)
@@ -431,12 +446,20 @@ def verify(browser, url):
     }""")
     page.wait_for_function("window.attachedFromQuick?.id === 1 && attachedFromQuick.choice === 17 && window.dragTracking === false")
     menu.click()
-    for name in ("在此窗口新建便签", "编辑工具栏", "查找便签", "在主窗口编辑", "解除挂载并收回"):
+    for name in ("新建便签", "编辑工具栏", "查找便签", "在主窗口编辑", "解除挂载并收回"):
         page.get_by_role("button", name=name).hover()
         page.wait_for_timeout(460)
         expect(tip).to_have_count(0)
-    page.get_by_role("button", name="在此窗口新建便签").click()
-    page.wait_for_function("window.createdQuick")
+    create = page.get_by_role("button", name="新建便签")
+    expect(create).to_have_attribute("aria-keyshortcuts", "Control+Alt+J")
+    page.evaluate("window.testEvent('desktop:quick-shortcut-changed','Control+Shift+Space')")
+    expect(create).to_have_attribute("aria-keyshortcuts", "Control+Shift+Space")
+    create.click()
+    page.wait_for_function("window.createdQuick === 1")
+    page.evaluate("window.testEvent('desktop:editor-action','new-quick')")
+    page.wait_for_function("window.createdQuick === 2")
+    page.keyboard.press("Meta+n")
+    assert page.evaluate("window.createdQuick") == 2
     expect(page.locator("#quick-actions:popover-open")).to_have_count(0)
     menu.click()
     page.keyboard.press("Escape")
@@ -592,6 +615,12 @@ def verify_language(browser, url):
     settings.wait_for_function("JSON.parse(localStorage.getItem('qa:appearance')).language === 'en'")
     expect(settings.locator("html")).to_have_attribute("lang", "en")
     expect(settings.get_by_label("Interface language")).to_have_value("en")
+    expect(workspace.locator('[data-jot-toolbar-command="format.bold"]')).to_have_attribute("aria-label", "Bold")
+    workspace.locator('[aria-controls="workspace-terminal"]').hover()
+    expect(workspace.locator(".jot-tooltip:popover-open")).to_have_text("Terminal")
+    settings.get_by_role("button", name="Images", exact=True).click()
+    expect(settings.get_by_role("group", name="Default storage method").get_by_role("radio", name="Beside the document")).to_be_checked()
+    expect(settings.get_by_role("heading", name="Folder-specific rules")).to_be_visible()
     settings.get_by_role("button", name="Shortcuts", exact=True).click()
     expect(settings.get_by_label("Search actions or shortcuts")).to_be_visible()
     settings.get_by_label("Search actions or shortcuts").fill("task list")
@@ -605,6 +634,7 @@ def verify_language(browser, url):
     settings.get_by_label("Interface language").select_option("zh-CN")
     expect(workspace.get_by_role("combobox", name="搜索便签和文档")).to_be_visible()
     expect(workspace.get_by_role("group", name="文档", exact=True)).to_be_visible()
+    expect(workspace.locator('[data-jot-toolbar-command="format.bold"]')).to_have_attribute("aria-label", "加粗")
     assert workspace.evaluate("originalEditor === document.querySelector('.cm-content')")
     query = workspace.get_by_role("combobox")
     query.fill("混合")
@@ -732,7 +762,7 @@ def verify_filing_settings(browser, url):
       };
     """)
     page.goto(url + "?view=settings")
-    page.get_by_role("button", name="归档", exact=True).click()
+    page.get_by_role("button", name="文档归档", exact=True).click()
     mode = page.locator("#filing-address-kind")
     address = page.locator("#filing-endpoint")
     model = page.locator("#filing-model")
@@ -817,6 +847,7 @@ if __name__ == "__main__":
     mode.add_argument("--tree-focus", action="store_true")
     mode.add_argument("--shortcut-settings", action="store_true")
     mode.add_argument("--filing-settings", action="store_true")
+    mode.add_argument("--image-settings", action="store_true")
     options = parser.parse_args()
     assert (PROJECT / "dist/index.html").is_file(), "Run pnpm build first"
     with ThreadingHTTPServer(("127.0.0.1", 0), partial(Static, directory=PROJECT / "dist")) as server:
@@ -826,15 +857,19 @@ if __name__ == "__main__":
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 url = f"http://127.0.0.1:{server.server_port}/"
                 if options.windows_titlebar:
-                    verify_windows_titlebar(browser, url)
+                    verify_desktop_titlebar(browser, url, "windows")
                 elif options.shortcut_settings:
                     verify_shortcut_settings(browser, url)
                 elif options.filing_settings:
                     verify_filing_settings(browser, url)
+                elif options.image_settings:
+                    from scenarios.images import check_image_settings_and_picker
+                    check_image_settings_and_picker(browser, url, IPC)
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:
-                        verify_windows_titlebar(browser, url)
+                        for platform in ("windows", "linux"):
+                            verify_desktop_titlebar(browser, url, platform)
                         verify_language(browser, url)
                         verify(browser, url)
                 browser.close()

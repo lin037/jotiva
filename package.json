@@ -1,7 +1,7 @@
 {
   "name": "jotiva",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
   "packageManager": "pnpm@11.11.0",
   "type": "module",
@@ -15,7 +15,7 @@
     "test:web:editor": "python3 qa/document-windows.py",
     "test:web:ui": "python3 qa/tooltips.py && python3 qa/source-tree.py",
     "test:web:visual": "python3 qa/document-windows.py --caret && python3 qa/scrollbars.py",
-    "test:theme": "cargo test --locked --manifest-path src-tauri/Cargo.toml imported_stylesheet && python3 qa/themes.py",
+    "test:theme": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::appearance::tests && python3 qa/themes.py",
     "test:shortcuts": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::shortcuts::tests && python3 qa/shortcuts.py && python3 qa/tooltips.py --shortcut-settings && python3 qa/editor-shortcuts.py && python3 qa/tooltips.py --tree-focus",
     "test:capacity": "cargo test --locked --manifest-path src-tauri/Cargo.toml lists_a_large_workspace_directory -- --ignored && python3 qa/source-tree.py --capacity && python3 qa/document-windows.py --capacity",
     "test:filing": "cargo test --locked --manifest-path src-tauri/Cargo.toml settings::filing::tests && cargo test --locked --manifest-path src-tauri/Cargo.toml settings::filing::tests::loopback_choice_requires_confirmation_before_writing -- --ignored --exact && python3 qa/filing-http.py && python3 qa/document-windows.py --filing && python3 qa/tooltips.py --filing-settings",
@@ -26,11 +26,12 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@jot-md/editor": "https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz",
+    "@jot-md/editor": "0.4.1",
     "@tauri-apps/api": "^2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "mermaid": "11.17.2"
+    "mermaid": "11.17.2",
+    "postcss": "8.5.33"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

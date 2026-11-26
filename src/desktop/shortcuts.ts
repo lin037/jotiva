@@ -16,13 +16,14 @@ export const fixedShortcuts = referenceRows.flatMap(row => {
   const key = desktopPlatform.shortcutSymbols ? row.key : "desktopKey" in row ? row.desktopKey : row.key.replace(/⌘/g, "Ctrl+").replace(/⇧/g, "Shift+").replace(/⌥/g, "Alt+").replace(/⌃/g, "Ctrl+").replace(/↩/g,"Enter");
   return key ? [{...row, key}] : [];
 });
-export const globalActions = [["quick", "速记"], ["search", "查找便签和文档"], ["dock", "靠右收拢 / 还原"]] as const;
+export const globalActions = [["quick", "新建便签"], ["search", "查找便签和文档"], ["dock", "靠右收拢 / 还原"]] as const;
 export type GlobalAction = typeof globalActions[number][0];
 export type LocalBindings = Record<string, string | null>;
 export type GlobalBindings = Record<GlobalAction, string | null> & { quick: string; local?: LocalBindings };
 const byId = new Map(commands.map(row => [row.id, row]));
 const listeners = new Set<(bindings: LocalBindings) => void>();
 let local: LocalBindings = {};
+let quickShortcut = "Control+Shift+Space";
 let actions = new Map<string, string>();
 
 const symbols: Record<string, string> = {
@@ -65,7 +66,8 @@ export function onLocalShortcuts(listener: (bindings: LocalBindings) => void) {
   return () => { listeners.delete(listener); };
 }
 function updateHint(element: HTMLElement) {
-  const key = effectiveShortcut(element.dataset.shortcutAction!);
+  const id = element.dataset.shortcutAction!;
+  const key = id === "quick" ? quickShortcut : effectiveShortcut(id);
   if (element.tagName === "KBD") {
     element.textContent = key ? shortcutLabel(key) : "";
     element.hidden = !key;
@@ -85,11 +87,20 @@ export function shortcutHint<T extends HTMLElement>(element: T, action: string):
 }
 export async function loadLocalShortcuts() {
   let updated = false;
-  await listen<LocalBindings>("desktop:shortcuts-changed", ({payload}) => {
-    updated = true;
-    applyLocalShortcuts(payload);
-  });
+  let quickUpdated = false;
+  await Promise.all([
+    listen<string>("desktop:quick-shortcut-changed", ({payload}) => {
+      quickUpdated = true;
+      quickShortcut = payload;
+      document.querySelectorAll<HTMLElement>('[data-shortcut-action="quick"]').forEach(updateHint);
+    }),
+    listen<LocalBindings>("desktop:shortcuts-changed", ({payload}) => {
+      updated = true;
+      applyLocalShortcuts(payload);
+    }),
+  ]);
   const {preferences} = await invoke<{preferences: GlobalBindings}>("read_settings");
+  if (!quickUpdated) quickShortcut = preferences.quick;
   if (!updated) applyLocalShortcuts(preferences.local ?? {});
 }
 

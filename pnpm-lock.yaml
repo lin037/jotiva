@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@jot-md/editor':
-        specifier: https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz
-        version: https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz
+        specifier: 0.4.1
+        version: 0.4.1
       '@tauri-apps/api':
         specifier: ^2
         version: 2.12.5
@@ -23,6 +23,9 @@ importers:
       mermaid:
         specifier: 11.17.2
         version: 11.17.2
+      postcss:
+        specifier: 8.5.33
+        version: 8.5.33
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2
@@ -96,9 +99,8 @@ packages:
   '@iconify/utils@3.1.7':
     resolution: {integrity: sha512-JZHlwdID+dy+lTgbYC8NEC4zeugqeYsc6jewvzb4c58kHauJn+X7rNwQjxz5p2qSjqaEeQoLkCIQ9v/H4PK0/w==}
 
-  '@jot-md/editor@https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz':
-    resolution: {integrity: sha512-lvNltk2i9ekKmgN4OxGJ6ezkvP/0XBYLSCVRYiPP6sCwP3VvdWFNjPOLK/SGeq7nryv0xacs8UDYCis7bZPfnw==, tarball: https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz}
-    version: 0.3.1
+  '@jot-md/editor@0.4.1':
+    resolution: {integrity: sha512-CzWw4rW6pXTv9EoamYNVSmMuL2AikoPDJ09zZg5dYLDOb5gj9EieKlH8syj6P6Qy0QFf/c28QBHD+Pu/UMcnTw==}
     engines: {node: '>=20'}
     bundledDependencies:
       - '@jot-md/editor-protocol'
@@ -1015,7 +1017,7 @@ snapshots:
       '@iconify/types': 2.0.0
       import-meta-resolve: 4.2.0
 
-  '@jot-md/editor@https://github.com/lin037/jot-md-engine/releases/download/v0.3.1/jot-md-editor-0.3.1.tgz':
+  '@jot-md/editor@0.4.1':
     dependencies:
       '@codemirror/commands': 6.11.1
       '@codemirror/lang-markdown': 6.5.2
