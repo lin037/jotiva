@@ -752,27 +752,25 @@ impl Notes {
     }
 
     pub fn latest(&self, host: HostId) -> Option<NoteId> {
-        self.by_host.get(&host)?.last().map(|(_, id)| *id)
+        self.on_host(host).next()
     }
 
-    pub fn latest_except(&self, host: HostId, excluded: impl Fn(NoteId) -> bool) -> Option<NoteId> {
-        self.by_host
-            .get(&host)?
-            .iter()
-            .rev()
-            .map(|(_, id)| *id)
-            .find(|id| !excluded(*id))
-    }
-
-    pub fn saved_for_host(&self, host: HostId) -> usize {
+    pub fn on_host(&self, host: HostId) -> impl Iterator<Item = NoteId> + '_ {
         self.by_host
             .get(&host)
             .into_iter()
             .flatten()
             .rev()
-            .filter(|(_, id)| self.records[id].note.version != 0)
-            .take(9)
-            .count()
+            .map(|(_, id)| *id)
+    }
+
+    pub fn saved_on_host(&self, host: HostId) -> impl Iterator<Item = NoteId> + '_ {
+        self.on_host(host)
+            .filter(|id| self.records[id].note.version != 0)
+    }
+
+    pub fn saved_for_host(&self, host: HostId) -> usize {
+        self.saved_on_host(host).take(9).count()
     }
 
     pub fn return_to_main(&mut self, host: HostId) -> bool {
@@ -1603,6 +1601,7 @@ mod tests {
         assert!(notes.restore(first, 22, &identity));
         assert_eq!(notes.host(first), Some(22));
         assert_eq!(notes.host(second), Some(22));
+        assert_eq!(notes.saved_on_host(22).collect::<Vec<_>>(), [second, first]);
         assert!(notes.pending_bindings().is_empty());
         fs::remove_dir_all(data).unwrap();
     }
