@@ -30,6 +30,22 @@ If you already have a document open, right-click it in the sidebar and choose �
 
 [Watch a note follow its window](../../README.en.md#demos)
 
+## Insert and store images
+
+Paste a screenshot or use the image button to choose a file or enter an existing URL. **Settings → Images** controls where pasted and picked files go.
+
+On macOS, if clicking the local file option closes the menu, reopen it, focus that option with the keyboard and press Enter to open the file chooser.
+
+- **Beside the document** stores files in `_assets` by default. Move that directory along with the Markdown file to keep relative links working. Unsaved notes use the inbox directory.
+- **Shared directory** writes a local file URL. Either local mode can group images by document name. Duplicate filenames get a numeric suffix.
+- **HTTP upload** sends a multipart POST. Configure the form field and the JSON Pointer for the returned HTTP or HTTPS image URL. For example, use `file` and `/data/url` for `{"data":{"url":"https://cdn.example.com/photo.png"}}`. An optional bearer token is stored in the system credential store for that endpoint. Object storage can be reached through an upload gateway.
+
+Right-click a workspace or archive folder and choose **Image settings…** to see the current method. To set up a folder rule, choose **Folder rules**, then copy a saved rule or customize a new one, and click **Apply**. For example, use **Beside the document** with `images` for blog posts and `media/screenshots` for meeting notes. Subfolders use the closest matching rule. Folders without a rule use the global default. Choose **Restore inheritance** to remove the rule for the selected folder.
+
+To share an image directory across a blog, choose **Folder rules → Customize now** on the blog root. Set the method to **Shared directory**, choose **Relative to this folder**, and enter `../access`. Images from `blog/posts/entry.md` go into `access` next to `blog`, and the document links to `../../access/photo.png`. An absolute shared directory uses local file URLs.
+
+The limit is 32 MiB per file. Optional compression keeps still PNG and JPEG images at their original dimensions and uses the result only when it is smaller. Animated images are preserved.
+
 ## Open a file and start writing
 
 Use **Cmd+O** on Mac or **Ctrl+O** on Windows and Linux. Start with a file you already have, or download the sample note and try checking off a task or editing the table. [HelloJotiva.md](../HelloJotiva.md)
@@ -65,11 +81,13 @@ New quick notes appear under **Archive → Inbox** (「归档 → 其他」). If
 | Windows | `%APPDATA%\io.github.lin037.jot.desktop\notes\其他\` |
 | Linux | `~/.local/share/io.github.lin037.jot.desktop/notes/其他/`. If you set `XDG_DATA_HOME`, use that in place of `~/.local/share`. |
 
+Right-click an imported archive folder and choose **Archive folder settings…** to edit its display name, description, and participation in Jev filing. New suggestions use the saved details. Renaming the entry keeps its disk location.
+
 Jev filing is off by default. If you turn it on and ask for a suggestion, Jotiva sends up to the first 6,000 characters of the note, along with the candidate folders' names and descriptions, to the service you set up. The file moves when you confirm. Your system's credential store holds the API key. On Linux, this uses Secret Service, `secret-tool`, and `zenity`.
 
 ## Change the theme or shortcuts
 
-Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
+Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「界面外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
 
 
 Single-click a file in the sidebar to reuse the italic preview tab. Double-click the file or tab, choose **Keep tab** from the tab menu, or start editing to keep it. Disable **Preview files on single click** in **Settings → Editor** to keep every file. Each press of the global quick-note shortcut creates a fresh note, as does **More → New note** in a note window.

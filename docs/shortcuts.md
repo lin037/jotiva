@@ -34,6 +34,9 @@
 | 粗体 / 斜体 | ⌘B / ⌘I | Ctrl+B / Ctrl+I |
 | 插入行内代码 / 链接 | ⌃⇧C / ⌃⇧K | Ctrl+Shift+C / Ctrl+Shift+K |
 | 改为 1 至 6 级标题 | ⌃⇧1 至 ⌃⇧6 | Ctrl+Shift+1 至 Ctrl+Shift+6 |
+| 切换任务列表 | ⌃⇧9 | Ctrl+Shift+9 |
+| 完成或重新打开当前任务 | ⌘⌥Enter | Ctrl+Alt+Enter |
+| 重排当前层级的有序列表 | 段落菜单，可自设快捷键 | 段落菜单，可自设快捷键 |
 | 撤销 / 重做 | ⌘Z / ⇧⌘Z | Ctrl+Z / Ctrl+Y |
 | 查找正文 / 搜索和替换 | ⌘F / ⌃⇧H | Ctrl+F / Ctrl+Shift+H |
 | 打开编辑器命令面板 | ⌃⇧P | Ctrl+Shift+P |
