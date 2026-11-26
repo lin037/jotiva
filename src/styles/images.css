@@ -101,6 +101,7 @@
     text-align: start;
     width: 100%;
   }
+  .image-add-rule > button { display: block; margin-inline-start: auto; }
   .image-rule + .image-rule { margin-block-start: var(--jot-space-2); }
   .image-rule-list:not(:empty) { margin-block-start: var(--jot-space-3); }
   .image-button-row, .image-save-bar {
@@ -115,7 +116,6 @@
     z-index: 1;
     justify-content: space-between;
     padding: var(--jot-space-3) 0;
-    border-block-start: var(--jot-line-width) solid var(--jot-color-line);
     background: var(--jot-color-bg);
   }
   .image-save-bar .image-button-row { margin-inline-start: auto; }

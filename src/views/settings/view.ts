@@ -127,8 +127,9 @@ function mountFilingSettings(page: HTMLElement) {
   saveStatus.setAttribute("role", "status");
   const save = element("button", "primary", localized("保存设置"));
   save.type = "submit";
-  const actions = element("div", "settings-field-controls settings-css-actions");
-  actions.append(save);
+  const actions = element("div", "settings-field-controls");
+  actions.classList.add("settings-save-actions");
+  actions.append(saveStatus, save);
   filing.append(
     element("h2", undefined, localized("Jev 归档")),
     element("p", "settings-detail", localized("点击「用 Jev 归档」时，Jotiva 会把当前便签的前 6000 个字符和参与分类的目录名称、说明发给下方的服务。确认建议后，文件才会移动。")),
@@ -136,7 +137,7 @@ function mountFilingSettings(page: HTMLElement) {
     field(localized("地址类型"), kind, kind.id),
     field(localized("服务地址"), endpoint, endpoint.id),
     field(localized("模型名称"), model, model.id),
-    actions, saveStatus,
+    actions,
   );
 
   const keys = element("section", "settings-group");
@@ -147,11 +148,14 @@ function mountFilingSettings(page: HTMLElement) {
   keyNotice.setAttribute("role", "status");
   const configure = button(localized("配置密钥…"), () => changeKey("set"));
   const remove = button(localized("移除密钥"), () => changeKey("remove"));
-  const keyActions = element("div", "settings-field-controls settings-css-actions");
+  const keyActions = element("div", "settings-field-controls");
   keyActions.append(configure, remove);
-  keys.append(element("h2", undefined, localized("API 密钥")),
+  const keyText = element("div", "settings-action-copy");
+  keyText.append(element("h2", undefined, localized("API 密钥")),
     element("p", "settings-detail", () => t("密钥保存在{store}中，仅用于上方填写的服务地址。", { store: desktopPlatform.keyStore })),
-    keyStatus, keyActions, keyNotice);
+    keyStatus, keyNotice);
+  keys.classList.add("settings-action-card");
+  keys.append(keyText, keyActions);
   page.append(filing, keys);
 
   let hasKey: boolean | null = null;
@@ -349,7 +353,7 @@ export async function mount() {
   file.hidden = true;
   const importCss = button(localized("导入 CSS…"), () => file.click());
   const removeCss = button(localized("移除"), () => setStylesheet(null));
-  const cssActions = element("div", "settings-field-controls settings-css-actions");
+  const cssActions = element("div", "settings-field-controls");
   cssActions.append(file, importCss, removeCss);
   file.addEventListener("change", async () => {
     const picked = file.files?.[0];
@@ -362,8 +366,10 @@ export async function mount() {
       report(error);
     }
   });
-  const css = element("section", "settings-group");
-  css.append(element("h2", undefined, localized("自定义 CSS")), cssName, cssActions);
+  const css = element("section", "settings-group settings-action-card");
+  const cssText = element("div", "settings-action-copy");
+  cssText.append(element("h2", undefined, localized("自定义 CSS")), cssName);
+  css.append(cssText, cssActions);
   panels.get("appearance")!.append(appearance, css);
 
   const refreshEditor = mountEditorSettings(panels.get("editor")!, change => apply({}, change));
@@ -445,7 +451,7 @@ export async function mount() {
     bindLabel(status, "text", localized("待保存"));
   });
   const shortcutActions = element("div", "settings-group shortcut-actions");
-  const buttons = element("div", "settings-field-controls settings-css-actions");
+  const buttons = element("div", "settings-field-controls");
   buttons.append(save, reset);
   const searchKeys = element("input");
   searchKeys.type = "search";

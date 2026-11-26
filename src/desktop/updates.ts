@@ -18,14 +18,16 @@ export async function watchUpdates(receive: (status: Status) => void) {
 }
 
 export function mountUpdateSettings(panel: HTMLElement) {
-  const group = element("section", "settings-group");
+  const group = element("section", "settings-group settings-update");
   const current = element("p", undefined, () => t("当前版本 {version}", { version }));
   const status = element("p", "settings-detail");
   status.setAttribute("role", "status");
   const check = button(localized("检查更新"), () => invoke("check_update"));
   const install = button(localized("安装更新并重启"), () => invoke("install_update"), "primary");
   install.hidden = true;
-  group.append(current, status, check, install);
+  const actions = element("div", "settings-field-controls");
+  actions.append(check, install);
+  group.append(current, status, actions);
   panel.append(group);
   const messages = {
     idle: localized("启动时自动检查更新"), manual: localized("此安装包可通过发行页或系统包管理器更新。"),
