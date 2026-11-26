@@ -112,11 +112,10 @@ def expect_hover_appearance(row):
     row.focus()
 
 
-def verify_windows_titlebar(browser, url):
+def verify_desktop_titlebar(browser, url, platform):
     for scale in (1, 1.25, 1.5):
         page = browser.new_page(device_scale_factor=scale, viewport={"width": 980, "height": 640})
-        page.add_init_script(IPC + """
-          window.__jotPlatform = {os:'windows', hostWindows:true};
+        page.add_init_script(IPC + f"\nwindow.__jotPlatform = {{os:'{platform}', hostWindows:true}};\n" + """
           const previous = window.__TAURI_INTERNALS__.invoke;
           window.__TAURI_INTERNALS__.invoke = (cmd,args) => {
             if(cmd==='plugin:window|is_maximized') return Promise.resolve(false);
@@ -148,7 +147,10 @@ def verify_windows_titlebar(browser, url):
                 assert bar.locator(".caption-controls").bounding_box() == caption
             page.keyboard.press("Escape")
         bar.locator(".titlebar-logo").click(button="right")
-        page.wait_for_function("window.systemMenu === true")
+        if platform == "windows":
+            page.wait_for_function("window.systemMenu === true")
+        else:
+            assert not page.evaluate("window.systemMenu === true")
         page.close()
 
 
@@ -855,7 +857,7 @@ if __name__ == "__main__":
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 url = f"http://127.0.0.1:{server.server_port}/"
                 if options.windows_titlebar:
-                    verify_windows_titlebar(browser, url)
+                    verify_desktop_titlebar(browser, url, "windows")
                 elif options.shortcut_settings:
                     verify_shortcut_settings(browser, url)
                 elif options.filing_settings:
@@ -866,7 +868,8 @@ if __name__ == "__main__":
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:
-                        verify_windows_titlebar(browser, url)
+                        for platform in ("windows", "linux"):
+                            verify_desktop_titlebar(browser, url, platform)
                         verify_language(browser, url)
                         verify(browser, url)
                 browser.close()

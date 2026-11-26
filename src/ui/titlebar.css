@@ -1,47 +1,53 @@
 @layer jot-ui {
-  .secondary-titlebar, :root:where([data-platform="windows"], [data-platform="linux"]) .workspace-titlebar {
-    display: grid;
-    align-items: center;
+  .jot-titlebar {
+    --caption-button-width: 42px;
     flex: none;
-    height: max(42px, var(--jot-titlebar-height));
     background: var(--jot-color-chrome);
-    border-block-end: var(--jot-line-width) solid var(--jot-color-line);
+    color: var(--jot-color-text);
     user-select: none;
   }
-  :root:where([data-platform="windows"], [data-platform="linux"]) .workspace-titlebar {
-    grid-template-columns: auto minmax(6rem, 1fr) auto auto;
+  .workspace-titlebar, .secondary-titlebar {
+    height: max(42px, var(--jot-titlebar-height));
   }
-  :root:where([data-platform="windows"], [data-platform="linux"]) .workspace-search {
+  .workspace-titlebar, .secondary-titlebar, .quick-titlebar {
+    border-block-end: var(--jot-line-width) solid var(--jot-color-line);
+  }
+  :root[data-custom-caption] .workspace-search {
     width: 100%;
     max-width: var(--jot-search-width);
     justify-self: center;
   }
-  :root[data-platform="windows"] .workspace-titlebar {
+  :root[data-custom-caption] .workspace-titlebar {
     grid-template-columns: minmax(0, 1fr) min(40%, var(--jot-search-width), max(2rem, calc(100% - 24rem))) minmax(0, 1fr);
   }
   .titlebar-logo { width: 24px; height: 24px; margin-inline: var(--jot-space-2); }
-  :root[data-platform="windows"] .workspace-leading { padding-inline-start: 0; }
-  :root[data-platform="windows"] .workspace-trailing { grid-column: 3; padding: 0; align-self: stretch; }
-  :root[data-platform="windows"] .workspace-trailing .caption-controls { margin-inline-start: var(--jot-space-2); }
+  :root[data-custom-caption] .workspace-leading { padding-inline-start: 0; }
+  :root[data-custom-caption] .workspace-trailing { grid-column: 3; padding: 0; align-self: stretch; }
+  :root[data-custom-caption] .workspace-trailing .caption-controls { margin-inline-start: var(--jot-space-2); }
   .document-tools { display: flex; align-items: center; gap: var(--jot-space-1); min-height: var(--jot-control-height);
     flex: none; padding-inline-end: var(--jot-space-2); border-bottom: 1px solid var(--jot-color-line); background: var(--jot-color-chrome); }
   .document-tools .document-tabs { flex: 0 1 auto; min-width: 0; border: 0; }
   .document-tools [aria-controls="document-outline"] { margin-inline-start: auto; }
   @media (max-width: 680px) {
-    :root[data-platform="windows"] .workspace-search:not(:focus-within) { width: 32px; }
-    :root[data-platform="windows"] .workspace-search:not(:focus-within) .workspace-search-field { justify-content: center; padding: 0; }
-    :root[data-platform="windows"] .workspace-search:not(:focus-within) input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: text; }
-    :root[data-platform="windows"] .workspace-search:not(:focus-within) kbd { display: none; }
-    :root[data-platform="windows"] .workspace-search:focus-within { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: min(88vw, var(--jot-search-width)); }
+    :root[data-custom-caption] .workspace-search:not(:focus-within) { width: 32px; }
+    :root[data-custom-caption] .workspace-search:not(:focus-within) .workspace-search-field { justify-content: center; padding: 0; }
+    :root[data-custom-caption] .workspace-search:not(:focus-within) input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: text; }
+    :root[data-custom-caption] .workspace-search:not(:focus-within) kbd { display: none; }
+    :root[data-custom-caption] .workspace-search:focus-within { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: min(88vw, var(--jot-search-width)); }
   }
-  .secondary-titlebar { grid-template-columns: 1fr minmax(0, auto) 1fr; padding-inline-start: 10px; }
-  .jot-titlebar { color: var(--jot-color-text); }
-  :root[data-platform="macos"] .secondary-titlebar {
+  .secondary-titlebar {
+    --side-width: 0px;
+    display: grid;
+    align-items: center;
+    grid-template-columns: minmax(var(--side-width), 1fr) minmax(0, auto) minmax(var(--side-width), 1fr);
     padding-inline: var(--jot-titlebar-leading-inset);
   }
-  :root[data-platform="macos"] .secondary-titlebar .caption-title { grid-column: 2; }
-  .secondary-titlebar > button { justify-self: start; }
-  .caption-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  :root[data-custom-caption] .secondary-titlebar {
+    --side-width: calc(3 * var(--caption-button-width));
+    padding-inline: 0;
+  }
+  .secondary-titlebar > button { justify-self: start; margin-inline-start: var(--jot-titlebar-leading-inset); }
+  .caption-title { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   body:has(> .secondary-titlebar) { display: flex; flex-direction: column; height: 100dvh; }
   body:has(> .secondary-titlebar) > #app { flex: 1; min-height: 0; height: auto; }
   .caption-controls {
@@ -49,7 +55,7 @@
     order: 10; margin-inline-start: auto; color: var(--jot-color-muted);
   }
   .caption-controls .caption-button {
-    display: grid; place-items: center; width: 42px; min-width: 30px; height: 100%;
+    display: grid; place-items: center; width: var(--caption-button-width); min-width: 30px; height: 100%;
     padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit;
   }
   .caption-controls .caption-button:hover { background: var(--jot-color-surface); color: var(--jot-color-text); }

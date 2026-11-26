@@ -8,11 +8,6 @@
     grid-template-columns: minmax(max-content, 1fr) minmax(0, min(48%, var(--jot-search-width))) minmax(max-content, 1fr);
     column-gap: var(--jot-space-2);
     align-items: center;
-    flex: none;
-    height: var(--jot-titlebar-height);
-    border-bottom: var(--jot-line-width) solid var(--jot-color-line);
-    background: var(--jot-color-chrome);
-    user-select: none;
   }
   .workspace-actions { display: flex; align-items: center; min-width: 0; }
   .workspace-leading { gap: var(--jot-space-1); padding-inline-start: var(--jot-titlebar-leading-inset); }

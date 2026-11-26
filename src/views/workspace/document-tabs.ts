@@ -99,7 +99,7 @@ export function documentTabs(open: (id: NoteId, mode?: OpenMode) => Promise<void
         void close([id]).then(() => active !== undefined && !bar.hidden && tabs.get(active)?.title.focus()).catch(report);
       }
     });
-    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2;
+    bar.hidden = !desktopPlatform.customCaption && tabs.size < 2;
     return tab;
   }
 
@@ -126,7 +126,7 @@ export function documentTabs(open: (id: NoteId, mode?: OpenMode) => Promise<void
     active = id;
     recent.delete(id);
     recent.add(id);
-    bar.hidden = !desktopPlatform.windowsChrome && tabs.size < 2 && preview === undefined;
+    bar.hidden = !desktopPlatform.customCaption && tabs.size < 2 && preview === undefined;
     tab.title.tabIndex = 0;
     tab.title.setAttribute("aria-selected", "true");
     if (!bar.hidden) tab.row.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -139,7 +139,7 @@ export function documentTabs(open: (id: NoteId, mode?: OpenMode) => Promise<void
     syncMenu();
     recent.delete(id);
     if (active === id) active = undefined;
-    bar.hidden = tabs.size === 0 || (!desktopPlatform.windowsChrome && tabs.size === 1 && active !== undefined && preview === undefined);
+    bar.hidden = tabs.size === 0 || (!desktopPlatform.customCaption && tabs.size === 1 && active !== undefined && preview === undefined);
   }
 
   return {

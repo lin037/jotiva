@@ -1,6 +1,7 @@
 import { t, bindLabel, localized } from "../../i18n";
 import { titlebar as configureTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
+import { environment } from "../../desktop/environment";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -317,7 +318,7 @@ export async function mount() {
     update.hidden = status.kind !== "available";
     if (status.kind === "available") bindLabel(update, "text", () => t("更新到 {version}", { version: status.version }));
   }).catch(report);
-  if (desktopPlatform.windowsChrome) {
+  if (desktopPlatform.customCaption) {
     const documentTools = element("div", "document-tools");
     add.replaceChildren(icon("add"));
     documentTools.append(tabs.bar, add, outlineButton, windowButton);
@@ -348,7 +349,7 @@ export async function mount() {
     editor: () => editor?.focus(), workspace: () => focusFiles(true), archive: () => focusFiles(false),
     tile: () => editor?.command("tile"),
     previousDocument,
-    get closeActive() { return editor && (tabs.multiple || desktopPlatform.windowsChrome || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
+    get closeActive() { return editor && (tabs.multiple || environment.os === "windows" || mountedTerminal?.hasSessions()) ? closeActive : undefined; },
     newDocument: newDocument,
     terminal: () => openTerminal(currentLocation(), "reveal"),
     save: () => editor?.save(),

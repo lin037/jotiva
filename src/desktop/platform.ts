@@ -6,7 +6,6 @@ const appKit = os === "macos";
 export const desktopPlatform = {
   pathSeparator: os === "windows" ? "\\" : "/",
   hostWindows,
-  windowsChrome: os === "windows",
   quoteShellPath: os === "windows"
     ? (path: string) => '"' + path.replace(/[`$"“”„]/gu, char => "`" + char) + '"'
     : (path: string) => path.replace(/[^a-zA-Z0-9_./\-\u0080-\u{10ffff}]/gu, char => "\\" + char),
@@ -25,6 +24,7 @@ export const desktopPlatform = {
   get keyStore() { return { macos: t("macOS 钥匙串"), windows: t("Windows 凭据管理器"), linux: t("系统密钥环") }[os]; },
 } as const;
 document.documentElement.dataset.platform = os;
+document.documentElement.toggleAttribute("data-custom-caption", desktopPlatform.customCaption);
 
 export const fileName = (path: string) => path.slice(path.lastIndexOf(desktopPlatform.pathSeparator) + 1);
 

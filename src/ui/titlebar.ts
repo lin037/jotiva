@@ -2,6 +2,7 @@ import { t, bindLabel, type Label, localized } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { desktopPlatform } from "../desktop/platform";
+import { environment } from "../desktop/environment";
 import { dragOnMouseDown, icon, iconButton } from "./chrome";
 import { element, report } from "./dom";
 import appIcon from "../assets/jot.svg";
@@ -48,13 +49,13 @@ export function titlebar(region: HTMLElement, compact = false) {
     const leading = region.querySelector(".workspace-leading");
     if (leading) {
       leading.prepend(appMenu());
-      if (desktopPlatform.windowsChrome) {
-        const logo = element("img", "titlebar-logo");
-        logo.src = appIcon;
-        logo.alt = "Jotiva";
-        logo.draggable = false;
-        leading.prepend(logo);
-        for (const part of [logo, leading, region.querySelector(".workspace-trailing")]) part?.setAttribute("data-tauri-drag-region", "");
+      const logo = element("img", "titlebar-logo");
+      logo.src = appIcon;
+      logo.alt = "Jotiva";
+      logo.draggable = false;
+      leading.prepend(logo);
+      for (const part of [logo, leading, region.querySelector(".workspace-trailing")]) part?.setAttribute("data-tauri-drag-region", "");
+      if (environment.os === "windows") {
         region.addEventListener("contextmenu", event => {
           if (!(event.target instanceof Element) || !event.target.hasAttribute("data-tauri-drag-region")) return;
           event.preventDefault();
@@ -65,7 +66,7 @@ export function titlebar(region: HTMLElement, compact = false) {
     else region.prepend(appMenu());
   }
   controls.append(captionButton("close", localized("关闭窗口"), () => win.close()));
-  const trailing = desktopPlatform.windowsChrome && region.querySelector(".workspace-trailing");
+  const trailing = region.querySelector(".workspace-trailing");
   (trailing || region).append(controls);
 }
 

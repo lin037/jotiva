@@ -7,14 +7,10 @@
   }
   .quick-titlebar {
     display: flex;
-    flex: none;
     align-items: center;
     gap: var(--jot-space-1);
     padding-inline: var(--jot-quick-leading-inset) var(--jot-space-3);
-    background: var(--jot-color-chrome);
     min-height: var(--jot-quick-titlebar-height);
-    border-bottom: var(--jot-line-width) solid var(--jot-color-line);
-    user-select: none;
   }
   .quick-other-pane { display: contents; }
   .quick-edit-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -63,7 +59,6 @@
     user-select: none;
   }
   .quick-folded-bar {
-    background: var(--jot-color-chrome);
     display: flex;
     align-items: center;
     gap: var(--jot-space-1);
