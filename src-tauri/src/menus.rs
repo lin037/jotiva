@@ -13,8 +13,7 @@ use crate::{
     desktop, events, open_settings, set_stylesheet, set_theme_mode,
     settings::{
         Preferences,
-        appearance::Appearance,
-        appearance::{AppearanceView, ThemeMode},
+        appearance::{Appearance, ThemeMode},
         shortcuts::Action,
     },
     windows::{self, SettingsSection},
@@ -279,8 +278,12 @@ pub fn apply_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<(
     for w in app.webview_windows().into_values() {
         crate::platform::prepare_caption(&w)?;
     }
-    let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
-    sync_theme(app, &appearance)?;
+    let (mode, has_stylesheet) = {
+        let state = app.state::<Mutex<Appearance>>();
+        let appearance = state.lock().unwrap();
+        (appearance.mode(), appearance.has_stylesheet())
+    };
+    sync_theme(app, mode, has_stylesheet)?;
     sync(app, focused(app).as_deref())
 }
 
@@ -291,7 +294,7 @@ fn focused(app: &AppHandle) -> Option<String> {
         .map(|(label, _)| label)
 }
 
-pub fn sync_theme(app: &AppHandle, appearance: &AppearanceView) -> tauri::Result<()> {
+pub fn sync_theme(app: &AppHandle, current: ThemeMode, has_stylesheet: bool) -> tauri::Result<()> {
     let Some(menu) = app.menu().and_then(|menu| menu.get("jot-theme")) else {
         return Ok(());
     };
@@ -307,14 +310,14 @@ pub fn sync_theme(app: &AppHandle, appearance: &AppearanceView) -> tauri::Result
             .get(id)
             .and_then(|entry| entry.as_check_menuitem().cloned())
         {
-            item.set_checked(appearance.mode() == mode)?;
+            item.set_checked(current == mode)?;
         }
     }
     if let Some(item) = theme
         .get("jot-remove-css")
         .and_then(|entry| entry.as_menuitem().cloned())
     {
-        item.set_enabled(appearance.has_stylesheet())?;
+        item.set_enabled(has_stylesheet)?;
     }
     Ok(())
 }

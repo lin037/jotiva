@@ -201,7 +201,7 @@ export async function librarySidebar(
   await listen("desktop:files-changed", () => {
     if (!inWorkspace && !sidebar.hidden) void refreshArchive().catch(report);
   });
-  await switchTo(localStorage.getItem("jot-library-view") !== "archive");
+  void switchTo(localStorage.getItem("jot-library-view") !== "archive").catch(report);
   return {
     sidebar,
     setActive(id: NoteId, path?: string) {

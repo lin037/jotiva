@@ -31,10 +31,11 @@ export interface AppearancePreferences {
   mode: ThemeMode;
   accent: string | null;
   themePreset: ThemePreset;
+  themeFile: string | null;
   editing: EditingPreferences;
 }
 
-interface Stylesheet {
+export interface Stylesheet {
   name: string;
   css: string;
 }
@@ -47,6 +48,7 @@ export interface WorkspaceLayout {
 export interface Appearance extends AppearancePreferences {
   systemSize: number;
   stylesheet: Stylesheet | null;
+  themeCss: string | null;
   workspace: WorkspaceLayout;
 }
 
@@ -63,19 +65,22 @@ let customStyle: HTMLStyleElement | undefined;
 
 function apply(value: Appearance) {
   const preset = value.themePreset ?? "default";
-  const presetChanged = preset !== (appearance?.themePreset ?? "default");
+  const selectedTheme = value.themeFile ?? preset;
+  const previousTheme = appearance?.themeFile ?? appearance?.themePreset ?? "default";
+  const presetChanged = selectedTheme !== previousTheme || (value.themeCss ?? null) !== (appearance?.themeCss ?? null);
   const customChanged = value.stylesheet?.css !== appearance?.stylesheet?.css;
   const scheme = (value.mode === "system" ? media.matches : value.mode === "dark") ? "dark" : "light";
   const themeChanged = presetChanged || customChanged || value.accent !== appearance?.accent
     || document.documentElement.dataset.jotScheme !== scheme;
   if (presetChanged) {
-    if (preset === "default") {
+    const css = value.themeFile ? value.themeCss : presets[preset];
+    if (!css) {
       presetStyle?.remove();
       presetStyle = undefined;
     } else {
       presetStyle ??= document.createElement("style");
-      presetStyle.dataset.jotPreset = preset;
-      presetStyle.textContent = "@layer jot-preset {\n" + presets[preset] + "\n}";
+      presetStyle.dataset.jotPreset = selectedTheme;
+      presetStyle.textContent = "@layer jot-preset {\n" + css.replace(/^\uFEFF/, "") + "\n}";
       document.head.insertBefore(presetStyle, customStyle ?? null);
     }
   }

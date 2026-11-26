@@ -17,14 +17,46 @@ BLUEPRINT = PROJECT / "docs/assets/blueprint.css"
 STYLESHEET_IPC = r"""
 const originalInvoke = window.__TAURI_INTERNALS__.invoke;
 const storageKey = 'qa:appearance';
+const themesKey = 'qa:theme-files';
 const current = () => JSON.parse(localStorage.getItem(storageKey)) ?? appearance;
+const themeFiles = () => JSON.parse(localStorage.getItem(themesKey)) ?? {};
 const update = value => window.testEvent('desktop:appearance-changed', value);
+const publish = value => {
+  const files = themeFiles();
+  const view = {...value, themeCss:files[value.themeFile] ?? null};
+  localStorage.setItem(storageKey, JSON.stringify(view));
+  update(view);
+};
+const filename = title => /\.css$/i.test(title) ? title : title + '.css';
 window.__TAURI_INTERNALS__.invoke = (command, args) => {
   if (command === 'read_appearance') return Promise.resolve(current());
+  if (command === 'list_theme_files') {
+    window.themeListRequests = (window.themeListRequests ?? 0) + 1;
+    return Promise.resolve(Object.keys(themeFiles()).sort());
+  }
   if (command === 'save_appearance' || command === 'set_stylesheet') {
-    const value = {...current(), ...(args.preferences ?? {stylesheet:args.stylesheet})};
-    localStorage.setItem(storageKey, JSON.stringify(value));
-    update(value);
+    publish({...current(), ...(args.preferences ?? {stylesheet:args.stylesheet})});
+    return Promise.resolve();
+  }
+  if (command === 'choose_theme_css') return Promise.resolve(window.themePick ?? null);
+  if (command === 'install_theme') {
+    const files = themeFiles();
+    const name = args.title ? filename(args.title) : args.stylesheet.name;
+    const conflict = Object.keys(files).find(file => file.toLowerCase() === name.toLowerCase());
+    if (conflict && conflict !== args.replace) return Promise.resolve(conflict);
+    files[conflict ?? name] = args.stylesheet.css;
+    localStorage.setItem(themesKey, JSON.stringify(files));
+    if (current().themeFile === (conflict ?? name)) publish(current());
+    return Promise.resolve(null);
+  }
+  if (command === 'rename_theme') {
+    const files = themeFiles();
+    const name = filename(args.title);
+    files[name] = files[args.file];
+    delete files[args.file];
+    localStorage.setItem(themesKey, JSON.stringify(files));
+    const value = current();
+    if (value.themeFile === args.file) publish({...value, themeFile:name});
     return Promise.resolve();
   }
   return originalInvoke(command, args);
@@ -33,6 +65,11 @@ window.addEventListener('storage', event => {
   if (event.key === storageKey) update(current());
 });
 """
+
+
+def save_global_css(page, css):
+    page.get_by_role("textbox", name="全局样式微调").fill(css)
+    page.locator(".settings-global-css").get_by_role("button", name="保存", exact=True).click()
 
 
 def check_dialog_backdrop(page, expected):
@@ -151,15 +188,13 @@ def check_diagram_presets(browser, url):
             settings.locator("#theme-mode").select_option(mode)
             expect(root).to_have_css("background-color", background)
             check_colors()
-    # Import the same CSS on top of Default and then override a single category.
+    # Apply the same CSS on top of Default and then override a single category.
     settings.locator("#theme-preset").select_option("default")
-    settings.locator('input[type="file"]').set_input_files(BLUEPRINT)
+    save_global_css(settings, BLUEPRINT.read_text())
     expect(root).to_have_css("background-color", presets["blueprint"][1])
     check_colors()
     settings.locator("#theme-preset").select_option("blueprint")
-    settings.locator('input[type="file"]').set_input_files({
-        "name": "series.css", "mimeType": "text/css", "buffer": b":root { --jot-color-series-2: #326e52; }",
-    })
+    save_global_css(settings, ":root { --jot-color-series-2: #326e52; }")
     expect(workspace.locator(".jot-mermaid .commit1").first).to_have_css("fill", "rgb(50, 110, 82)")
     check_colors()
     context.close()
@@ -210,11 +245,9 @@ gantt
     original_link = link.evaluate("el => getComputedStyle(el).color")
     original_node = node.evaluate("el => getComputedStyle(el).fill")
 
-    # Import a user's copy of the shipped file with only three light palette entries edited.
+    # Apply a copy of the shipped CSS with three light palette entries edited.
     css = THEME.read_text().replace("#f1bd50", "#85d5b6").replace("#e5ddca", "#d5e8de").replace("#21252a", "#12332b")
-    settings.locator('input[type="file"]').set_input_files({
-        "name": "my-ink.css", "mimeType": "text/css", "buffer": css.encode(),
-    })
+    save_global_css(settings, css)
     expect(task).to_have_css("fill", "rgb(133, 213, 182)")
     expect(settings.locator(".jot-button.primary").first).to_have_css("background-color", "rgb(133, 213, 182)")
     expect(workspace.locator(".jot-sidebar")).to_have_css("background-color", "rgb(213, 232, 222)")
@@ -237,15 +270,12 @@ gantt
     assert flow.evaluate("el => getComputedStyle(el).fontFamily === getComputedStyle(document.querySelector('.cm-content')).fontFamily")
     settings.locator("#theme-mode").select_option("dark")
     expect(task).to_have_css("fill", "rgb(255, 205, 112)")
-    settings.get_by_role("button", name="移除", exact=True).click()
+    save_global_css(settings, "")
     settings.locator("#theme-mode").select_option("light")
     expect(task).to_have_css("fill", "rgb(241, 189, 80)")
     expect(node).to_have_css("fill", original_node)
     # A small overlay on the Ink preset can also recolor just the light scheme.
-    settings.locator('input[type="file"]').set_input_files({
-        "name": "mint.css", "mimeType": "text/css",
-        "buffer": b':root[data-jot-scheme="light"] { --ink-accent: #85d5b6; }',
-    })
+    save_global_css(settings, ':root[data-jot-scheme="light"] { --ink-accent: #85d5b6; }')
     expect(task).to_have_css("fill", "rgb(133, 213, 182)")
     expect(node).to_have_css("stroke", "rgb(65, 96, 76)")
     expect(node).to_have_css("fill", original_node)
@@ -256,7 +286,91 @@ gantt
     print("Markdown, flowchart and Gantt follow palette edits and live appearance changes.")
 
 
+def check_installed_themes(browser, url):
+    context = browser.new_context(color_scheme="light")
+    context.add_init_script(IPC + STYLESHEET_IPC)
+    settings, workspace = context.new_page(), context.new_page()
+    settings.goto(url + "?view=settings")
+    workspace.goto(url + "?view=main")
+    selector = settings.locator("#theme-preset")
+    install = settings.get_by_role("button", name="导入主题…")
+    canvas = workspace.locator("html")
+
+    def pick(background):
+        settings.evaluate("""background => {
+            window.themePick = {name:'蓝纸.css', css:':root[data-jot-scheme="light"] { --jot-color-bg: ' + background + '; }'};
+        }""", background)
+        install.click()
+
+    pick("#abcdef")
+    expect(selector.locator('option[value="蓝纸.css"]')).to_have_text("蓝纸")
+    expect(selector).to_have_value("default")
+    selector.select_option("蓝纸.css")
+    expect(canvas).to_have_css("background-color", "rgb(171, 205, 239)")
+
+    pick("#ccddee")
+    conflict = settings.get_by_role("dialog", name="已安装同名主题「蓝纸」")
+    conflict.get_by_role("button", name="取消").click()
+    expect(canvas).to_have_css("background-color", "rgb(171, 205, 239)")
+    pick("#ccddee")
+    conflict.get_by_role("button", name="更新现有主题").click()
+    expect(selector).to_have_value("蓝纸.css")
+    expect(canvas).to_have_css("background-color", "rgb(204, 221, 238)")
+
+    pick("#febad0")
+    conflict.get_by_role("button", name="换个名字导入…").click()
+    alternative = settings.get_by_role("dialog", name="换个名字导入…")
+    alternative.get_by_role("textbox", name="名称").fill("粉纸")
+    alternative.get_by_role("button", name="导入", exact=True).click()
+    expect(selector.locator('option[value="粉纸.css"]')).to_have_text("粉纸")
+    expect(canvas).to_have_css("background-color", "rgb(204, 221, 238)")
+
+    settings.get_by_role("button", name="重命名主题「蓝纸」").click()
+    rename = settings.get_by_role("dialog", name="重命名主题")
+    rename.get_by_role("textbox", name="名称").fill("海蓝")
+    rename.get_by_role("button", name="保存").click()
+    expect(selector.locator('option[value="蓝纸.css"]')).to_have_count(0)
+    expect(selector).to_have_value("海蓝.css")
+    document = context.new_page()
+    document.goto(url + "?view=document-1")
+    expect(document.locator("html")).to_have_css("background-color", "rgb(204, 221, 238)")
+
+    assert workspace.evaluate("!window.themeListRequests") and document.evaluate("!window.themeListRequests")
+    assert settings.evaluate("window.themeListRequests > 0")
+    assert not settings.evaluate("performance.getEntriesByType('resource').some(({name}) => name.includes('format-css-'))")
+    input_css = settings.get_by_role("textbox", name="全局样式微调")
+    format_css = settings.get_by_role("button", name="格式化", exact=True)
+    css = '/* preserve */@media (min-width: 10px){:root{--jot-color-bg:#eeeeee;--sample:"{;}"}}'
+    formatted = '/* preserve */\n@media (min-width: 10px) {\n  :root {\n    --jot-color-bg: #eeeeee;\n    --sample: "{;}";\n  }\n}\n'
+    input_css.fill(css)
+    format_css.click()
+    expect(input_css).to_have_value(formatted)
+    expect(canvas).to_have_css("background-color", "rgb(204, 221, 238)")
+    settings.locator(".settings-global-css").get_by_role("button", name="保存", exact=True).click()
+    for theme in ("blueprint", "粉纸.css", "海蓝.css"):
+        selector.select_option(theme)
+        expect(canvas).to_have_css("background-color", "rgb(238, 238, 238)")
+        expect(document.locator("html")).to_have_css("background-color", "rgb(238, 238, 238)")
+    settings.reload()
+    expect(selector).to_have_value("海蓝.css")
+    expect(input_css).to_have_value(formatted)
+    draft = ":root {"
+    input_css.fill(draft)
+    selector.select_option("blueprint")
+    expect(input_css).to_have_value(draft)
+    format_css.click()
+    expect(settings.get_by_role("alert")).to_have_text("无法格式化 CSS，请检查语法。")
+    expect(input_css).to_have_value(draft)
+    expect(canvas).to_have_css("background-color", "rgb(238, 238, 238)")
+    selector.select_option("海蓝.css")
+    save_global_css(settings, "")
+    expect(canvas).to_have_css("background-color", "rgb(204, 221, 238)")
+    context.close()
+    print("Theme installation, conflict actions, live replacement, rename, and global overrides passed.")
+
+
 def verify(browser, url):
+    check_installed_themes(browser, url)
     check_diagram_presets(browser, url)
     check_diagram_palette(browser, url)
     check_task_paint(browser, url)
@@ -308,8 +422,7 @@ def verify(browser, url):
     for page in (settings, workspace, quick):
         expect(page.locator("html")).to_have_css("background-color", "rgb(255, 251, 255)")
     assert workspace.evaluate("previousEditor === document.querySelector('.cm-content')")
-    settings.locator('input[type="file"]').set_input_files(THEME)
-    expect(settings.get_by_text(THEME.name, exact=True)).to_be_visible()
+    save_global_css(settings, THEME.read_text())
     document.reload()
     expect(document.locator(".cm-content")).to_be_visible()
     for page in (settings, workspace, quick, document):
@@ -334,7 +447,7 @@ def verify(browser, url):
     check_dialog_backdrop(workspace, "rgba(0, 0, 0, 0.45)")
 
     settings.locator("#theme-mode").select_option("light")
-    settings.get_by_role("button", name="移除", exact=True).click()
+    save_global_css(settings, "")
     for page in (settings, workspace, quick, document):
         expect(page.locator("style[data-jot-custom-theme]")).to_have_count(0)
     expect(root).to_have_css("background-color", "rgb(255, 251, 255)")

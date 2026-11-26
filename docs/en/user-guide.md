@@ -87,12 +87,12 @@ Jev filing is off by default. If you turn it on and ask for a suggestion, Jotiva
 
 ## Change the theme or shortcuts
 
-Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「界面外观」), choose a theme, set the font size, or import CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
+Choose **English** or **简体中文** under **Settings → Appearance → Interface language** to update open windows immediately. Press **Cmd+,** or **Ctrl+,** to open Settings. In Appearance (「界面外观」), choose a theme, set the font size, or edit the global CSS. In Shortcuts (「快捷键」), find an action by name or key combination and set the keys you want. [Shortcut reference (中文)](../shortcuts.md) · [Theme options (中文)](../themes.md)
 
 
 Single-click a file in the sidebar to reuse the italic preview tab. Double-click the file or tab, choose **Keep tab** from the tab menu, or start editing to keep it. Disable **Preview files on single click** in **Settings → Editor** to keep every file. Each press of the global quick-note shortcut creates a fresh note, as does **More → New note** in a note window.
 
-Choose Default, Ink and Steel, Material, or Blueprint in **Settings → Appearance**. Blueprint uses a fine grid in the title bar and a solid background for writing. Open documents and terminals pick up the change immediately. Imported CSS takes precedence.
+Choose a built-in or installed theme in **Settings → Appearance → Interface theme**. Under **My themes**, select **Import theme…** and choose a CSS file. Jotiva uses the filename as the theme name. When a name is already taken, you can update the installed theme or import a copy with a different name. Open documents and terminals update immediately. Type or paste CSS under **Global CSS tweaks** and choose **Save** to apply it across themes. Choose **Format** to tidy the CSS, or clear the text and save to remove it. [Theme guide (中文)](../themes.md)
 
 ## Software updates
 

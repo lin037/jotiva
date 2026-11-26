@@ -197,12 +197,20 @@ char *jot_choose_folder(void) {
 
 // AppKit's field editor normally handles Escape by restoring the old text.
 // Use the dialog's cancel/create actions for these two text commands.
-char *jot_choose_markdown(void) {
+static char *choose_file(NSArray<UTType *> *types) {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedContentTypes = @[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]];
+    panel.allowedContentTypes = types;
     panel.canChooseDirectories = NO;
     if ([panel runModal] != NSModalResponseOK) return NULL;
     return strdup(panel.URL.fileSystemRepresentation);
+}
+
+char *jot_choose_markdown(void) {
+    return choose_file(@[[UTType typeWithFilenameExtension:@"md"], [UTType typeWithFilenameExtension:@"markdown"], [UTType typeWithFilenameExtension:@"txt"]]);
+}
+
+char *jot_choose_css(void) {
+    return choose_file(@[[UTType typeWithFilenameExtension:@"css"]]);
 }
 
 void jot_file_error(const char *message) {

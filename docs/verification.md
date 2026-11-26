@@ -34,7 +34,7 @@ pnpm test:web
 | `pnpm test:web:editor` | 多窗口合并和冲突保留、标签撤销历史、速记恢复和 Worker 回收。可单跑 `python3 qa/document-windows.py --sync`、`--history` 或 `--resume`，也可组合。 |
 | `pnpm test:web:ui` | 文件树、窗口选择器和焦点导航。窗口测试模拟未授权、取消、授权后继续、使用中撤权和列表读取失败后重试。 |
 | `pnpm test:web:visual` | 截图核对标题光标和滚动条。光标截图要在闪烁前捕捉，适合固定系统、缩放和负载的机器。 |
-| `pnpm test:theme` | 导入示例 CSS，核对编辑器、各窗口和弹窗遮罩在深浅色下的外观，验证重开和移除主题后的效果。 |
+| `pnpm test:theme` | 检查主题的安装、同名更新和改名，以及全局 CSS 的格式化、保存和跨窗口生效。 |
 | `pnpm test:shortcuts` | 窗口分派、焦点导航、按名称或键位查找、录入和保存。在编辑器中改键后，验证新旧组合、清除和恢复默认。 |
 | `pnpm test:capacity` | 扫描包含大量真实文件的目录，并在 WebKit 中检查文件树分页、多个标签和长文滚动。 |
 | `pnpm test:filing` | 用回环 HTTP 服务检查分类、超时、错误和确认后移动文件。WebKit 检查手动触发与取消，并模拟不同地址的密钥状态、更换和移除。无需服务密钥。 |

@@ -69,6 +69,7 @@ window.__TAURI_INTERNALS__ = {
       case "document_menu": window.menu = args; return;
       case "workspace_tab_menu": window.multipleTabs = args.multiple; return;
       case "read_settings": return {preferences:{quick:"Control+Shift+Space",search:null,dock:null,local:{}}};
+      case "list_theme_files": return [];
       case "read_appearance": return {baseSize:null, systemSize:13, mode:"light", accent:null,
         workspace:{sidebar:null,outline:null}, stylesheet:null,
         editing:{font:"system",wrapCode:true,foldHeadings:true,toolbar:true,headingScale:null,ruledPaper:false}};

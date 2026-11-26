@@ -130,6 +130,21 @@
   .settings-custom-accent input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
   .settings-heading-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--jot-space-3); padding-block: var(--jot-space-2); }
   .settings-heading-bar h2 { margin: 0; }
+  .settings-theme-file { border-block-start: var(--jot-line-width) solid var(--jot-color-line); }
+  .settings-theme-file > span { min-width: 0; overflow-wrap: anywhere; }
+  .settings-global-css textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    resize: vertical;
+    font: var(--jot-type-small)/1.5 var(--jot-font-mono);
+  }
+  .settings-css-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--jot-space-2);
+    margin-block: var(--jot-space-3) var(--jot-space-1);
+  }
   .settings-heading-samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); column-gap: var(--jot-space-5); }
   .settings-heading-samples .settings-field {
     flex-wrap: nowrap;

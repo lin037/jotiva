@@ -30,6 +30,7 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
     if (cmd==='read_image_settings') return {revision:0,folder:null,config:{defaultMode:'relative',rules:[],subfolder:'_assets',
       directory:'',groupByDocument:false,compress:false,endpoint:'',field:'file',responsePointer:'/url',bearer:false}};
     if (cmd==='read_appearance') return appearance;
+    if (cmd==='list_theme_files') return [];
     if (cmd==='accessibility_trusted') return !window.permissionMissing;
     if (cmd==='quick_view') return {epoch:1, kind:'edit', id:1, standalone:false, pinned:false, source:'会议'};
     if (cmd==='read_settings') {

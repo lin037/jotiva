@@ -88,15 +88,17 @@ export function shortcutHint<T extends HTMLElement>(element: T, action: string):
 export async function loadLocalShortcuts() {
   let updated = false;
   let quickUpdated = false;
-  await listen<string>("desktop:quick-shortcut-changed", ({payload}) => {
-    quickUpdated = true;
-    quickShortcut = payload;
-    document.querySelectorAll<HTMLElement>('[data-shortcut-action="quick"]').forEach(updateHint);
-  });
-  await listen<LocalBindings>("desktop:shortcuts-changed", ({payload}) => {
-    updated = true;
-    applyLocalShortcuts(payload);
-  });
+  await Promise.all([
+    listen<string>("desktop:quick-shortcut-changed", ({payload}) => {
+      quickUpdated = true;
+      quickShortcut = payload;
+      document.querySelectorAll<HTMLElement>('[data-shortcut-action="quick"]').forEach(updateHint);
+    }),
+    listen<LocalBindings>("desktop:shortcuts-changed", ({payload}) => {
+      updated = true;
+      applyLocalShortcuts(payload);
+    }),
+  ]);
   const {preferences} = await invoke<{preferences: GlobalBindings}>("read_settings");
   if (!quickUpdated) quickShortcut = preferences.quick;
   if (!updated) applyLocalShortcuts(preferences.local ?? {});

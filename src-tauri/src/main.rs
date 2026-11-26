@@ -680,8 +680,54 @@ fn set_stylesheet(app: AppHandle, stylesheet: Option<Stylesheet>) -> Result<(), 
     publish_appearance(&app, view)
 }
 
+#[tauri::command]
+async fn choose_theme_css() -> Result<Option<Stylesheet>, String> {
+    let Some(path) = platform::dialogs::choose_css().await? else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        Appearance::read_theme_source(std::path::Path::new(&path)).map(Some)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn install_theme(
+    app: AppHandle,
+    stylesheet: Stylesheet,
+    title: Option<String>,
+    replace: Option<String>,
+) -> Result<Option<String>, String> {
+    let (conflict, view) = {
+        let state = app.state::<Mutex<Appearance>>();
+        state
+            .lock()
+            .unwrap()
+            .install_theme(stylesheet, title.as_deref(), replace.as_deref())?
+    };
+    if let Some(view) = view {
+        publish_appearance(&app, view)?;
+    }
+    Ok(conflict)
+}
+
+#[tauri::command]
+fn rename_theme(app: AppHandle, file: String, title: String) -> Result<(), String> {
+    let view = app
+        .state::<Mutex<Appearance>>()
+        .lock()
+        .unwrap()
+        .rename_theme(&file, &title)?;
+    if let Some(view) = view {
+        publish_appearance(&app, view)?;
+    }
+    Ok(())
+}
+
 fn publish_appearance(app: &AppHandle, view: AppearanceView) -> Result<(), String> {
-    menus::sync_theme(app, &view).map_err(|error| error.to_string())?;
+    menus::sync_theme(app, view.mode(), view.has_stylesheet())
+        .map_err(|error| error.to_string())?;
     app.emit(events::APPEARANCE_CHANGED, view)
         .map_err(|error| error.to_string())
 }
@@ -846,17 +892,25 @@ fn main() {
             app.manage(Mutex::new(Folders::load(data.join("folders.json"))?));
             app.manage(Mutex::new(desktop::Desktop::default()));
             app.manage(Mutex::new(menus::Context::default()));
-            let appearance = app.state::<Mutex<Appearance>>().lock().unwrap().view();
-            i18n::set_language(appearance.language());
-            app.set_theme(appearance.mode().native());
-            menus::sync_theme(app.handle(), &appearance)?;
+            let (language, mode, has_stylesheet) = {
+                let state = app.state::<Mutex<Appearance>>();
+                let appearance = state.lock().unwrap();
+                (
+                    appearance.language(),
+                    appearance.mode(),
+                    appearance.has_stylesheet(),
+                )
+            };
+            i18n::set_language(language);
+            app.set_theme(mode.native());
+            menus::sync_theme(app.handle(), mode, has_stylesheet)?;
             let keys = app
                 .state::<Mutex<Settings>>()
                 .lock()
                 .unwrap()
                 .preferences
                 .clone();
-            if !keys.local.is_empty() || appearance.language() == i18n::Language::English {
+            if !keys.local.is_empty() || language == i18n::Language::English {
                 menus::apply_keys(app.handle(), &keys)?;
             }
             desktop::start(app.handle())?;
@@ -1006,6 +1060,10 @@ fn main() {
             save_workspace,
             save_appearance,
             set_stylesheet,
+            choose_theme_css,
+            settings::appearance::list_theme_files,
+            install_theme,
+            rename_theme,
             read_settings,
             save_settings,
             record_shortcut,

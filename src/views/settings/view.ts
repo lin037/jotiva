@@ -1,12 +1,13 @@
 import { field, select } from "./controls";
 import { mountImageSettings } from "./images";
+import { mountGlobalCss, mountThemeSettings } from "./themes";
 import { t, message, bindLabel, localized } from "../../i18n";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { accentPreset, accentPresets } from "../../appearance/accent";
-import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, setStylesheet, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type ThemePreset, type WritingFont } from "../../appearance/preferences";
+import { currentAppearance, defaultHeadingScale, onAppearanceChange, saveAppearance, type AppearancePreferences, type EditingPreferences, type HeadingScale, type ThemeMode, type WritingFont } from "../../appearance/preferences";
 import { commands, effectiveShortcut, fixedShortcuts, globalActions, recordedShortcut, shortcutLabel, type GlobalBindings, type GlobalAction } from "../../desktop/shortcuts";
 import { events } from "../../desktop/ipc";
 import { mountUpdateSettings } from "../../desktop/updates";
@@ -288,9 +289,9 @@ export async function mount() {
   let savingAppearance = Promise.resolve<unknown>(undefined);
   function apply(patch: Partial<AppearancePreferences>, editor?: EditingPatch) {
     const request = savingAppearance.catch(() => {}).then(() => {
-      const { baseSize, mode, themePreset, accent, language, editing } = currentAppearance();
+      const { baseSize, mode, themePreset, themeFile, accent, language, editing } = currentAppearance();
       const changes = typeof editor === "function" ? editor(editing) : editor;
-      return saveAppearance({ baseSize, mode, themePreset, accent, language, editing: { ...editing, ...changes }, ...patch });
+      return saveAppearance({ baseSize, mode, themePreset, themeFile, accent, language, editing: { ...editing, ...changes }, ...patch });
     });
     savingAppearance = request;
     return request;
@@ -310,10 +311,7 @@ export async function mount() {
   const language = select<AppearancePreferences["language"]>("interface-language", [["zh-CN", "简体中文"], ["en", "English"]],
     language => apply({ language }));
   const scheme = select<ThemeMode>("theme-mode", [["system", localized("跟随系统")], ["light", localized("浅色")], ["dark", localized("深色")]], mode => apply({ mode }));
-  const preset = select<ThemePreset>("theme-preset", [
-    ["default", localized("默认")], ["ink", localized("墨与钢")], ["material", "Material"],
-    ["blueprint", localized("蓝晒")],
-  ], themePreset => apply({ themePreset }));
+  const themes = mountThemeSettings(apply);
   const accent = element("input");
   accent.id = "accent";
   accent.type = "color";
@@ -336,7 +334,7 @@ export async function mount() {
   palette.append(custom);
   appearance.append(
     field(localized("界面语言"), language, language.id),
-    field(localized("界面主题"), preset, preset.id),
+    field(localized("界面主题"), themes.preset, themes.preset.id),
     field(localized("界面模式"), scheme, scheme.id),
     field(localized("基础字号"), [font, element("span", "muted", "pt"), applySize, systemSize], font.id),
     field(localized("强调色"), palette),
@@ -346,31 +344,8 @@ export async function mount() {
     void apply({ baseSize: font.valueAsNumber }).catch(report);
   });
 
-  const cssName = element("p", "settings-detail muted");
-  const file = element("input");
-  file.type = "file";
-  file.accept = ".css,text/css";
-  file.hidden = true;
-  const importCss = button(localized("导入 CSS…"), () => file.click());
-  const removeCss = button(localized("移除"), () => setStylesheet(null));
-  const cssActions = element("div", "settings-field-controls");
-  cssActions.append(file, importCss, removeCss);
-  file.addEventListener("change", async () => {
-    const picked = file.files?.[0];
-    if (!picked) return;
-    file.value = "";
-    try {
-      if (picked.size > 128 * 1024 || !picked.name.toLowerCase().endsWith(".css")) throw new Error(t("请选择不超过 128 KB 的 CSS 文件"));
-      await setStylesheet({ name: picked.name, css: await picked.text() });
-    } catch (error) {
-      report(error);
-    }
-  });
-  const css = element("section", "settings-group settings-action-card");
-  const cssText = element("div", "settings-action-copy");
-  cssText.append(element("h2", undefined, localized("自定义 CSS")), cssName);
-  css.append(cssText, cssActions);
-  panels.get("appearance")!.append(appearance, css);
+  const css = mountGlobalCss();
+  panels.get("appearance")!.append(appearance, themes.panel, css.panel);
 
   const refreshEditor = mountEditorSettings(panels.get("editor")!, change => apply({}, change));
 
@@ -378,15 +353,14 @@ export async function mount() {
     font.value = String(value.baseSize ?? value.systemSize);
     systemSize.disabled = value.baseSize === null;
     scheme.value = value.mode;
-    preset.value = value.themePreset ?? "default";
+    themes.refresh(value);
     language.value = value.language ?? "zh-CN";
     const selected = accentPreset(value.accent);
     swatches.forEach((swatch, index) => swatch.setAttribute("aria-pressed", String(accentPresets[index] === selected)));
     const dark = document.documentElement.dataset.jotScheme === "dark";
     accent.value = selected ? selected[dark ? "dark" : "light"] : value.accent!;
     custom.classList.toggle("is-selected", !selected);
-    bindLabel(cssName, "text", () => value.stylesheet?.name ?? t("导入 CSS 可调整界面和正文样式。"));
-    removeCss.hidden = value.stylesheet === null;
+    css.refresh(value.stylesheet);
     refreshEditor(value.editing);
   }
   onAppearanceChange(refreshAppearance);
@@ -561,6 +535,7 @@ export async function mount() {
       else tab.removeAttribute("aria-current");
     }
     content.scrollTop = 0;
+    if (id === "appearance") void themes.load().catch(report);
     if (id === "images") void loadImages().catch(report);
     if (id === "filing") void loadFiling();
     stopCheckingPermission?.();
@@ -569,8 +544,10 @@ export async function mount() {
       stopCheckingPermission = watchAccessibility(showPermission, error => { permission.textContent = String(error); });
     }
   }
-  await getCurrentWindow().listen<Section>(events.settingsSection, ({ payload }) => show(payload));
-  await getCurrentWindow().listen(events.imageSettingsChanged, () => { void loadImages().catch(report); });
+  await Promise.all([
+    getCurrentWindow().listen<Section>(events.settingsSection, ({ payload }) => show(payload)),
+    getCurrentWindow().listen(events.imageSettingsChanged, () => { void loadImages().catch(report); }),
+  ]);
   const initial = (window as Window & { __jotSettingsSection?: Section }).__jotSettingsSection;
   show(initial ?? "appearance");
 }

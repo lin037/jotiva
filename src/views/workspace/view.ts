@@ -358,10 +358,11 @@ export async function mount() {
     settings: showSettings,
     quit: () => invoke("quit"),
   });
-  await getCurrentWindow().listen<NoteId>(events.mainNote, event => { void open(event.payload).catch(report); });
-  await getCurrentWindow().listen(events.sidebarToggle, toggleSidebar);
-  await getCurrentWindow().listen("desktop:workspace-added", () => { void library.showWorkspace().catch(report); });
-  await getCurrentWindow().listen<string>(events.editorAction, ({ payload }) => {
+  const currentWindow = getCurrentWindow();
+  const mainNoteListener = currentWindow.listen<NoteId>(events.mainNote, event => { void open(event.payload).catch(report); });
+  const sidebarListener = currentWindow.listen(events.sidebarToggle, toggleSidebar);
+  const workspaceListener = currentWindow.listen("desktop:workspace-added", () => { void library.showWorkspace().catch(report); });
+  const actionListener = currentWindow.listen<string>(events.editorAction, ({ payload }) => {
     const actions: Record<string, () => unknown> = {
       "close-tab": () => !document.querySelector("dialog[open]") && closeActive(),
       "previous-document": previousDocument, new: newDocument, save: () => editor?.save(), file: () => editor?.file(), find: finder.focus,
@@ -388,7 +389,7 @@ export async function mount() {
     dirty = false;
     void Promise.all([library.refresh(sourcesChanged), refreshCard(), finder.refresh()]).catch(report);
   }
-  await listen<NoteId | null>(events.notesChanged, ({ payload }) => {
+  const notesListener = listen<NoteId | null>(events.notesChanged, ({ payload }) => {
     if (document.hasFocus()) refresh(payload === null);
     else {
       dirty = true;
@@ -397,7 +398,7 @@ export async function mount() {
     }
   });
   let titleRefresh = 0;
-  await listen("desktop:files-changed", () => {
+  const filesListener = listen("desktop:files-changed", () => {
     const ids = tabs.ids().filter(id => id !== editor?.id);
     if (!ids.length) return;
     const turn = ++titleRefresh;
@@ -405,7 +406,7 @@ export async function mount() {
       if (turn === titleRefresh) for (const card of cards) tabs.rename(card.id, card.title);
     }).catch(report);
   });
-  await listen<NoteId[]>("desktop:notes-removed", ({ payload }) => {
+  const removedListener = listen<NoteId[]>("desktop:notes-removed", ({ payload }) => {
     void enqueue(async () => {
       for (const id of payload) if (id !== editor?.id) tabs.remove(id);
       if (!editor || !payload.includes(editor.id)) return;
@@ -414,14 +415,14 @@ export async function mount() {
       await library.refresh();
     }).catch(report);
   });
-  await listen(events.foldersChanged, () => {
+  const foldersListener = listen(events.foldersChanged, () => {
     void library.loadFolders().then(refreshCard).catch(report);
   });
   window.addEventListener("focus", () => {
     if (dirty) refresh();
     library.refreshFiles();
   });
-  await saveBeforeClose(async () => {
+  const closeListener = saveBeforeClose(async () => {
     if (terminal) await (await terminal).ready();
     if (await invoke<number>("live_terminals") > 0 && await fileDialog(t("结束终端并关闭窗口？"), t("结束并关闭"), {
       detail: t("关闭主窗口会结束所有终端会话及其前台任务。")
@@ -435,7 +436,10 @@ export async function mount() {
     const cards = await invoke<Pick<Card, "id" | "title">[]>("take_dropped_tabs");
     if (cards.length) await openTabs(cards);
   };
-  await getCurrentWindow().listen("desktop:dropped-tabs", () => { void receiveDrops().catch(report); });
+  const dropsListener = currentWindow.listen("desktop:dropped-tabs", () => { void receiveDrops().catch(report); });
+  // Keep the initial document and drag queue reads behind their subscriptions.
+  await Promise.all([mainNoteListener, sidebarListener, workspaceListener, actionListener, notesListener,
+    filesListener, removedListener, foldersListener, closeListener, dropsListener]);
   const initial = await invoke<NoteId | null>("initial_note");
   if (initial !== null) await open(initial);
   await receiveDrops();
