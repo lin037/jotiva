@@ -1,4 +1,4 @@
-import { bindLabel, type Label } from "../i18n";
+import { bindLabel, message, type Label } from "../i18n";
 
 export const root = document.querySelector<HTMLElement>("#app")!;
 
@@ -9,7 +9,7 @@ notice.hidden = true;
 document.body.append(notice);
 
 export function report(error: unknown) {
-  notice.textContent = error instanceof Error ? error.message : String(error);
+  notice.textContent = message(error instanceof Error ? error.message : String(error));
   notice.hidden = false;
 }
 
@@ -24,6 +24,18 @@ export function element<K extends keyof HTMLElementTagNameMap>(tag: K, className
   if (["input", "textarea", "select"].includes(tag)) result.classList.add("jot-control", "jot-field");
   if (text) bindLabel(result, "text", text);
   return result;
+}
+
+export function chevron() {
+  const icon = element("span", "jot-chevron");
+  icon.setAttribute("aria-hidden", "true");
+  return icon;
+}
+
+export function disclosureSummary(label: Label) {
+  const summary = element("summary", "jot-disclosure");
+  summary.append(chevron(), element("span", undefined, label));
+  return summary;
 }
 
 export function button(label: Label, action: (event: MouseEvent) => unknown, className?: string, tip?: Label) {

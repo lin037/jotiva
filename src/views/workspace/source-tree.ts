@@ -4,15 +4,15 @@ import { popupMenu } from "../../ui/context-menu";
 import { attachOnSwitch } from "./document-drag";
 import { sources, type NoteId, type SourceGroup } from "../../desktop/ipc";
 import { iconButton } from "../../ui/chrome";
-import { button, element, report } from "../../ui/dom";
+import { button, chevron, element, report } from "../../ui/dom";
 import { noteList } from "../../ui/note-list";
 
 export function treeRow(title: Label, expanded: boolean, toggle: () => void) {
   const entry = button("", toggle, "library-node");
   entry.setAttribute("aria-expanded", String(expanded));
   bindLabel(entry, "title", title);
-  const caret = element("span", "tree-caret");
-  caret.setAttribute("aria-hidden", "true");
+  const caret = chevron();
+  caret.classList.add("tree-caret");
   entry.append(caret, element("span", "node-title", title));
   return entry;
 }

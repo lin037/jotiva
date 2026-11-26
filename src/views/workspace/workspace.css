@@ -140,15 +140,6 @@
   .library-node:is(:hover, :focus):enabled { background: var(--jot-color-hover); }
   .library-node[aria-expanded="true"] { font-weight: var(--jot-weight-semibold); }
   .node-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .tree-caret {
-    flex: none;
-    width: var(--jot-space-2);
-    height: var(--jot-space-2);
-    border-block-start: var(--jot-line-width) solid var(--jot-color-muted);
-    border-inline-end: var(--jot-line-width) solid var(--jot-color-muted);
-    transform: rotate(45deg);
-  }
-  .library-node[aria-expanded="true"] .tree-caret { transform: rotate(135deg); }
   .tree-children, .library-notes {
     margin-inline-start: var(--jot-space-3);
     padding-inline-start: var(--jot-space-2);
