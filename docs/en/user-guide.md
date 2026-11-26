@@ -49,7 +49,7 @@ In Jotiva, press **`Cmd+K`** (macOS) or **`Ctrl+K`** to open search:
 <details>
 <summary>Platform attachment details & macOS Accessibility troubleshooting</summary>
 
-- **macOS**: Grant **Accessibility** permission under **Settings → Window attachments** so Jotiva can identify other apps' windows. If Accessibility is enabled in System Settings but Jotiva still asks for permission, quit Jotiva and reopen it from Applications. After replacing an installed build, remove the stale entry in **System Settings → Privacy & Security → Accessibility** and re-add the current copy.
+- **macOS**: Grant **Accessibility** permission under **Settings → Window attachments** so Jotiva can identify other apps' windows. If macOS asks for permission again after an update, request it there. If Accessibility is enabled in System Settings but Jotiva still asks for permission, quit Jotiva and reopen it from Applications. If the prompt persists, re-add the current app under **System Settings → Privacy & Security → Accessibility**.
 - **Windows**: Choose a window from the list or drag a document onto the target window.
 - **Linux**: Window attachment works in EWMH-compatible X11 sessions. Native Wayland supports standalone notes. Global shortcut availability depends on your desktop session.
 

@@ -16,11 +16,14 @@ def config():
         raise ValueError("Configure the updater public key and signing private key")
     bundle = {"createUpdaterArtifacts": True}
     if sys.platform == "darwin":
-        identity = os.environ["APPLE_SIGNING_IDENTITY"]
-        if not identity.startswith("Developer ID Application:") or not os.environ["JOT_INSTALLER_IDENTITY"].startswith("Developer ID Installer:"):
+        identity = os.environ.get("APPLE_SIGNING_IDENTITY", "")
+        installer = os.environ.get("JOT_INSTALLER_IDENTITY", "")
+        if (identity or installer) and not (
+            identity.startswith("Developer ID Application:") and installer.startswith("Developer ID Installer:")
+        ):
             raise ValueError("Configure Developer ID Application and Installer identities")
-        bundle["macOS"] = {"signingIdentity": identity}
-    elif sys.platform == "win32":
+        bundle["macOS"] = {"signingIdentity": identity or "-"}
+    elif sys.platform == "win32" and os.environ.get("JOTIVA_CERT_THUMBPRINT"):
         bundle["windows"] = {
             "certificateThumbprint": os.environ["JOTIVA_CERT_THUMBPRINT"],
             "digestAlgorithm": "sha256", "timestampUrl": "http://timestamp.digicert.com",

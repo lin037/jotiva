@@ -24,6 +24,8 @@ jobs:
     outputs:
       number: ${{ steps.version.outputs.number }}
       signed: ${{ steps.version.outputs.signed }}
+      macos_signed: ${{ steps.version.outputs.macos_signed }}
+      windows_signed: ${{ steps.version.outputs.windows_signed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -32,6 +34,8 @@ jobs:
         env:
           REF_NAME: ${{ github.ref_name }}
           SIGNED: ${{ inputs.publish || vars.JOTIVA_SIGNED_RELEASE == 'true' }}
+          MACOS_SIGNED: ${{ vars.JOTIVA_MACOS_SIGNED_RELEASE == 'true' }}
+          WINDOWS_SIGNED: ${{ vars.JOTIVA_WINDOWS_SIGNED_RELEASE == 'true' }}
         run: |
           python3 - <<'PY'
           import json, os, re, tomllib
@@ -44,9 +48,13 @@ jobs:
           assert version == frontend == rust, (version, frontend, rust)
           ref = os.environ["REF_NAME"]
           assert ref in (f"v{version}", f"build/v{version}"), (ref, version)
+          signed = os.environ["SIGNED"].lower() == "true"
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               print(f"number={version}", file=output)
-              print(f"signed={os.environ['SIGNED'].lower()}", file=output)
+              print(f"signed={str(signed).lower()}", file=output)
+              for platform in ("macos", "windows"):
+                  sign_installer = signed and os.environ[f"{platform.upper()}_SIGNED"].lower() == "true"
+                  print(f"{platform}_signed={str(sign_installer).lower()}", file=output)
           PY
 
   ci:
@@ -67,7 +75,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Import Developer ID application and installer identities
-        if: needs.version.outputs.signed == 'true'
+        if: needs.version.outputs.macos_signed == 'true'
         env:
           CERTIFICATES: ${{ secrets.JOTIVA_MAC_CERTIFICATES }}
           CERT_PASSWORD: ${{ secrets.JOTIVA_MAC_CERTIFICATE_PASSWORD }}
@@ -87,6 +95,7 @@ jobs:
       - name: Build the universal application
         env:
           SIGNED: ${{ needs.version.outputs.signed }}
+          MACOS_SIGNED: ${{ needs.version.outputs.macos_signed }}
           JOTIVA_UPDATER_PUBLIC_KEY: ${{ vars.JOTIVA_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -98,15 +107,20 @@ jobs:
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           args=()
-          if [[ "$SIGNED" == true ]]; then
+          if [[ "$MACOS_SIGNED" == true ]]; then
+            : "${APPLE_SIGNING_IDENTITY:?}" "${JOT_INSTALLER_IDENTITY:?}"
             : "${APPLE_ID:?}" "${APPLE_PASSWORD:?}" "${APPLE_TEAM_ID:?}"
+          else
+            unset APPLE_SIGNING_IDENTITY JOT_INSTALLER_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          fi
+          if [[ "$SIGNED" == true ]]; then
             python3 scripts/update-release.py config "$RUNNER_TEMP/update.json"
             args+=(--config "$RUNNER_TEMP/update.json")
           fi
           python3 scripts/build-macos.py "${args[@]}" --bundles app --target universal-apple-darwin -- --locked
       - name: Build and verify installers
         env:
-          JOT_INSTALLER_IDENTITY: ${{ needs.version.outputs.signed == 'true' && vars.JOT_INSTALLER_IDENTITY || '' }}
+          JOT_INSTALLER_IDENTITY: ${{ needs.version.outputs.macos_signed == 'true' && vars.JOT_INSTALLER_IDENTITY || '' }}
           VERSION: ${{ needs.version.outputs.number }}
         run: |
           python3 -m pip install -r scripts/requirements-macos.txt
@@ -115,8 +129,8 @@ jobs:
           python3 scripts/package-macos.py "$app" --output-dir artifacts
           file="artifacts/Jotiva_${VERSION}_universal"
           python3 qa/macos/installers.py "$app" "$file.dmg" "$file.pkg" --zip "$file.zip"
-      - name: Verify publisher, notarize installers and collect signed update
-        if: needs.version.outputs.signed == 'true'
+      - name: Verify publisher and notarize installers
+        if: needs.version.outputs.macos_signed == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -133,6 +147,10 @@ jobs:
             xcrun stapler staple "$file"
             xcrun stapler validate "$file"
           done
+      - name: Collect the signed updater archive
+        if: needs.version.outputs.signed == 'true'
+        run: |
+          target=src-tauri/target/universal-apple-darwin/release/bundle/macos
           cp "$target/Jotiva.app.tar.gz" "$target/Jotiva.app.tar.gz.sig" artifacts/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -155,6 +173,7 @@ jobs:
         shell: pwsh
         env:
           SIGNED: ${{ needs.version.outputs.signed }}
+          WINDOWS_SIGNED: ${{ needs.version.outputs.windows_signed }}
           CERTIFICATE: ${{ secrets.JOTIVA_WINDOWS_CERTIFICATE }}
           CERT_PASSWORD: ${{ secrets.JOTIVA_WINDOWS_CERTIFICATE_PASSWORD }}
           JOTIVA_UPDATER_PUBLIC_KEY: ${{ vars.JOTIVA_UPDATER_PUBLIC_KEY }}
@@ -162,7 +181,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $configArgs = @()
-          if ($env:SIGNED -eq 'true') {
+          if ($env:WINDOWS_SIGNED -eq 'true') {
             $file = Join-Path $env:RUNNER_TEMP 'publisher.pfx'
             try {
               [IO.File]::WriteAllBytes($file, [Convert]::FromBase64String($env:CERTIFICATE))
@@ -171,6 +190,8 @@ jobs:
               $env:JOTIVA_CERT_THUMBPRINT = ($cert | Where-Object HasPrivateKey | Select-Object -First 1).Thumbprint
               if (!$env:JOTIVA_CERT_THUMBPRINT) { throw 'Missing Windows code signing identity' }
             } finally { Remove-Item -Force -ErrorAction SilentlyContinue $file }
+          }
+          if ($env:SIGNED -eq 'true') {
             $config = Join-Path $env:RUNNER_TEMP 'update.json'
             python scripts/update-release.py config $config
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -178,7 +199,7 @@ jobs:
           }
           pnpm tauri build @configArgs --bundles nsis -- --locked
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          if ($env:SIGNED -eq 'true') {
+          if ($env:WINDOWS_SIGNED -eq 'true') {
             $files = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe') + @(Get-Item 'src-tauri/target/release/Jotiva.exe')
             foreach ($file in $files) {
               $result = Get-AuthenticodeSignature $file.FullName

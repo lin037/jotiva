@@ -89,10 +89,12 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 \
 
 ### GitHub Actions 签名凭据清单
 
+Tauri 更新签名用于应用内更新。macOS Developer ID 与 Windows 发布者签名分别由 `JOTIVA_MACOS_SIGNED_RELEASE`、`JOTIVA_WINDOWS_SIGNED_RELEASE` 控制，设为 `true` 才启用。只启用 Tauri 更新签名时，macOS 使用本地签名，Windows 使用无发布者签名的安装包。
+
 | 用途 | 仓库 Variables / Secrets 配置 |
 | --- | --- |
 | **Tauri 更新签名** | Variable `JOTIVA_UPDATER_PUBLIC_KEY`（公钥）；Secrets `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（离线备份私钥，后续版本保持一致）。 |
 | **macOS 签名与公证** | Secret `JOTIVA_MAC_CERTIFICATES`（含 Developer ID Application 与 Installer 的 Base64 `.p12`）、`JOTIVA_MAC_CERTIFICATE_PASSWORD`；Variables `APPLE_SIGNING_IDENTITY`、`JOT_INSTALLER_IDENTITY`、`APPLE_TEAM_ID`；Secrets `APPLE_ID`、`APPLE_PASSWORD`（应用专用密码）。 |
 | **Windows 代码签名** | Secrets `JOTIVA_WINDOWS_CERTIFICATE`（Base64 PFX）、`JOTIVA_WINDOWS_CERTIFICATE_PASSWORD`；若改用云/硬件签名服务需替换工作流中的导入步骤。 |
 
-> 验证 macOS 辅助功能权限跨版本延续时，需在同一台机器上由同一 Developer ID 签名团队、相同应用标识与安装路径的旧版本原地升级。
+> 用同一台 Mac、相同应用标识和安装路径验证原地升级。使用本地签名时，macOS 可能要求重新授权辅助功能。要验证 Developer ID 发布包的授权延续，旧版和新版还需属于同一签名团队。

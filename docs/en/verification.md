@@ -87,7 +87,9 @@ Releases are driven by [Release packages](../../.github/workflows/release.yml):
 2. Manually trigger `Release packages` on that tag with `publish` enabled (to test signed pre-release artifacts on a `build/vX.Y.Z` branch, set repository variable `JOTIVA_SIGNED_RELEASE=true`).
 3. After checks pass, the workflow publishes macOS Universal installers (`.dmg`, `.pkg`, `.zip`), Windows x64 NSIS, Linux x86_64 (`.deb`, `.AppImage`), source archives, `latest.json`, `SHA256SUMS`, and `HelloJotiva.zip` to GitHub Releases. Extract the sample archive to open either language version and its image offline.
 
-### Required GitHub Actions Variables & Secrets
+### GitHub Actions Variables & Secrets
+
+Tauri update signing protects in-app updates. Set `JOTIVA_MACOS_SIGNED_RELEASE` or `JOTIVA_WINDOWS_SIGNED_RELEASE` to `true` to also enable the corresponding platform's publisher signing. With updater signing alone, macOS builds use ad-hoc signing and Windows installers have no publisher signature.
 
 | Purpose | Configuration |
 | --- | --- |
@@ -95,4 +97,4 @@ Releases are driven by [Release packages](../../.github/workflows/release.yml):
 | **macOS signing & notarization** | Secrets `JOTIVA_MAC_CERTIFICATES` (Base64 `.p12` containing Developer ID Application & Installer identities) and `JOTIVA_MAC_CERTIFICATE_PASSWORD`; Variables `APPLE_SIGNING_IDENTITY`, `JOT_INSTALLER_IDENTITY`, `APPLE_TEAM_ID`; Secrets `APPLE_ID` and `APPLE_PASSWORD` (app-specific password). |
 | **Windows Authenticode** | Secrets `JOTIVA_WINDOWS_CERTIFICATE` (Base64 `.pfx`) and `JOTIVA_WINDOWS_CERTIFICATE_PASSWORD` (replace the import step if using hardware or cloud signing). |
 
-> To verify macOS Accessibility permission continuity across upgrades, upgrade in place between builds signed with the same Developer ID team, bundle identifier, and install path.
+> Test upgrades in place on the same Mac with the same bundle identifier and install path. macOS may ask for Accessibility permission again with ad-hoc signing. For Developer ID builds, test permission continuity across versions signed by the same team.
