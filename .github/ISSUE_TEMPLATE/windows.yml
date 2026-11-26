@@ -1,21 +1,23 @@
-name: Windows 使用反馈 / Windows feedback
-description: 分享 Windows 上的使用场景或报告桌面集成问题
+name: Windows 桌面反馈 / Windows feedback
+description: 报告 Windows 上的使用体验或窗口挂载兼容问题
 body:
   - type: input
     id: system
     attributes:
-      label: Windows 版本和架构 / Windows version and architecture
-      placeholder: Windows 11 24H2，x64
+      label: Windows 版本与架构 / Windows version & architecture
+      placeholder: Windows 11 24H2, x64
     validations:
       required: true
   - type: input
     id: build
     attributes:
-      label: Jotiva 版本与安装来源 / App version and installer source
+      label: Jotiva 版本与安装方式 / App version & installer
+    validations:
+      required: false
   - type: textarea
     id: workflow
     attributes:
-      label: 你想完成的操作或遇到的问题 / Workflow or problem
-      description: 请附操作步骤和实际结果。涉及窗口挂载时，请写明宿主应用。
+      label: 问题描述或场景建议 / Problem or workflow
+      description: 请附上操作步骤与实际表现；涉及窗口挂载时请写明目标应用名称。
     validations:
       required: true

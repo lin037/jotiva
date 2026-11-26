@@ -1,7 +1,13 @@
-# 社区行为准则
+# 社区行为准则（Code of Conduct）
 
-Jotiva 欢迎不同经验、背景和语言的使用者与贡献者。讨论时请针对问题、代码和证据，尊重他人的时间与隐私。意见不同可以直接说明理由。
+Jotiva 欢迎来自不同背景、经验与语言的开发者和用户共同参与讨论与共建。
 
-骚扰、威胁、人身攻击、歧视性言论和未经同意公开他人个人信息，都会妨碍社区参与。也请避免广告和重复刷屏。
+- **友善且就事论事**：讨论请聚焦于具体问题、代码实现与复现事实；出现意见分歧时，直接说明理由与依据。
+- **尊重隐私与时间**：分享日志、截图或示例时避免泄露他人信息；避免无意义的广告、刷屏或重复催促。
+- **零容忍行为**：任何形式的骚扰、人身攻击、威胁、歧视性言论或未经授权公开他人隐私的行为都将被制止。
 
-遇到不当行为，可使用 GitHub 自带的举报入口。维护者会根据情况提醒、关闭讨论或限制参与。举报时请提供相关链接，并保护当事人的隐私。 [GitHub 举报说明](https://docs.github.com/en/site-policy/acceptable-use-policies/github-abuse-reporting)
+如遇到不当行为，可通过 GitHub 举报机制或联系仓库维护者处理，并在举报时尽量保护当事人的隐私。[GitHub Abuse Reporting](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
+
+---
+
+Jotiva welcomes contributors and users from all backgrounds. Please keep discussions respectful, constructive, and focused on technical evidence and user workflows. Harassment, personal attacks, discrimination, spam, or sharing private information without consent will not be tolerated. Report unacceptable behavior through [GitHub Abuse Reporting](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).

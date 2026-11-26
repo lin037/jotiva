@@ -1,10 +1,10 @@
 name: 功能建议 / Feature request
-description: 描述你希望在 Jotiva 中完成的操作
+description: 分享你的使用场景与希望改进的工作流
 body:
   - type: textarea
     id: workflow
     attributes:
-      label: 你想完成什么？/ What would you like to do?
-      description: 可以说明当前做法，以及你希望省掉哪个步骤。
+      label: 使用场景与期望能力 / Use case & desired workflow
+      description: 可以描述你当前的做法，以及希望简化或解决什么问题。
     validations:
       required: true

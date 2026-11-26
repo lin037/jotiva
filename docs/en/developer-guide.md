@@ -1,50 +1,95 @@
-# Jotiva developer guide
+# Jotiva Developer Guide
 
-[Project home](../../README.en.md) · [User guide](user-guide.md) · [中文](../developer-guide.md)
+[Project Home](../../README.en.md) · [User Guide](user-guide.md) · [Architecture](architecture.md) · [Verification & Releasing](verification.md) · [简体中文](../developer-guide.md)
 
-Jotiva is a Tauri 2 app. The TypeScript side runs the interface and editing sessions. Rust handles disk writes, revisions, and window behavior. The Markdown editor comes from a pinned release of Jot Markdown Engine. [Jot Markdown Engine](https://github.com/lin037/jot-md-engine)
+Jotiva is a Tauri 2 desktop application. The TypeScript frontend manages window views, editing sessions, and shortcut dispatch, while the Rust backend handles disk persistence, library indexing, host-window tracking, the integrated terminal, and OS integration. Core Markdown parsing and editing are powered by a pinned release of [Jot Markdown Engine](https://github.com/lin037/jot-md-engine).
 
-## Get a local build running
+---
 
-Install Rust through rustup, Node.js 24, and pnpm 11.11.0. Rustup picks up Rust 1.100.0 from the repository's toolchain file. On macOS, install the Xcode Command Line Tools. On Windows, install the MSVC desktop C++ tools and WebView2. On Linux, install the development packages for GTK, WebKitGTK 4.1, AppIndicator, OpenSSL, and libxdo. [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+## Local Setup
 
-Run these from the checkout.
+### Prerequisites
+- **Rust** via `rustup` (pinned to `1.100.0` by the repository toolchain file).
+- **Node.js 24** and **pnpm 11.11.0**.
+- **Platform dependencies** ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)):
+  - **macOS**: Xcode Command Line Tools
+  - **Windows**: MSVC desktop C++ build tools and Microsoft Edge WebView2 Runtime
+  - **Linux**: Development packages for WebKitGTK 4.1, GTK, AppIndicator, OpenSSL, and `libxdo`
+
+> If you develop across both Windows and WSL, install frontend dependencies separately in each environment (keep your WSL checkout inside the Linux filesystem).
+
+### Start in development mode
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-Vite serves the interface at `127.0.0.1:1420`. Use `pnpm tauri dev` when you need file dialogs, native menus, or window attachment. If you work in both Windows and WSL, install the frontend dependencies separately in each environment.
+`pnpm dev` starts the Vite server at `127.0.0.1:1420`. The frontend needs Tauri's window APIs, so use `pnpm tauri dev` to run the app locally. Keep `pnpm-lock.yaml` and `src-tauri/Cargo.lock` in sync when updating dependencies.
 
-## Where to start reading
+---
 
-| If you're changing… | Start here |
+## Repository Map
+
+| Location | Responsibility |
 | --- | --- |
-| The workspace, settings, or editor | `src/views/` for each window's UI. `src/editor/` holds the session, worker, and save queue. |
-| Calls between the frontend and Rust | `src/desktop/` for frontend calls and types. `src-tauri/src/main.rs` for Tauri commands and setup. |
-| When a quick note appears or hides | `src-tauri/src/desktop.rs` for the decisions. `windows.rs` for presentation and focus. |
-| What happens to a file on save | Follow the save queue in `src/editor/note-editor.ts` through the Rust `save_note` command to `Notes::save`. File operations live in `src-tauri/src/library/` and `storage.rs`. |
-| A feature that depends on the operating system | `src-tauri/src/platform/` for host windows, file managers, storage operations, and credentials. |
-| Tests | `qa/` for WebKit checks, native desktop scenarios, and package checks. |
+| `src/main.ts` | Mounts the workspace, quick-note, document, or settings view based on window label. |
+| `src/views/` | Entry views for `workspace` (tree, tabs, terminal), `quick`, `document`, and `settings`. |
+| `src/editor/` | Editing session, worker bridge, save queue, revision merge, images, and outline (`note-editor.ts` is shared across all three editor windows). |
+| `src/desktop/` | Frontend IPC wrappers, shortcut definitions, and focus/window helpers. |
+| `src/appearance/`, `src/ui/`, `src/styles/` | Theme resolution, shared controls/lists, and CSS design tokens. |
+| `src-tauri/src/main.rs`, `events.rs` | Tauri command registration, shared app state, and frontend/backend events. |
+| `src-tauri/src/desktop.rs`, `desktop/note_windows.rs`, `windows.rs` | Window state transitions, host binding, quick-note panels, and standalone document windows. |
+| `src-tauri/src/library/`, `storage.rs` | Notes library, workspace/archive indexing, file actions, and atomic writes. |
+| `src-tauri/src/images/`, `terminal.rs`, `updates.rs` | Image storage/compression/upload, PTY terminal sessions, and app updates. |
+| `src-tauri/src/host.rs`, `platform/{macos,windows,linux}/`, `menus.rs` | Platform traits, OS adapters, and native application menus. |
+| `src-tauri/src/settings/` | Appearance, shortcuts, Jev filing settings, and credential lookup. |
+| `qa/`, `scripts/` | Unit tests, Playwright WebKit suite, native smoke tests, and packaging scripts. |
 
-The host-window and file-manager interfaces live in `platform/contract.rs`. Look for a shared Tauri API first. When a feature needs a native call, put it in the matching platform module. Keep the behavior that all three platforms share in the existing window or document code. [Architecture notes (中文)](../architecture.md)
+See [Architecture](architecture.md) for data flow and platform boundaries.
 
-## Test your changes
+---
 
-Run `pnpm build`, `pnpm test:unit`, and `pnpm test:rust`. If you touch file handling, check what happens after a normal save, an interrupted save, and a conflict. If you change Jev filing, run `pnpm test:filing` against the local mock service. The test guide covers WebKit and the native checks for macOS, Windows, X11, and Wayland. [Test guide (中文)](../verification.md)
+## Building & Testing
 
-Use strict TypeScript and run rustfmt on Rust changes. Include both lockfiles when they change. In a bug report, give the Jotiva version, operating system, architecture, and the smallest sample that reproduces the issue. For window attachment, include the other app and your display setup. On Linux, say whether you're using X11 or Wayland. [Contributing](../../CONTRIBUTING.md)
+Run the baseline checks from the repository root:
 
-## Branches and releases
+```sh
+pnpm build          # TypeScript check and production Vite bundle
+pnpm test:unit      # Frontend unit tests
+pnpm test:rust      # Rust test suite
+```
 
-`main` is the only long-lived branch. Start each change from the latest `main`, open a pull request against `main`, and wait for CI before merging. Delete the remote working branch after merge. Run `git fetch --prune origin` to remove stale remote-tracking refs locally.
+Before submitting Rust changes, verify formatting and lints:
+
+```sh
+cargo fmt --check --manifest-path src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```
+
+- For Playwright WebKit suites, macOS/Windows/Linux desktop smoke tests, and release signing setup, see [Verification & Releasing](verification.md).
+- After upgrading `@jot-md/editor` or changing lockfiles, run `python3 scripts/third-party-notices.py` (Python 3.10+) and commit the updated [THIRD-PARTY-NOTICES.txt](../../src-tauri/notices/THIRD-PARTY-NOTICES.txt).
+
+---
+
+## Conventions
+
+- **TypeScript**: Keep strict type checking clean. Keep view-specific DOM/CSS inside `src/views/`; move logic to `ui/` or `editor/` only when shared across windows.
+- **IPC boundaries**: Update Rust commands and TypeScript wrappers together (payload shape, event scope, and error messages), and keep window IDs separate from document IDs.
+- **Rust & persistence**: Format with `rustfmt`, reuse `library/` and `storage.rs` for disk mutations, and verify failure/rollback and restart recovery.
+- **Platform code**: Keep OS-specific calls behind `src-tauri/src/platform/contract.rs`, prefer built-in Tauri APIs when available, and return actionable error messages to users.
+
+---
+
+## Branches & Contributing
+
+`main` is the only long-lived branch. Branch from `main`, open a pull request, wait for CI to pass, and delete the working branch after merge.
 
 | Branch | Purpose |
 | --- | --- |
-| `feat/<topic>`, `fix/<topic>` | Features, fixes, and routine maintenance. Name the change, for example `fix/windows-window-focus`. |
-| `verify/<topic>` | Run cross-platform CI on push. Delete the branch after verification once any changes worth keeping have landed on `main`. |
-| `release/X.Y.Z` | Prepare version updates and release notes together when needed. Delete the branch after merging the release PR. |
-| `build/vX.Y.Z` | Build installers for verification. A push starts `Release packages`. Delete the branch once the packages have been checked and any changes worth keeping have landed on `main`. |
+| `feat/<topic>`, `fix/<topic>`, `docs/<topic>` | Features, bug fixes, docs, and routine maintenance. |
+| `verify/<topic>` | Runs cross-platform CI on push; delete once verified changes land on `main`. |
+| `release/X.Y.Z` | Prepares version bumps and release notes; delete after merging. |
+| `build/vX.Y.Z` | Triggers `Release packages` pre-release installers; delete after verification. |
 
-For a formal release, tag the release commit on `main` as `vX.Y.Z`. Manually run `Release packages` on that tag and select `publish`. The workflow checks that the source versions match the tag, runs CI, and publishes the packages to GitHub Releases after the checks pass. Use version tags to find past releases. [CI](https://github.com/lin037/jotiva/actions/workflows/ci.yml) · [Release packages](https://github.com/lin037/jotiva/actions/workflows/release.yml)
+See [Contributing](contributing.md) for PR and issue guidelines. Jotiva is licensed under the [MIT License](../../LICENSE).

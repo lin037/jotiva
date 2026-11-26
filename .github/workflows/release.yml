@@ -287,15 +287,14 @@ jobs:
           VERSION: ${{ needs.version.outputs.number }}
         run: |
           git archive --format=tar.gz --prefix="Jotiva-${VERSION}/" --output="artifacts/Jotiva-${VERSION}-source.tar.gz" HEAD
+          git archive --format=zip --output=artifacts/HelloJotiva.zip HEAD \
+            docs/HelloJotiva.md docs/en/HelloJotiva.md \
+            docs/assets/hello-jotiva docs/en/assets/hello-jotiva
           if [[ "${{ needs.version.outputs.signed }}" == true ]]; then
             python3 scripts/update-release.py manifest artifacts "$VERSION"
           fi
           cd artifacts
           files=(./*.dmg ./*.pkg ./*.zip ./*-setup.exe ./*.deb ./*.AppImage ./*.tar.gz)
-          if [[ -f ../docs/HelloJotiva.md ]]; then
-            cp ../docs/HelloJotiva.md .
-            files+=(./HelloJotiva.md)
-          fi
           if [[ -f latest.json ]]; then files+=(./*.sig ./latest.json); fi
           sha256sum "${files[@]}" > SHA256SUMS
           sha256sum -c SHA256SUMS
