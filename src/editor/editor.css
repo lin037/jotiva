@@ -48,7 +48,11 @@
   .jot-editor-toolbar {
     --jot-toolbar-padding: var(--jot-space-1) var(--jot-space-2);
   }
-  .jot-editor .jot-editor-toolbar__button { padding-inline: var(--jot-space-1); }
+  .jot-editor .jot-editor-toolbar__button {
+    min-inline-size: max(24px, 1.8rem);
+    padding-inline: var(--jot-space-1);
+  }
+  .jot-editor .jot-editor-toolbar__button .jot-editor-toolbar__chevron { width: .6rem; }
   .jot-editor .jot-editor-toolbar__group { gap: 0; }
   .jot-editor .jot-editor-toolbar__group:not([hidden]) ~ .jot-editor-toolbar__group { padding-inline-start: var(--jot-space-1); }
 }
@@ -79,13 +83,6 @@
 }
 .jot-editor :is(.cm-scroller, .jot-markdown-editor__surface) { overscroll-behavior-y: none; }
 .jot-editor.jot-markdown-editor .cm-content:not(.jot-live-preview-content) { width: 100%; min-width: 0; }
-.jot-editor .cm-content[data-before-heading="first"] > .cm-line:first-child:not([data-jot-heading-level]),
-.jot-editor .cm-content > [data-before-heading="next"] + .cm-line:not([data-jot-heading-level]) {
-  font-size: var(--jot-heading-1-font-size);
-  line-height: var(--jot-heading-1-line-height);
-  font-weight: 700;
-  padding-inline: 0;
-}
 /* Enter creates a plain CodeMirror row before the worker classifies it as a blank or paragraph. */
 .jot-editor .jot-live-preview-content > .cm-line:where(:not(.jot-live-preview-line)) {
   padding-inline: var(--jot-paragraph-padding-x);
