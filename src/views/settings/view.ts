@@ -1,4 +1,6 @@
-import { t, message, type Label, bindLabel, localized } from "../../i18n";
+import { field, select } from "./controls";
+import { mountImageSettings } from "./images";
+import { t, message, bindLabel, localized } from "../../i18n";
 import { secondaryTitlebar } from "../../ui/titlebar";
 import { desktopPlatform } from "../../desktop/platform";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -13,7 +15,7 @@ import { icon } from "../../ui/chrome";
 import { button, element, report, root } from "../../ui/dom";
 import "./settings.css";
 
-type Section = "appearance" | "editor" | "filing" | "shortcuts" | "windows" | "updates";
+type Section = "appearance" | "editor" | "images" | "filing" | "shortcuts" | "windows" | "updates";
 
 interface SettingsView {
   preferences: GlobalBindings;
@@ -23,35 +25,14 @@ interface SettingsView {
 }
 
 const sections = [
-  ["appearance", localized("外观"), "appearance"],
-  ["editor", localized("编辑器"), "format"],
-  ["filing", localized("归档"), "folder"],
+  ["appearance", localized("界面外观"), "appearance"],
+  ["editor", localized("编辑选项"), "format"],
+  ["images", localized("图片管理"), "image"],
+  ["filing", localized("文档归档"), "folder"],
   ["shortcuts", localized("快捷键"), "keys"],
   ["windows", localized("窗口关联"), "window"],
   ["updates", localized("软件更新"), "settings"],
 ] as const;
-
-function field(name: Label, controls: HTMLElement | HTMLElement[], id?: string) {
-  const row = element("div", "settings-field");
-  const label = id ? element("label", undefined, name) : element("span", undefined, name);
-  const items = element("div", "settings-field-controls");
-  if (id) label.setAttribute("for", id);
-  items.append(...(Array.isArray(controls) ? controls : [controls]));
-  row.append(label, items);
-  return row;
-}
-
-function select<T extends string>(id: string, options: readonly (readonly [T, Label])[], changed: (value: T) => unknown) {
-  const input = element("select");
-  input.id = id;
-  for (const [value, text] of options) {
-    const option = element("option", undefined, text);
-    option.value = value;
-    input.append(option);
-  }
-  input.addEventListener("change", () => { void Promise.resolve().then(() => changed(input.value as T)).catch(report); });
-  return input;
-}
 
 type EditingPatch = Partial<EditingPreferences> | ((value: EditingPreferences) => Partial<EditingPreferences>);
 
@@ -293,7 +274,7 @@ export async function mount() {
     nav.set(id, tab);
     const page = element("section", "settings-page");
     page.hidden = true;
-    page.append(element("h1", undefined, id === "editor" ? localized("编辑器画面") : title));
+    page.append(element("h1", undefined, title));
     content.append(page);
     panels.set(id, page);
   }
@@ -563,6 +544,7 @@ export async function mount() {
   }
   showPermission(current.trusted);
 
+  const loadImages = mountImageSettings(panels.get("images")!);
   function show(id: Section) {
     if (!panels.has(id)) return;
     if (recording) void record().catch(report);
@@ -573,6 +555,7 @@ export async function mount() {
       else tab.removeAttribute("aria-current");
     }
     content.scrollTop = 0;
+    if (id === "images") void loadImages().catch(report);
     if (id === "filing") void loadFiling();
     stopCheckingPermission?.();
     stopCheckingPermission = undefined;
@@ -581,6 +564,7 @@ export async function mount() {
     }
   }
   await getCurrentWindow().listen<Section>(events.settingsSection, ({ payload }) => show(payload));
+  await getCurrentWindow().listen(events.imageSettingsChanged, () => { void loadImages().catch(report); });
   const initial = (window as Window & { __jotSettingsSection?: Section }).__jotSettingsSection;
-  show(initial && panels.has(initial) ? initial : "appearance");
+  show(initial ?? "appearance");
 }

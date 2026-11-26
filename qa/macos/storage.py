@@ -1,10 +1,12 @@
 """Check actual WebKit edits, filesystem conflicts and recovery across two Jotiva processes."""
 
 from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
 import subprocess
 import tempfile
+from threading import Thread
 import time
 
 from run import TARGET, build_test_app
@@ -35,13 +37,44 @@ def stage(data, app, name):
     raise RuntimeError(f"Waiting for {name}, application exit code {app.poll()}")
 
 
-def exercise(work):
+class ImageUpload(BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.server.uploads.append((self.path, self.rfile.read(int(self.headers["Content-Length"]))))
+        result = json.dumps({"url": f"http://127.0.0.1:{self.server.server_port}/fixture.png"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(result)))
+        self.end_headers()
+        self.wfile.write(result)
+
+    def do_GET(self):
+        if self.path != "/fixture.png":
+            self.send_error(404)
+            return
+        body = self.server.uploads[-1][1]
+        start = body.index(b"\x89PNG")
+        end = body.index(b"IEND", start) + 8
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.end_headers()
+        self.wfile.write(body[start:end])
+
+    def log_message(self, *_):
+        pass
+
+
+def exercise(work, server):
     data = work / "data"
     data.mkdir()
     root = work / "workspace"
     root.mkdir()
     archive = root / "archive"
     archive.mkdir()
+    blog = root / "blog"
+    (blog / "posts").mkdir(parents=True)
+    (blog / "posts/entry.md").write_text("Blog image rule fixture")
+    (archive / "review.md").write_text("Archive image rule fixture")
+    (root / "images.md").write_text("\n\nPhoto fixture")
     disk = root / "meeting.md"
     disk.write_text("original-file")
     removable = root / "removable.md"
@@ -58,15 +91,34 @@ def exercise(work):
     legacy_snapshot = legacy_record.read_bytes()
     (data / "workspace.json").write_text(json.dumps([str(root)]))
     (data / "settings.json").write_text(json.dumps({"quick":"Control+Shift+KeyU", "search":None, "dock":None}))
+    shared = work / "shared-images"
+    shared.mkdir()
+    (data / "images.json").write_text(json.dumps({
+        "config": {"defaultMode": "fixed", "directory": str(shared.resolve()), "rules": [
+            {"path": str(root.resolve()), "mode": "relative", "subfolder": "notes/media"},
+            {"path": str(archive.resolve()), "mode": "http"},
+        ], "endpoint": f"http://127.0.0.1:{server.server_port}/upload"}, "directories": [str(shared.resolve())],
+    }))
     identifier = f"io.github.lin037.jot.qa.storage{time.time_ns():x}"
     binary = build_test_app(work, identifier, 1, query="storage=1", data=data)
     with launch(binary) as app:
         opened = stage(data, app, "storage-open")
         assert Path(opened["path"]).samefile(disk) and "edited-in-Jot" in disk.read_text()
+        assert (shared / "inbox.png").is_file()
+        assert (root / "notes/media/粘贴 1.png").read_bytes() == (root / "access/粘贴 1.png").read_bytes()
+        image_settings = json.loads((data / "images.json").read_text())
+        assert str(root.resolve() / "access") in image_settings["directories"]
+        assert any(rule["path"] == str(blog.resolve()) and rule["directory"] == "${ruleDir}/../access"
+                   for rule in image_settings["config"]["rules"])
         disk.write_text("preserve-this-disk-version")
         (root / "changed.md").touch()
         original = Path(stage(data, app, "storage-archive")["path"])
         assert original.parent.samefile(data / "notes/其他")
+        assert f"http://127.0.0.1:{server.server_port}/fixture.png" in (archive / "review.md").read_text()
+        assert len(server.uploads) == 1
+        route, body = server.uploads[0]
+        assert route == "/upload" and b'name="file"' in body and b'\x89PNG\r\n\x1a\n' in body
+        (archive / "review.md").unlink()
         archive.rmdir()
         stage(data, app, "storage-saved")
     removable.unlink()
@@ -86,10 +138,15 @@ def exercise(work):
     assert Path(recovered["offline"]["path"]).parent.samefile(original.parent)
     assert recovered["offline"]["markdown"] == "offline snapshot"
     assert legacy.read_text() == legacy_markdown and legacy_record.read_bytes() == legacy_snapshot
-    print("Passed legacy-note loading, native edit, conflict recovery, archive failure and restart.")
+    print("Passed settings centering, folder-specific image routing, native screenshot paste, file preview after restart, legacy storage and conflict recovery.")
 
 
 if __name__ == "__main__":
     TARGET.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=TARGET.parent, prefix="jot-native-storage-") as temporary:
-        exercise(Path(temporary).resolve())
+    with tempfile.TemporaryDirectory(dir=TARGET.parent, prefix="jot-native-storage-") as temporary, HTTPServer(("127.0.0.1", 0), ImageUpload) as server:
+        server.uploads = []
+        Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            exercise(Path(temporary).resolve(), server)
+        finally:
+            server.shutdown()

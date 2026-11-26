@@ -1383,6 +1383,7 @@ Rust tempfile 3.27.0 — https://static.crates.io/crates/tempfile/tempfile-3.27.
 Rust tendril 0.5.1 — https://static.crates.io/crates/tendril/tendril-0.5.1.crate
 Rust toml_datetime 0.6.3 — https://static.crates.io/crates/toml_datetime/toml_datetime-0.6.3.crate
 Rust tray-icon 0.25.1 — https://static.crates.io/crates/tray-icon/tray-icon-0.25.1.crate
+Rust unicase 2.9.0 — https://static.crates.io/crates/unicase/unicase-2.9.0.crate
 Rust unicode-segmentation 1.13.3 — https://static.crates.io/crates/unicode-segmentation/unicode-segmentation-1.13.3.crate
 Rust url 2.5.8 — https://static.crates.io/crates/url/url-2.5.8.crate
 Rust uuid 1.29.3 — https://static.crates.io/crates/uuid/uuid-1.29.3.crate
@@ -7661,6 +7662,7 @@ DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------
 
 Rust hyper 1.12.0 — https://static.crates.io/crates/hyper/hyper-1.12.0.crate
+Rust unicase 2.9.0 — https://static.crates.io/crates/unicase/unicase-2.9.0.crate
 
 Copyright (c) 2014-2026 Sean McArthur
 
@@ -9200,6 +9202,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+------------------------------------------------------------------------
+
+Rust mime_guess 2.0.5 — https://static.crates.io/crates/mime_guess/mime_guess-2.0.5.crate
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Austin Bonander
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ------------------------------------------------------------------------
 
@@ -15281,7 +15309,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------
 
-npm @jot-md/editor 0.3.1
+npm @jot-md/editor 0.4.0
 npm @jot-md/editor-protocol 0.3.1
 
 MIT License

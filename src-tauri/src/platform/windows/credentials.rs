@@ -6,6 +6,13 @@ use windows_sys::Win32::{
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
+fn credential_name(service: &str) -> &'static str {
+    if service.ends_with(".images") {
+        "Images"
+    } else {
+        "Jev"
+    }
+}
 // Credential Manager compares target names case-insensitively. Encode the full URL bytes
 // so endpoints differing only in the case of a path cannot share a bearer token.
 fn target(service: &str, url: &str) -> Vec<u16> {
@@ -14,7 +21,7 @@ fn target(service: &str, url: &str) -> Vec<u16> {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect::<String>();
-    wide(&format!("{service}/Jev/{bytes}"))
+    wide(&format!("{service}/{}/{bytes}", credential_name(service)))
 }
 pub fn read(service: &str, url: &str) -> Result<Option<String>, String> {
     let mut raw = ptr::null_mut();
@@ -59,7 +66,8 @@ pub fn remove(service: &str, url: &str) -> Result<(), String> {
     Ok(())
 }
 pub fn prompt(service: &str, url: &str) -> Result<(), String> {
-    let caption = wide("Jotiva · Jev");
+    let name = credential_name(service);
+    let caption = wide(&format!("Jotiva · {name}"));
     let message = wide(&format!("输入用于 {url} 的 API 密钥"));
     let info = CREDUI_INFOW {
         cbSize: mem::size_of::<CREDUI_INFOW>() as u32,
@@ -68,7 +76,8 @@ pub fn prompt(service: &str, url: &str) -> Result<(), String> {
         ..Default::default()
     };
     let mut user = [0u16; 514];
-    user[..3].copy_from_slice(&[74, 101, 118]);
+    let username = wide(name);
+    user[..username.len()].copy_from_slice(&username);
     let mut secret = [0u16; 514];
     let mut save = 0;
     let status = unsafe {

@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory(prefix="jot-source-tree-") as directory:
 import {{ windowPicker }} from {json.dumps(str(PROJECT / "src/views/workspace/source-dialog.ts"))};
 import {{ attachOnSwitch, documentDrag }} from {json.dumps(str(PROJECT / "src/views/workspace/document-drag.ts"))};
 import {{ librarySidebar }} from {json.dumps(str(PROJECT / "src/views/workspace/library-sidebar.ts"))};
+import {{ folderEditor }} from {json.dumps(str(PROJECT / "src/views/workspace/folder-dialog.ts"))};
 import {json.dumps(str(PROJECT / "src/styles/index.css"))};
 import {json.dumps(str(PROJECT / "src/views/workspace/workspace.css"))};
 let groups = Array.from({{length:{100 if options.capacity else 2}}}, (_, app) => ({{
@@ -90,6 +91,11 @@ window.permissionRequests = 0;
 window.choiceReads = 0;
 window.populate = (path, count = 85) => tree.get(path).push(...Array.from({{length:count}}, (_, i) => '长文件名-'+i+'.md'));
 let draft = '归档草稿';
+let archiveFolder = {{id:9, name:'会议归档', path:'/archive', description:'', classify:false}};
+let imageRevision = 0;
+const imageConfig = {{defaultMode:'relative', subfolder:'_assets', directory:'/photos', groupByDocument:false,
+  compress:false, endpoint:'', field:'file', responsePointer:'/url', bearer:false,
+  rules:[{{path:'/work', mode:'relative', directory:'', subfolder:'work-images'}}]}};
 const createdArchive = new Map();
 let openedFile;
 const actions = [];
@@ -123,7 +129,22 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
     return [{{choice:5,app:'会议',title:'每周例会'}},{{choice:6,app:'会议',title:'设计评审'}},{{choice:7,app:'备忘录',title:''}}];
   }}
   if(cmd==='clear_source_choices') return;
-  if(cmd==='list_folders') return [{{id:9, name:'会议归档', path:'/archive', description:''}}];
+  if(cmd==='list_folders') return [archiveFolder];
+  if(cmd==='save_folder') return archiveFolder = args.input;
+  if(cmd==='read_image_settings') {{
+    const rule = imageConfig.rules.find(r => r.path === args.folder);
+    const inherited = imageConfig.rules.find(r => args.folder.startsWith(r.path + '/'));
+    return structuredClone({{revision:imageRevision, config:imageConfig,
+      folder:{{path:args.folder, effectiveRule:rule ?? inherited ?? null, inheritedRule:inherited ?? null}}}});
+  }}
+  if(cmd==='save_image_folder') {{
+    if(args.revision !== imageRevision) throw Error('Stale image settings');
+    imageRevision++;
+    imageConfig.rules = imageConfig.rules.filter(rule => rule.path !== args.folder);
+    if(args.rule) imageConfig.rules.push(args.rule);
+    window.savedImageFolder = args;
+    return;
+  }}
   if(cmd==='workspace_roots') return window.workspaceRoots;
   if(cmd==='workspace_children') return tree.get(args.path).map(name=>({{name, path:args.path+'/'+name, directory:tree.has(args.path+'/'+name)}}));
   if(cmd==='source_at_drop') return {{outside:false, choice:null}};
@@ -208,7 +229,7 @@ window.__TAURI_INTERNALS__ = {{ metadata:{{currentWindow:{{label:'main'}}}}, tra
   }}
   throw Error(cmd);
 }} }};
-librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.movedArchive=[id,folder], async()=>{{}}, async location=>{{window.terminalOrigin=location}}).then(sidebar => {{
+librarySidebar(id=>window.opened=id, folderEditor(folder => window.testSidebar.loadFolders(folder.id)), ()=>{{}}, (id,folder)=>window.movedArchive=[id,folder], async()=>{{}}, async location=>{{window.terminalOrigin=location}}).then(sidebar => {{
   documentDrag(sidebar.sidebar, async()=>{{}}, ()=>{{}}, async()=>{{}});
   document.querySelector('.workspace').prepend(sidebar.sidebar);
   window.testSidebar = sidebar; window.noteReads = () => reads; window.sourceReads = () => sourceReads;
@@ -249,6 +270,49 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
             assert page.evaluate("window.terminalOrigin") == origin
 
         terminal_here(row, {"kind": "workspace", "path": "/work/会议.md"})
+        def image_settings(selector, path, inherited=False, edit=False):
+            page.evaluate("window.pick = '图片管理…'; window.savedImageFolder = null")
+            page.locator(selector).click(button="right")
+            dialog = page.get_by_role("dialog", name="此文件夹的图片保存方式")
+            expect(dialog.get_by_text(path.rsplit("/", 1)[-1], exact=True)).to_be_visible()
+            expect(dialog).not_to_contain_text(path)
+            expect(dialog.locator(".image-dialog-choice")).to_have_count(4)
+            marker = dialog.locator(".image-dialog-choice[data-current]")
+            expect(marker).to_contain_text("目录规则" if inherited or path == "/work" else "跟随文档")
+            if not edit:
+                dialog.get_by_role("button", name="取消").click()
+                assert page.evaluate("savedImageFolder") is None
+                return
+            expect(dialog.locator("p.image-current")).to_contain_text("继承自 work")
+            dialog.locator(".image-dialog-choice").filter(has_text="目录规则").click()
+            dialog.get_by_text("选择已有规则", exact=True).click()
+            dialog.locator(".image-folder-choice").filter(has_text="work").click()
+            expect(dialog.locator("#folder-image-rule-subfolder")).to_have_value("work-images")
+            dialog.locator("#folder-image-rule-subfolder").fill("team-images")
+            dialog.get_by_role("button", name="应用", exact=True).click()
+            expect(dialog).to_have_count(0)
+            assert page.evaluate("savedImageFolder.rule") == {
+                "path": path, "mode": "relative", "directory": "", "subfolder": "team-images"
+            }
+            page.locator(selector).click(button="right")
+            expect(dialog.locator("p.image-current")).to_contain_text("此文件夹的规则")
+            dialog.locator(".image-dialog-choice").filter(has_text="目录规则").click()
+            dialog.get_by_role("button", name="恢复继承").click()
+            dialog.get_by_role("button", name="应用", exact=True).click()
+            expect(dialog).to_have_count(0)
+            assert page.evaluate("savedImageFolder.rule") is None
+            page.locator(selector).click(button="right")
+            dialog.locator(".image-dialog-choice").filter(has_text="目录规则").click()
+            dialog.get_by_role("button", name="立即自定义").click()
+            dialog.get_by_label("保存方式", exact=True).select_option("fixed")
+            dialog.get_by_label("图片目录来源").select_option("relative")
+            dialog.get_by_label("相对位置", exact=True).fill("../assets")
+            expect(dialog.locator(".image-preview")).to_contain_text("assets/image.png")
+            dialog.get_by_role("button", name="应用", exact=True).click()
+            expect(dialog).to_have_count(0)
+            assert page.evaluate("savedImageFolder.rule.directory") == "${ruleDir}/../assets"
+        image_settings('[data-directory="/work"]', "/work")
+        image_settings('[data-directory="/work/小组"]', "/work/小组", inherited=True, edit=True)
         terminal_here(page.locator('[data-directory="/work/小组"]'), {"kind": "workspace", "path": "/work/小组"})
         for action, value in [("复制绝对路径", "/work/会议.md"), ("复制相对路径", "会议.md")]:
             page.evaluate("action => window.pick = action", action)
@@ -376,6 +440,21 @@ librarySidebar(id=>window.opened=id, ()=>{{}}, ()=>{{}}, (id,folder)=>window.mov
         print("Modified clicks selected a range without opening editors. Bulk copy, cancel trash, drag move and retrying an inline rename all passed.")
         print("Empty-state row filled the panel at both widths. Directory creation targeted in root and nested directories; the active file remained visible beyond the first 80 entries.")
         page.get_by_role("button", name="归档", exact=True).click()
+        image_settings('[data-archive-folder=""]', "/notes/其他")
+        image_settings('[data-archive-folder="9"]', "/archive")
+        page.evaluate("window.pick='归档目录设置…'")
+        folder_row = page.locator('[data-archive-folder="9"]')
+        folder_row.click(button="right")
+        form = page.get_by_role("dialog")
+        form.get_by_label("名称", exact=True).fill("每周会议")
+        form.get_by_label("用途说明").fill("周会纪要与行动项")
+        form.get_by_label("参与 Jev 分类").check()
+        form.get_by_role("button", name="保存文件夹").click()
+        expect(folder_row).to_contain_text("每周会议")
+        folder_row.click(button="right")
+        expect(form.get_by_label("用途说明")).to_have_value("周会纪要与行动项")
+        expect(form.get_by_label("参与 Jev 分类")).to_be_checked()
+        form.get_by_role("button", name="取消").click()
         create_at('[data-archive-folder=""]')
         page.wait_for_function("window.opened === 81")
         create_at('[data-archive-folder="9"]', '会议提纲.md')

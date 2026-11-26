@@ -91,6 +91,14 @@ fn model_name(value: &str) -> Result<String, String> {
 }
 
 pub(crate) fn endpoint(value: &str) -> Result<tauri::Url, String> {
+    parse_http_endpoint(value, false)
+}
+
+pub(crate) fn http_endpoint(value: &str) -> Result<tauri::Url, String> {
+    parse_http_endpoint(value, true)
+}
+
+fn parse_http_endpoint(value: &str, allow_remote_http: bool) -> Result<tauri::Url, String> {
     let value = value.trim();
     let (_, rest) = value.split_once("://").ok_or("请填写完整的服务地址")?;
     if value.contains('\\') || value.chars().any(char::is_whitespace) {
@@ -107,7 +115,10 @@ pub(crate) fn endpoint(value: &str) -> Result<tauri::Url, String> {
     {
         return Err("地址中不能含有账号、密码、查询参数或片段".into());
     }
-    if url.scheme() != "https" {
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("请填写 HTTP 或 HTTPS 服务地址".into());
+    }
+    if url.scheme() == "http" && !allow_remote_http {
         let numeric_loopback = matches!(url.host_str(), Some("127.0.0.1" | "[::1]"))
             && url.host_str().is_some_and(|host| {
                 authority == host
@@ -118,7 +129,7 @@ pub(crate) fn endpoint(value: &str) -> Result<tauri::Url, String> {
                             !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
                         })
             });
-        if url.scheme() != "http" || !numeric_loopback {
+        if !numeric_loopback {
             return Err("远程服务须使用 HTTPS。本机 HTTP 服务请填写 127.0.0.1 或 [::1]。".into());
         }
     }

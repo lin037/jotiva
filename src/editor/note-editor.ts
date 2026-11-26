@@ -1,4 +1,4 @@
-import { t, bindLabel, localized } from "../i18n";
+import { t, bindLabel, language, localized } from "../i18n";
 import { primaryPressed } from "../desktop/platform";
 import type { MarkdownEditor, MarkdownEditorOptions } from "@jot-md/editor";
 import { normalizeInsertedText } from "@jot-md/editor/adapter";
@@ -10,6 +10,7 @@ import { commands, matchesShortcut } from "../desktop/shortcuts";
 import { button, report } from "../ui/dom";
 import { fileDialog } from "../ui/file-dialog";
 import { applyIncoming } from "./document-sync";
+import { noteImages } from "./images";
 import { diagramTheme } from "./diagram-theme";
 import { trackCharacterCount } from "./character-count";
 import { trackListMarkers } from "./list-layout";
@@ -149,6 +150,8 @@ export class NoteEditor {
         root,
         mode,
         history,
+        locale: language,
+        ...noteImages(id),
         openShortcutSettings: () => { void invoke("show_settings", { section: "shortcuts" }).catch(report); },
         plugins: [
           createHeadingFoldPlugin({ enabled: preferences.foldHeadings }),
@@ -199,25 +202,7 @@ export class NoteEditor {
       };
       trackListMarkers(ready, root, refreshLayout);
       await editor.open();
-      // WebKit chooses the native insertion caret before the worker projects the first '#'.
-      // Use the heading metrics for that input transaction, on its empty line only.
-      editor.input.view.contentDOM.addEventListener("beforeinput", event => {
-        if (event.inputType !== "insertText" || event.isComposing || event.data !== "#" || ready.mode !== "live-preview") return;
-        const selection = getSelection();
-        const anchor = selection?.anchorNode;
-        const row = (anchor instanceof Element ? anchor : anchor?.parentElement)?.closest<HTMLElement>(".cm-line");
-        if (!selection?.isCollapsed || !row || !root.contains(row) || row.textContent ||
-          !row.matches(":not([data-jot-live-node]), .jot-live-preview-blank-line:not(.jot-live-preview-native-block--block-quote,.jot-live-preview-source-fenced-code,.jot-live-preview-source-math-block,.jot-live-preview-list-item)")) return;
-        // CodeMirror replaces the edited row during input. Keep its place marked through
-        // that replacement until the live-preview projection supplies the final metrics.
-        const previous = row.previousElementSibling as HTMLElement | null;
-        const marker = previous ?? row.parentElement!;
-        marker.dataset.beforeHeading = previous ? "next" : "first";
-        row.getBoundingClientRect();
-        requestAnimationFrame(() => {
-          void ready.settled().finally(() => { delete marker.dataset.beforeHeading; }).catch(report);
-        });
-      }, { capture:true, signal:session.#keys.signal });
+      ready.setLocale(language);
       retainScrollEnd(editor.input.view, session.#keys.signal);
       if (counter) session.#stopCount = trackCharacterCount(editor, counter);
       const opened = session;
@@ -226,6 +211,7 @@ export class NoteEditor {
       });
       session.#modeWatcher.observe(root, { attributes: true, attributeFilter: ["data-jot-editor-mode"] });
       session.#stopAppearance = onAppearanceChange(({ editing }, themeChanged) => {
+        ready.setLocale(language);
         refreshLayout(themeChanged);
         if (ready.isPluginEnabled("heading-fold") !== editing.foldHeadings) {
           void ready.setPluginEnabled("heading-fold", editing.foldHeadings).then(refreshShortcuts).catch(report);

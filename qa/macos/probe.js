@@ -373,6 +373,7 @@ async function verifyReattach(id) {
   const { items } = await run("list_notes", { query: "plain text dropped onto the meeting", offset: 0 });
   for (const card of items) if (card.attached) await run("detach_note", { id: card.id });
   await record("reattached", { id, target, fileAndTextDropped: true, nativeDrag: true });
+  await run("locate", { id });
 }
 
 if (label.startsWith("document-")) {
@@ -418,6 +419,8 @@ async function verifyStorage() {
   }
   const previous = (await run("list_notes", {query:"#probe:storage-saved", offset:0})).items[0];
   if (previous) {
+    (await workspaceFileRow("images.md")).click();
+    await waitFor(() => [...document.querySelectorAll(".jot-editor img")].some(img => img.naturalWidth === 3), "reopened native image");
     const marker = await run("read_note", {id: previous.id});
     const {missing, ...ids} = JSON.parse(marker.markdown.split("\n")[1]);
     const saved = {};
@@ -438,6 +441,70 @@ async function verifyStorage() {
     await record("storage-reopened", saved);
     return;
   }
+  const blog = root + "/blog";
+  const {revision, folder: imageFolder} = await run("read_image_settings", {folder:blog});
+  if (imageFolder.effectiveRule.path !== root || imageFolder.effectiveRule.mode !== "relative") {
+    throw Error("The folder's current image rule did not match its parent");
+  }
+  await run("save_image_folder", {
+    folder:blog, revision, rule:{path:blog, mode:"fixed", directory:"${ruleDir}/../access"},
+  });
+  const monitor = await run("plugin:window|current_monitor", {label});
+  const windowPosition = {x:monitor.workArea.position.x + 40, y:monitor.workArea.position.y + 40};
+  await run("plugin:window|set_position", {label, value:{Physical:windowPosition}});
+  await waitFor(async () => {
+    const origin = await run("plugin:window|outer_position", {label});
+    return Math.abs(origin.x - windowPosition.x) <= 2 && Math.abs(origin.y - windowPosition.y) <= 2;
+  }, "workspace moved off the center of the display");
+  const mainSize = await run("plugin:window|outer_size", {label});
+  await run("show_settings", {section:"images"});
+  const settingsMarker = await waitFor(async () => (await run("list_notes", {query:"#probe:settings-opened", offset:0})).items[0],
+    "settings window opened");
+  const settingsNote = await run("read_note", {id:settingsMarker.id});
+  const {position, size} = JSON.parse(settingsNote.markdown.split("\n")[1]);
+  const offset = Math.hypot(position.x + size.width / 2 - windowPosition.x - mainSize.width / 2,
+    position.y + size.height / 2 - windowPosition.y - mainSize.height / 2);
+  if (offset > 4) throw Error(`Settings window center differs from the main window by ${offset} pixels`);
+  await waitFor(async () => !(await run("read_settings")).windows.settings);
+  const imageRow = await workspaceFileRow("images.md");
+  imageRow.click();
+  await waitFor(() => focusedEditor()?.textContent.includes("Photo fixture"));
+  const imageId = await run("open_library_file", {path:imageRow.dataset.file});
+  const defaults = await run("image_options", {id:42});
+  const workspace = await run("image_options", {id:imageId});
+  if (defaults.mode !== "fixed" || workspace.mode !== "relative") throw Error("Incorrect image storage for inbox or workspace");
+  // Paste a file through the mounted editor, then open the rendered asset through the native protocol.
+  const canvas = document.createElement("canvas");
+  canvas.width = 3;
+  canvas.height = 2;
+  const png = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  const fixedLink = await api.invoke("store_note_image", await png.arrayBuffer(), {headers:{
+    "x-jot-note":"42", "x-jot-name":"inbox.png", "x-jot-mode":defaults.mode, "x-jot-revision":String(defaults.revision)
+  }});
+  if (!fixedLink.startsWith("file:///")) throw Error("Inbox did not save to the fixed directory");
+  const fixedPreview = new Image();
+  fixedPreview.src = api.convertFileSrc("42/" + fixedLink);
+  await fixedPreview.decode();
+  if (fixedPreview.naturalWidth !== 3) throw Error("Fixed directory image preview failed");
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([png], "粘贴 1.png", {type: "image/png"}));
+  const pasteImage = () => {
+    const paste = new Event("paste", {bubbles: true, cancelable: true});
+    Object.defineProperty(paste, "clipboardData", {value: transfer});
+    focusedEditor().dispatchEvent(paste);
+  };
+  pasteImage();
+  await waitFor(async () => (await run("read_note", {id:imageId})).markdown.includes("notes/media/"), "saved image link");
+  document.execCommand("insertParagraph");
+  const image = await waitFor(() => [...document.querySelectorAll(".jot-editor img")].find(img => img.naturalWidth === 3), "native asset preview");
+  if (image.naturalHeight !== 2) throw Error("Incorrect image dimensions");
+  const blogId = await run("open_library_file", {path:root + "/blog/posts/entry.md"});
+  await run("show_main", {id:blogId});
+  await waitFor(() => focusedEditor()?.textContent.includes("Blog image rule fixture"));
+  pasteImage();
+  await waitFor(async () => (await run("read_note", {id:blogId})).markdown.includes("../../access/"), "blog image link");
+  document.execCommand("insertParagraph");
+  await waitFor(() => [...document.querySelectorAll(".jot-editor img")].some(img => img.naturalWidth === 3), "sibling directory image preview");
   const row = await workspaceFileRow();
   row.click();
   await waitFor(() => focusedEditor()?.textContent.includes("original-file"));
@@ -448,6 +515,14 @@ async function verifyStorage() {
   const copy = await verifyConflictCopy();
   const archivePath = root + "/archive";
   const folder = await run("save_folder", {input:{id:null, name:"会议", description:"", path:archivePath, classify:false}});
+  const archiveImageId = await run("open_library_file", {path:archivePath + "/review.md"});
+  if ((await run("image_options", {id:archiveImageId})).mode !== "http") throw Error("Archive override did not take precedence over workspace");
+  await run("show_main", {id:archiveImageId});
+  await waitFor(() => focusedEditor()?.textContent.includes("Archive image rule fixture"));
+  pasteImage();
+  await waitFor(async () => (await run("read_note", {id:archiveImageId})).markdown.includes("http://127.0.0.1:"), "archived note's uploaded image");
+  document.execCommand("insertParagraph");
+  await waitFor(() => [...document.querySelectorAll(".jot-editor img")].some(img => img.src.startsWith("http://127.0.0.1:") && img.naturalWidth === 3), "HTTP image preview");
   const original = await run("new_note");
   await run("save_note", {id:original, version:0, markdown:"归档失败后保留的正文"});
   const note = await run("read_note", {id:original});
@@ -501,19 +576,25 @@ if (label === "main" && new URL(import.meta.url).searchParams.has("storage")) {
       await waitFor(async () => (await run("list_notes", { query: "#probe:settings-opened", offset: 0 })).items.length);
       await waitFor(async () => !(await run("read_settings")).windows.settings);
       await record("ready", { ...settings, outlinePassed: true, listGeometryPassed: true, missingFileRecovered: true, paneWidthsPassed: true, settingsPassed: true });
+      await run("close_editor_window");
     } else {
       await verifyReattach(id);
     }
-    await run("close_editor_window");
   } catch (error) {
     await record("error", { error: String(error) });
   }
 }
 
 if (label === "settings") {
-  await waitFor(() => document.querySelector(".settings-nav"), "settings mount");
-  await record("settings-opened", {});
-  await run("plugin:window|close", { label });
+  try {
+    await waitFor(() => document.querySelector(".settings-nav"), "settings mount");
+    const position = await run("plugin:window|outer_position", {label});
+    const size = await run("plugin:window|outer_size", {label});
+    await record("settings-opened", {position, size});
+    await run("plugin:window|close", { label });
+  } catch (error) {
+    await record("error", {error:String(error)});
+  }
 }
 
 if (label === "quick") {
@@ -545,6 +626,11 @@ if (label === "quick") {
       if (samples.items.length === sampleCount) {
         const reassigned = await run("list_notes", { query: "#probe:reattached", offset: 0 });
         if (!reassigned.items.length) {
+          // Timing samples can leave an earlier note on the host used later by the drag fixture.
+          const warmed = await run("list_notes", {query:"latency-probe first key", offset:0});
+          for (const card of warmed.items) {
+            if (card.attached && card.id !== state.id) await run("detach_note", {id:card.id});
+          }
           await run("show_main", { id: state.id });
           return;
         }
@@ -626,7 +712,10 @@ if (label === "quick") {
         await verifyNewlineOrigin();
       }
       await run("dismiss_quick");
-      await record("sample", { measured, page, id: state.id, source: note.source });
+      const expand = await waitFor(() => shell.dataset.mode === "summary" &&
+        document.querySelector('button[aria-label="展开便签"]')?.getBoundingClientRect(), "folded note ready to reopen");
+      await record("sample", { measured, page, id: state.id, source: note.source,
+        expand: [innerWidth - expand.right + expand.width / 2, expand.y + expand.height / 2] });
     } catch (error) {
       await record("error", { error: String(error), mode: (await run("quick_view")).kind, focused: document.hasFocus(), active: document.activeElement?.className });
     } finally {
@@ -735,13 +824,14 @@ if (label === "quick") {
     void ready();
   }).observe(document.body, { subtree: true, childList: true, attributeOldValue: true, attributeFilter: ["data-mode", "data-jot-editor-ready"] });
   document.addEventListener("focusin", ready);
+  window.addEventListener("blur", () => { previous = undefined; });
   window.addEventListener("focus", ready);
   await ready();
 }
 
 if (label.startsWith("quick-")) {
   (async () => {
-    const input = await waitFor(focusedEditor);
+    const input = await waitFor(() => document.hasFocus() && focusedEditor(), "focused sibling editor");
     const view = await run("quick_view");
     const existing = await run("list_notes", {query:"#probe:folded-drag", offset:0, scope:null});
     if (existing.items.length) {

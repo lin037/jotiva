@@ -7,6 +7,7 @@ from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
 
+from scenarios.images import check_image_settings_and_picker
 from tooltips import IPC, PROJECT, Static
 
 TEST_IPC = """
@@ -17,6 +18,7 @@ window.changeKeys = changes => {
   window.testEvent('desktop:shortcuts-changed', changes);
 };
 note.markdown = 'hello';
+window.savedNote = note;
 window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
   if (cmd === 'save_note') { note.markdown = args.markdown; return ++note.version; }
   if (cmd === 'document_menu') { window.menu = args; return; }
@@ -84,7 +86,58 @@ def verify(page, url):
     page.evaluate("changeKeys({})")
     page.keyboard.press("Meta+f")
     expect(page.locator(".cm-search")).to_be_visible()
+    page.locator(".cm-search input[name=search]").press("Escape")
     print("Editor format, document search and display-mode bindings changed, cleared, reloaded and restored.")
+
+
+def verify_markdown(page, url, windows=False):
+    platform = """
+    window.__jotPlatform.os = 'windows';
+    Object.defineProperty(navigator,'platform',{configurable:true,value:'Win32'});
+    """ if windows else ""
+    page.add_init_script(IPC + TEST_IPC + platform)
+    page.goto(url)
+    content = page.locator(".cm-content")
+    expect(content).to_be_visible()
+    page.wait_for_function("window.menu?.editable")
+    primary = "Control" if windows else "Meta"
+    content.focus()
+
+    def saved(markdown):
+        page.wait_for_function("text => window.savedNote.markdown === text", arg=markdown, timeout=6000)
+
+    page.keyboard.press("Control+Shift+Digit9")
+    saved("- [ ] hello")
+    page.keyboard.press(primary + "+Alt+Enter")
+    saved("- [x] hello")
+    page.locator(".jot-live-preview-task-checkbox").click()
+    saved("- [ ] hello")
+    page.keyboard.press(primary + "+z")
+    saved("- [x] hello")
+    if windows:
+        return
+
+    def replace(value):
+        content.focus()
+        page.keyboard.press("Meta+a")
+        page.keyboard.insert_text(value)
+        saved(value)
+
+    rows = "9) A\n2) B\n  5. child\n2) C"
+    replace(rows)
+    page.locator('[data-jot-toolbar-command="toolbar.open-more"]').click()
+    page.locator('[data-jot-toolbar-choice="list.renumber"]').click()
+    saved("9) A\n10) B\n  5. child\n11) C")
+    page.keyboard.press("Meta+z")
+    saved(rows)
+    for fence in ["~~~", chr(96)*3]:
+        replace(fence)
+        page.keyboard.press("Enter")
+        page.keyboard.insert_text("x")
+        saved(fence+"\nx\n"+fence)
+    replace(r"Inline \(x+1\)" + "\n\n" + r"\[" + "\ny+2\n" + r"\]" + "\n\nend")
+    expect(page.locator(".katex")).to_have_count(2)
+    print("Passed task shortcuts, checkbox, undo, list renumbering, code fences and inline/display math.")
 
 
 if __name__ == "__main__":
@@ -94,6 +147,11 @@ if __name__ == "__main__":
             with sync_playwright() as playwright:
                 browser = playwright.webkit.launch(executable_path=os.getenv("WEBKIT_EXECUTABLE"))
                 verify(browser.new_page(), f"http://127.0.0.1:{server.server_port}/")
+                for windows in (False, True):
+                    test_page = browser.new_page()
+                    verify_markdown(test_page, f"http://127.0.0.1:{server.server_port}/", windows)
+                    test_page.close()
+                check_image_settings_and_picker(browser, f"http://127.0.0.1:{server.server_port}/", IPC)
                 browser.close()
         finally:
             server.shutdown()

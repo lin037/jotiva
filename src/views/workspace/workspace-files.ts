@@ -12,6 +12,7 @@ import { fileDialog } from "../../ui/file-dialog";
 import { button, element, report } from "../../ui/dom";
 import type { OpenTerminal } from "./terminal";
 import { treeRow } from "./source-tree";
+import { manageFolderImages } from "../../ui/image-dialog";
 
 interface FileEntry {
   name: string;
@@ -188,6 +189,7 @@ export function workspaceFiles(openNote: (id: NoteId, mode?: OpenMode) => unknow
     const menu = directory ? [
       { label: t("新建文档"), run: () => createFile(row) },
       { label: t("新建文件夹…"), run: () => createDirectory(path) },
+      { label: t("图片管理…"), run: () => manageFolderImages(path, row) },
     ] : [
       { label: t("打开"), run: async () => openNote(await openLibraryFile(path)) },
       { label: t("在新窗口打开"), run: async () => invoke("open_document_window", { id: await openLibraryFile(path) }) },

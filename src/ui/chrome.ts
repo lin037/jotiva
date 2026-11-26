@@ -4,6 +4,7 @@ import { button, report } from "./dom";
 
 const glyphs = {
   trash: "M3 4.5h10M6 4.5v-2h4v2M4.5 5l.6 8h5.8l.6-8M7 7v4m2-4v4",
+  image: "M2 3h12v10H2zM2 11l4-4 3 3 2-2 3 3M10.5 5.5h.01",
   terminal: "m2.5 4 4 4-4 4m6 0h5",
   menu: "M2.5 4h11m-11 4h11m-11 4h11",
   minimize: "M3 8.5h10",

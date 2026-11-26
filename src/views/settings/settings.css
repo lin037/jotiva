@@ -15,9 +15,11 @@
     background: var(--jot-color-sidebar);
   }
   .settings-tab {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--jot-icon-size) minmax(0, 1fr);
     align-items: center;
-    gap: var(--jot-space-3);
+    justify-items: start;
+    column-gap: var(--jot-space-3);
     min-height: var(--jot-control-height);
     border: 0;
     color: var(--jot-color-muted);
@@ -55,9 +57,10 @@
     padding-block: var(--jot-space-3);
   }
   .settings-field + .settings-field { border-top: var(--jot-line-width) solid var(--jot-color-line); }
-  .settings-field-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--jot-space-2); }
+  .settings-field-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-inline-size: 0; max-inline-size: 100%; gap: var(--jot-space-2); }
   .settings-css-actions { justify-content: flex-start; margin-block: var(--jot-space-2); }
-  .settings-field input, .settings-field select { width: auto; max-width: 100%; }
+  .settings-field input, .settings-field select { width: auto; min-inline-size: 0; max-width: 100%; }
+  .settings-field select { overflow: hidden; text-overflow: ellipsis; }
   .settings-field input[type="number"] { width: 4rem; }
   .settings-field input[type="checkbox"] { accent-color: var(--jot-color-accent); }
   .settings-detail { font-size: var(--jot-type-small); margin: var(--jot-space-2) 0; overflow-wrap: anywhere; }

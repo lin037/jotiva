@@ -5,6 +5,7 @@ mod desktop;
 mod events;
 mod host;
 mod i18n;
+mod images;
 mod library;
 mod menus;
 mod platform;
@@ -146,7 +147,7 @@ async fn show_settings(
     app: AppHandle,
     section: Option<windows::SettingsSection>,
 ) -> Result<(), String> {
-    open_settings(&app, section)
+    windows::on_main_thread(move || open_settings(&app, section)).await
 }
 
 fn open_settings(app: &AppHandle, section: Option<windows::SettingsSection>) -> Result<(), String> {
@@ -824,6 +825,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     let mut startup_files = platform::startup_files();
     platform::builder()
+        .register_asynchronous_uri_scheme_protocol("asset", images::serve)
         .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(menus::build)
         .on_menu_event(menus::handle)
@@ -832,6 +834,7 @@ fn main() {
             app.manage(storage::lock_library(&data)?);
             app.manage(RwLock::new(Notes::load(data.join("notes"))?));
             app.manage(Mutex::new(Settings::load(data.join("settings.json"))?));
+            app.manage(Mutex::new(images::Images::load(data.join("images.json"))?));
             app.manage(Mutex::new(Filing::load(data.join("filing.json"))?));
             app.manage(Mutex::new(Appearance::load(data.join("appearance.json"))?));
             app.manage(Mutex::new(workspace::Workspace::load(
@@ -990,6 +993,12 @@ fn main() {
             menus::workspace_tab_menu,
             quit,
             cancel_quit,
+            images::read_image_settings,
+            images::save_image_settings,
+            images::save_image_folder,
+            images::image_key,
+            images::image_options,
+            images::store_note_image,
             updates::read_update,
             updates::check_update,
             updates::install_update,

@@ -142,6 +142,8 @@ fn menu_with_keys(app: &AppHandle, preferences: &Preferences) -> tauri::Result<M
             &item("format:format.bullet-list", "无序列表")?,
             &item("format:format.ordered-list", "有序列表")?,
             &item("format:format.task-list", "任务列表")?,
+            &item("format:task.toggle-checked", "切换任务完成状态")?,
+            &item("format:list.renumber", "重排有序列表编号")?,
             &item("format:format.quote", "引用")?,
         ],
     )?;

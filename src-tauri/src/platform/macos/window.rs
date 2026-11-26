@@ -21,6 +21,7 @@ unsafe extern "C" {
         left: *mut std::ffi::c_void,
         right: *mut std::ffi::c_void,
     );
+    fn jot_center_over(window: *mut std::ffi::c_void, owner: *mut std::ffi::c_void);
     fn jot_activating_note() -> bool;
     fn jot_note_spaces(window: *mut std::ffi::c_void, follows_spaces: bool);
     fn jot_focus_note(window: *mut std::ffi::c_void, move_to_host_space: bool);
@@ -56,6 +57,11 @@ pub fn tile(
     unsafe {
         jot_tile_documents(caller.ns_window()?, left.ns_window()?, right.ns_window()?);
     }
+    Ok(())
+}
+
+pub fn center_over(window: &WebviewWindow, owner: &WebviewWindow) -> tauri::Result<()> {
+    unsafe { jot_center_over(window.ns_window()?, owner.ns_window()?) };
     Ok(())
 }
 

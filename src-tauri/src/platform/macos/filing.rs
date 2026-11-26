@@ -3,6 +3,11 @@ use serde_json::Value;
 use std::ffi::{CStr, CString, c_char, c_void};
 unsafe extern "C" {
     fn jot_filing_credential(service: *const c_char, endpoint: *const c_char, action: i32) -> i32;
+    fn jot_read_endpoint_key(
+        service: *const c_char,
+        endpoint: *const c_char,
+        out: *mut *mut c_char,
+    ) -> i32;
     fn jot_filing_post(
         service: *const c_char,
         endpoint: *const c_char,
@@ -64,4 +69,21 @@ pub fn post_fixture(endpoint: &str, key: &str, payload: &Value) -> (i64, Vec<u8>
     native_response(payload, |json, reply| unsafe {
         jot_filing_http(url.as_ptr(), key.as_ptr(), json.as_ptr(), 25, reply)
     })
+}
+
+pub fn read_token(service: &str, url: &str) -> Result<Option<String>, String> {
+    let service = CString::new(service).map_err(|e| e.to_string())?;
+    let url = CString::new(url).map_err(|e| e.to_string())?;
+    let mut out = std::ptr::null_mut();
+    match unsafe { jot_read_endpoint_key(service.as_ptr(), url.as_ptr(), &mut out) } {
+        0 => Ok(None),
+        1 => {
+            let token = unsafe { CStr::from_ptr(out) }
+                .to_string_lossy()
+                .into_owned();
+            unsafe { free(out.cast()) };
+            Ok(Some(token))
+        }
+        _ => Err("无法读取图片上传密钥".into()),
+    }
 }

@@ -27,6 +27,8 @@ window.__TAURI_INTERNALS__ = {metadata:{currentWindow:{label},currentWebview:{la
       const listeners = events.get(args.event) ?? [];
       listeners.push(args.handler); events.set(args.event,listeners); return args.handler;
     }
+    if (cmd==='read_image_settings') return {revision:0,folder:null,config:{defaultMode:'relative',rules:[],subfolder:'_assets',
+      directory:'',groupByDocument:false,compress:false,endpoint:'',field:'file',responsePointer:'/url',bearer:false}};
     if (cmd==='read_appearance') return appearance;
     if (cmd==='accessibility_trusted') return !window.permissionMissing;
     if (cmd==='quick_view') return {epoch:1, kind:'edit', id:1, standalone:false, pinned:false, source:'会议'};
@@ -263,11 +265,12 @@ def verify(browser, url):
         ("history.undo","撤销"), ("history.redo","重做"), ("toolbar.open-heading","标题"),
         ("format.bold","加粗"), ("format.italic","斜体"), ("format.code","行内代码"), ("format.link","链接"),
         ("format.bullet-list","无序列表"), ("format.ordered-list","有序列表"), ("format.quote","引用"),
+        ("format.task-list","待办"), ("toolbar.open-image","图片"),
         ("toolbar.open-table","表格"), ("toolbar.open-more","更多"), ("search.open","搜索"), ("command.palette","命令"),
     ]:
         hover(toolbar(command), label)
 
-    print("Passed workspace controls, keyboard access and the 14 published toolbar buttons.", flush=True)
+    print("Passed workspace controls, keyboard access and the published toolbar buttons.", flush=True)
     bold = toolbar("format.bold")
     hover(bold, "加粗")
     expect(bold).to_have_attribute("title", "")
@@ -309,8 +312,9 @@ def verify(browser, url):
         page.wait_for_function("size => parseFloat(getComputedStyle(document.documentElement).fontSize) === size", arg=scale)
         positions = bar.locator("[data-jot-toolbar-command]").evaluate_all(
             "buttons => buttons.map(button => button.getBoundingClientRect().top)")
-        assert len(positions) == 14 and max(positions) - min(positions) < 1, positions
-        assert bar.evaluate("t => t.scrollWidth > t.clientWidth") == (scale == 18)
+        assert len(positions) == 16 and max(positions) - min(positions) < 1, positions
+        size = bar.evaluate("t => [t.scrollWidth, t.clientWidth]")
+        assert (size[0] > size[1]) == (scale == 18), (width, scale, size)
     # The component's roving focus must also expose the focused button on a narrow toolbar.
     toolbar("format.bold").focus()
     page.keyboard.press("End")
@@ -608,8 +612,12 @@ def verify_language(browser, url):
     settings.wait_for_function("JSON.parse(localStorage.getItem('qa:appearance')).language === 'en'")
     expect(settings.locator("html")).to_have_attribute("lang", "en")
     expect(settings.get_by_label("Interface language")).to_have_value("en")
+    expect(workspace.locator('[data-jot-toolbar-command="format.bold"]')).to_have_attribute("aria-label", "Bold")
     workspace.locator('[aria-controls="workspace-terminal"]').hover()
     expect(workspace.locator(".jot-tooltip:popover-open")).to_have_text("Terminal")
+    settings.get_by_role("button", name="Images", exact=True).click()
+    expect(settings.get_by_role("group", name="Default storage method").get_by_role("radio", name="Beside the document")).to_be_checked()
+    expect(settings.get_by_role("heading", name="Folder-specific rules")).to_be_visible()
     settings.get_by_role("button", name="Shortcuts", exact=True).click()
     expect(settings.get_by_label("Search actions or shortcuts")).to_be_visible()
     settings.get_by_label("Search actions or shortcuts").fill("task list")
@@ -623,6 +631,7 @@ def verify_language(browser, url):
     settings.get_by_label("Interface language").select_option("zh-CN")
     expect(workspace.get_by_role("combobox", name="搜索便签和文档")).to_be_visible()
     expect(workspace.get_by_role("group", name="文档", exact=True)).to_be_visible()
+    expect(workspace.locator('[data-jot-toolbar-command="format.bold"]')).to_have_attribute("aria-label", "加粗")
     assert workspace.evaluate("originalEditor === document.querySelector('.cm-content')")
     query = workspace.get_by_role("combobox")
     query.fill("混合")
@@ -750,7 +759,7 @@ def verify_filing_settings(browser, url):
       };
     """)
     page.goto(url + "?view=settings")
-    page.get_by_role("button", name="归档", exact=True).click()
+    page.get_by_role("button", name="文档归档", exact=True).click()
     mode = page.locator("#filing-address-kind")
     address = page.locator("#filing-endpoint")
     model = page.locator("#filing-model")
@@ -835,6 +844,7 @@ if __name__ == "__main__":
     mode.add_argument("--tree-focus", action="store_true")
     mode.add_argument("--shortcut-settings", action="store_true")
     mode.add_argument("--filing-settings", action="store_true")
+    mode.add_argument("--image-settings", action="store_true")
     options = parser.parse_args()
     assert (PROJECT / "dist/index.html").is_file(), "Run pnpm build first"
     with ThreadingHTTPServer(("127.0.0.1", 0), partial(Static, directory=PROJECT / "dist")) as server:
@@ -849,6 +859,9 @@ if __name__ == "__main__":
                     verify_shortcut_settings(browser, url)
                 elif options.filing_settings:
                     verify_filing_settings(browser, url)
+                elif options.image_settings:
+                    from scenarios.images import check_image_settings_and_picker
+                    check_image_settings_and_picker(browser, url, IPC)
                 else:
                     verify_tree_focus(browser, url)
                     if not options.tree_focus:

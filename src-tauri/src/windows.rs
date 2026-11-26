@@ -95,12 +95,13 @@ pub fn document(app: &AppHandle, id: NoteId, title: &str, name_on_open: bool) ->
     window.set_focus()
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SettingsSection {
     Updates,
     Appearance,
     Editor,
+    Images,
     Filing,
     Shortcuts,
     Windows,
@@ -128,6 +129,15 @@ pub fn settings(app: &AppHandle, section: Option<SettingsSection>) -> tauri::Res
     };
 
     crate::platform::prepare_caption(&window)?;
+    if window.is_minimized()? {
+        window.unminimize()?;
+    }
+    if let Some(main) = app.get_webview_window(MAIN)
+        && main.is_visible()?
+        && !main.is_minimized()?
+    {
+        crate::platform::window::center_over(&window, &main)?;
+    }
     window.show()?;
 
     window.set_focus()

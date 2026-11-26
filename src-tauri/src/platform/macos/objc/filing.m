@@ -3,10 +3,15 @@
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <curl/curl.h>
 
+static NSString *credentialName(const char *service) {
+    return [[NSString stringWithUTF8String:service] hasSuffix:@".images"] ? @"Images" : @"Jev";
+}
+
 static NSDictionary *keyQuery(const char *service, NSString *endpoint) {
+    NSString *name = credentialName(service);
     return @{ (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
               (__bridge id)kSecAttrService: [NSString stringWithUTF8String:service],
-              (__bridge id)kSecAttrAccount: endpoint ? [@"Jev " stringByAppendingString:endpoint] : @"Jev" };
+              (__bridge id)kSecAttrAccount: endpoint ? [NSString stringWithFormat:@"%@ %@", name, endpoint] : name };
 }
 
 static BOOL validKey(NSString *key) {
@@ -73,7 +78,7 @@ static int jot_filing_key(const char *service, const char *endpoint, const char 
         NSData *data = [NSJSONSerialization dataWithJSONObject:record options:0 error:NULL];
         if (!data) return -1;
         NSDictionary *update = @{ (__bridge id)kSecValueData: data,
-                                  (__bridge id)kSecAttrLabel: @"Jotiva · Jev" };
+                                  (__bridge id)kSecAttrLabel: [@"Jotiva · " stringByAppendingString:credentialName(service)] };
         OSStatus code = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)update);
         if (code == errSecItemNotFound) {
             NSDictionary *legacy = keyQuery(service, nil);
@@ -103,7 +108,7 @@ int jot_filing_credential(const char *service, const char *endpoint, int action)
         __block NSString *secret = nil;
         void (^prompt)(void) = ^{
             NSAlert *alert = [NSAlert new];
-            alert.messageText = @"保存 Jev API 密钥";
+            alert.messageText = [credentialName(service) isEqualToString:@"Images"] ? @"保存图片上传密钥" : @"保存 Jev API 密钥";
             alert.informativeText = [NSString stringWithFormat:@"此密钥将用于以下地址，并保存在 macOS 钥匙串中。\n\n%@", [NSString stringWithUTF8String:endpoint]];
             NSSecureTextField *field = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 340, 24)];
             field.placeholderString = @"API 密钥";
@@ -209,5 +214,16 @@ long jot_filing_post(const char *service, const char *endpoint, const char *payl
         OSStatus status = lookupKey(service, [NSString stringWithUTF8String:endpoint], YES, &key);
         if (status != errSecSuccess || !key.length) return -1;
         return jot_filing_http(endpoint, key.UTF8String, payload, 25L, reply);
+    }
+}
+
+int jot_read_endpoint_key(const char *service, const char *endpoint, char **out) {
+    @autoreleasepool {
+        NSString *value = nil;
+        OSStatus status = lookupKey(service, [NSString stringWithUTF8String:endpoint], YES, &value);
+        if (status == errSecItemNotFound) return 0;
+        if (status != errSecSuccess) return -1;
+        *out = strdup(value.UTF8String);
+        return *out ? 1 : -1;
     }
 }

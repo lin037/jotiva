@@ -3,6 +3,7 @@ import { desktopPlatform, displayPath } from "../../desktop/platform";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { copyText, popupMenu } from "../../ui/context-menu";
+import { manageFolderImages } from "../../ui/image-dialog";
 import { noteActions } from "./document-file-menu";
 import { attachOnSwitch } from "./document-drag";
 import { folders, notes, openLibraryFile, type Folder, type NoteId } from "../../desktop/ipc";
@@ -157,6 +158,7 @@ export async function librarySidebar(
       void popupMenu(event, [
         { label: t("新建文档"), run: () => createInline(() => createInArchive(row)) },
         terminal,
+        { label: t("图片管理…"), run: () => manageFolderImages(directory, row) },
         ...(group ? [{ label: t("归档目录设置…"), run: () => editFolder(group) }] : []),
         { label: desktopPlatform.reveal, run: () => invoke("reveal_file", { path: directory }) },
         { label: t("复制绝对路径"), run: () => copyText(displayPath(directory)) },

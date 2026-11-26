@@ -6,7 +6,11 @@ fn command(action: &str, service: &str, url: &str) -> Command {
     let mut c = Command::new("secret-tool");
     c.arg(action);
     if action == "store" {
-        c.arg("--label=Jotiva Jev");
+        c.arg(if service.ends_with(".images") {
+            "--label=Jotiva Images"
+        } else {
+            "--label=Jotiva Jev"
+        });
     }
     c.args(["application", service, "endpoint", url]);
     c

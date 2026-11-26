@@ -8,6 +8,7 @@ pub const NOTES_CHANGED: &str = "desktop:notes-changed";
 pub const SHORTCUT_RECORDED: &str = "desktop:shortcut-recorded";
 pub const FOLDERS_CHANGED: &str = "desktop:folders-changed";
 pub const APPEARANCE_CHANGED: &str = "desktop:appearance-changed";
+pub const IMAGE_SETTINGS_CHANGED: &str = "desktop:image-settings-changed";
 pub const SETTINGS_SECTION: &str = "desktop:settings-section";
 pub const SIDEBAR_TOGGLE: &str = "desktop:sidebar-toggle";
 pub const EDITOR_ACTION: &str = "desktop:editor-action";

@@ -77,6 +77,21 @@ void jot_tile_documents(void *caller, void *left, void *right) {
     arrangeDocuments((__bridge NSWindow *)left, (__bridge NSWindow *)right, ((__bridge NSWindow *)caller).screen ?: NSScreen.mainScreen);
 }
 
+void jot_center_over(void *pointer, void *ownerPointer) {
+    NSWindow *window = (__bridge NSWindow *)pointer;
+    NSWindow *owner = (__bridge NSWindow *)ownerPointer;
+    NSRect frame = window.frame;
+    NSRect anchor = owner.frame;
+    frame.origin.x = NSMidX(anchor) - NSWidth(frame) / 2;
+    frame.origin.y = NSMidY(anchor) - NSHeight(frame) / 2;
+    if (owner.screen) {
+        NSRect work = owner.screen.visibleFrame;
+        frame.origin.x = MAX(NSMinX(work), MIN(frame.origin.x, NSMaxX(work) - NSWidth(frame)));
+        frame.origin.y = MAX(NSMinY(work), MIN(frame.origin.y, NSMaxY(work) - NSHeight(frame)));
+    }
+    [window setFrameOrigin:frame.origin];
+}
+
 static __weak NSWindow *requestedNote;
 
 bool jot_activating_note(void) { return requestedNote != nil; }
